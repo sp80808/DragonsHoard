@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { ArrowLeft, Volume2, VolumeX, Trash2, AlertCircle } from 'lucide-react';
+import { ArrowLeft, Volume2, VolumeX, Trash2, AlertCircle, Music } from 'lucide-react';
 import { audioService } from '../services/audioService';
 import { clearSaveData } from '../services/gameLogic';
 
@@ -10,18 +10,25 @@ interface SettingsProps {
 }
 
 export const Settings: React.FC<SettingsProps> = ({ onBack, onClearData }) => {
-  const [volume, setVolume] = useState(audioService.getVolume() * 100);
+  const [sfxVolume, setSfxVolume] = useState(audioService.getVolume() * 100);
+  const [musicVolume, setMusicVolume] = useState(audioService.getMusicVolume() * 100);
   const [confirmClear, setConfirmClear] = useState(false);
 
-  const handleVolumeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleSfxChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = parseInt(e.target.value);
-    setVolume(val);
+    setSfxVolume(val);
     audioService.setVolume(val / 100);
+  };
+
+  const handleMusicChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = parseInt(e.target.value);
+    setMusicVolume(val);
+    audioService.setMusicVolume(val / 100);
   };
 
   const handleClearData = () => {
       clearSaveData();
-      onClearData(); // Likely restarts the app state
+      onClearData(); 
   };
 
   return (
@@ -34,23 +41,47 @@ export const Settings: React.FC<SettingsProps> = ({ onBack, onClearData }) => {
            <h2 className="text-2xl font-bold text-white fantasy-font">Settings</h2>
         </div>
 
-        <div className="space-y-8">
+        <div className="space-y-6">
             {/* Audio Section */}
             <div>
                 <h3 className="text-slate-400 text-xs uppercase tracking-widest font-bold mb-4">Audio</h3>
-                <div className="flex items-center gap-4">
-                    <button onClick={() => { setVolume(0); audioService.setVolume(0); }} className="text-slate-400 hover:text-white">
-                        {volume === 0 ? <VolumeX /> : <Volume2 />}
+                
+                {/* SFX Volume */}
+                <div className="flex items-center gap-4 mb-4">
+                    <button onClick={() => { setSfxVolume(0); audioService.setVolume(0); }} className="text-slate-400 hover:text-white w-6">
+                        {sfxVolume === 0 ? <VolumeX size={20}/> : <Volume2 size={20}/>}
                     </button>
-                    <input 
-                        type="range" 
-                        min="0" 
-                        max="100" 
-                        value={volume} 
-                        onChange={handleVolumeChange}
-                        className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-yellow-500"
-                    />
-                    <span className="w-12 text-right font-mono text-slate-300">{volume}%</span>
+                    <div className="flex-1">
+                        <label className="text-xs text-slate-500 block mb-1">Sound Effects</label>
+                        <input 
+                            type="range" 
+                            min="0" 
+                            max="100" 
+                            value={sfxVolume} 
+                            onChange={handleSfxChange}
+                            className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-yellow-500"
+                        />
+                    </div>
+                    <span className="w-8 text-right font-mono text-slate-300 text-sm">{sfxVolume}%</span>
+                </div>
+
+                {/* Music Volume */}
+                <div className="flex items-center gap-4">
+                    <button onClick={() => { setMusicVolume(0); audioService.setMusicVolume(0); }} className="text-slate-400 hover:text-white w-6">
+                        <Music size={20}/>
+                    </button>
+                    <div className="flex-1">
+                        <label className="text-xs text-slate-500 block mb-1">Dark Ambient</label>
+                        <input 
+                            type="range" 
+                            min="0" 
+                            max="100" 
+                            value={musicVolume} 
+                            onChange={handleMusicChange}
+                            className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-purple-500"
+                        />
+                    </div>
+                    <span className="w-8 text-right font-mono text-slate-300 text-sm">{musicVolume}%</span>
                 </div>
             </div>
 
@@ -84,7 +115,7 @@ export const Settings: React.FC<SettingsProps> = ({ onBack, onClearData }) => {
                     </div>
                 )}
                 <p className="text-xs text-slate-600 mt-2 text-center">
-                    This will wipe your progress, inventory, and high scores.
+                    This will wipe your progress, inventory, and achievements.
                 </p>
             </div>
         </div>

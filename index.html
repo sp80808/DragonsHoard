@@ -137,6 +137,12 @@
       .damage-flash {
         animation: damageFlash 0.3s ease-out;
       }
+
+      /* Shimmer Effect for XP Bar */
+      @keyframes shimmer {
+        0% { transform: translateX(-150%) skewX(-20deg); }
+        100% { transform: translateX(150%) skewX(-20deg); }
+      }
     </style>
   <script type="importmap">
 {

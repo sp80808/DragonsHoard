@@ -7,7 +7,7 @@ import { SplashScreen } from './components/SplashScreen';
 import { Leaderboard } from './components/Leaderboard';
 import { Settings } from './components/Settings';
 import { Direction, GameState, TileType, InventoryItem, FloatingText, CraftingRecipe, View, Achievement } from './types';
-import { initializeGame, moveGrid, spawnTile, isGameOver, checkLoot, useInventoryItem, applyMidasTouch, applyChronosShift, applyVoidSingularity, tryAutoMerge, saveHighscore, checkAchievements } from './services/gameLogic';
+import { initializeGame, moveGrid, spawnTile, isGameOver, checkLoot, useInventoryItem, applyMidasTouch, applyChronosShift, applyVoidSingularity, tryAutoMerge, saveHighscore, checkAchievements, savePersistentAchievements } from './services/gameLogic';
 import { SHOP_ITEMS, getXpThreshold, getStage, getStageBackground, getItemDefinition } from './constants';
 import { audioService } from './services/audioService';
 import { AlertTriangle, Crown, RefreshCw, Trophy } from 'lucide-react';
@@ -47,14 +47,13 @@ const reducer = (state: GameState, action: Action): GameState => {
         return { ...state, logs: [] };
 
     case 'UNLOCK_ACHIEVEMENT':
+        const newAchievements = [...state.achievements, action.achievement.id];
+        savePersistentAchievements(newAchievements); // Save to persistent storage
         return {
             ...state,
-            achievements: [...state.achievements, action.achievement.id],
+            achievements: newAchievements,
             gold: state.gold + (action.achievement.reward?.gold || 0),
             xp: state.xp + (action.achievement.reward?.xp || 0),
-            // Note: Item rewards are simpler to handle if we just add gold/xp here, logic complexity for items inside reducer 
-            // without full item def is annoying, but let's try if reward has item.
-            // For now, simple implementation.
             logs: [...state.logs, `Achievement: ${action.achievement.name}`]
         };
 
@@ -203,16 +202,10 @@ const reducer = (state: GameState, action: Action): GameState => {
       const maxTile = Math.max(...newGrid.map(t => t.value));
       if (maxTile > newStats.highestTile) newStats.highestTile = maxTile;
 
-      // Count specific merges for achievements/stats
-      // We check what was merged. `mergedIds` contains IDs of tiles that *survived* and grew.
-      // So we check their new values.
       const mergedTiles = newGrid.filter(t => mergedIds.includes(t.id));
       mergedTiles.forEach(t => {
-          // If a tile became 4, it means two 2s merged.
           if (t.value === 4) newStats.slimesMerged += 1;
           
-          // Demon Ability Check (Demon is 128)
-          // If we just made a Demon (128) or higher
           if (t.value === 128) {
               newEffectCounters['DEMON_CURSE'] = 1;
               newLogs.push("Demon Curse! Next spawn dangerous.");
@@ -331,7 +324,8 @@ const reducer = (state: GameState, action: Action): GameState => {
         powerUpEffect: nextPowerUpEffect,
         lastSpawnedTileId,
         stats: newStats,
-        combo: comboMultiplier > 1 ? combo : 0
+        combo: comboMultiplier > 1 ? combo : 0,
+        achievements: state.achievements // Persisted in memory, but updated in logic
       };
       
       localStorage.setItem('2048_rpg_state_v3', JSON.stringify(newState));
@@ -444,12 +438,15 @@ const App: React.FC = () => {
       audioService.resume();
       window.removeEventListener('keydown', handleInteract);
       window.removeEventListener('touchstart', handleInteract);
+      window.removeEventListener('click', handleInteract);
     };
     window.addEventListener('keydown', handleInteract);
     window.addEventListener('touchstart', handleInteract);
+    window.addEventListener('click', handleInteract);
     return () => {
         window.removeEventListener('keydown', handleInteract);
         window.removeEventListener('touchstart', handleInteract);
+        window.removeEventListener('click', handleInteract);
     };
   }, []);
 
@@ -622,6 +619,7 @@ const App: React.FC = () => {
                     onClose={() => setShowStore(false)} 
                     onBuy={(item) => dispatch({ type: 'BUY_ITEM', item })} 
                     onCraft={(recipe) => dispatch({ type: 'CRAFT_ITEM', recipe })}
+                    onUseItem={(item) => dispatch({ type: 'USE_ITEM', item })}
                 />
             )}
 

@@ -4,6 +4,7 @@ import { GRID_SIZE_INITIAL, SHOP_ITEMS, getStage, getStageBackground, ACHIEVEMEN
 
 const createId = () => Math.random().toString(36).substr(2, 9);
 const LEADERBOARD_KEY = 'dragon_hoard_leaderboard';
+const ACHIEVEMENTS_STORAGE_KEY = 'dragon_hoard_unlocked_achievements';
 
 export const getEmptyCells = (grid: Tile[], size: number) => {
   const cells: { x: number; y: number }[] = [];
@@ -54,14 +55,9 @@ export const spawnTile = (grid: Tile[], size: number, level: number, forcedValue
   }
 
   // Determine value to spawn
-  // Demon Curse Effect: If cursed, spawn 8 or 16
-  // We need to pass state/counters here ideally, but for now we'll rely on the caller passing `forcedValue` if there is a curse
-  // However, the `forcedValue` arg handles the curse from the reducer level.
-  
   activeGrid = placeOne(activeGrid, forcedValue);
 
   // Slime Ability: 20% chance to spawn an extra slime if the spawned tile was a Slime (2)
-  // We check the last added tile
   const lastTile = activeGrid[activeGrid.length - 1];
   if (lastTile && lastTile.value === 2 && lastTile.isNew && Math.random() < 0.2) {
       activeGrid = placeOne(activeGrid, 2);
@@ -132,29 +128,6 @@ export const moveGrid = (grid: Tile[], direction: Direction, size: number): Move
   let newGrid: Tile[] = [];
   const mergedIndices = new Set<string>();
 
-  // Temporary grid for processing movements
-  let tempGrid = sortedTiles.map(t => ({...t}));
-
-  // Logic to process moves/merges
-  // We rebuild the grid tile by tile
-  // But wait, the standard 2048 alg requires processing in order.
-  
-  // Let's restart the loop properly
-  newGrid = []; // We will push final positions here
-  
-  // Track processed to avoid double merge
-  // We need to group by rows/cols based on direction to process correctly
-  // Actually the sortedTiles approach works if we process one by one and check the *newGrid* state?
-  // No, checking *newGrid* is hard.
-  // Let's stick to the existing logic but refine it.
-  
-  // Standard 2048 Algorithm
-  // 1. Group by line
-  // 2. Process each line: Slide, Merge, Slide
-  
-  // ... Or stick to the simpler collision logic if it works, but 2048 usually needs distinct phases.
-  // The existing implementation uses a collision check against `newGrid`.
-  
   sortedTiles.forEach((tile) => {
     let { x, y } = tile;
     let nextX = x + vector.x;
@@ -193,13 +166,9 @@ export const moveGrid = (grid: Tile[], direction: Direction, size: number): Move
           goldGained += Math.ceil(collision.value * 0.5);
 
           // Goblin Ability: Bonus Gold (Value 4 merging into 8)
-          // If we just created an 8 (from 4s), add bonus
           if (collision.value === 8) {
-              goldGained += 5; // Steal extra gold
+              goldGained += 5; 
           }
-          
-          // Demon Ability: Check later in reducer, but we can flag it? 
-          // Actually we can just check merged values in reducer or return stats
           
           return;
         } else {
@@ -227,12 +196,9 @@ export const moveGrid = (grid: Tile[], direction: Direction, size: number): Move
     }
   });
 
-  // Post-Process Abilities
-  // Drake (32) Ability: Burn/Upgrade adjacent low tile
-  // Find tiles that became 32 (or higher if we want) in this turn
+  // Post-Process Abilities: Drake (32)
   const drakeMerges = newGrid.filter(t => t.value === 32 && t.mergedFrom);
   drakeMerges.forEach(drake => {
-      // Find a neighbor < 32
       const neighbors = newGrid.filter(n => 
           n.id !== drake.id && 
           n.value < 32 &&
@@ -242,8 +208,8 @@ export const moveGrid = (grid: Tile[], direction: Direction, size: number): Move
       if (neighbors.length > 0) {
           const victim = neighbors[Math.floor(Math.random() * neighbors.length)];
           victim.value *= 2; // Upgrade!
-          victim.mergedFrom = [victim.id]; // Trigger animation
-          xpGained += victim.value; // Bonus XP for the burn
+          victim.mergedFrom = [victim.id];
+          xpGained += victim.value;
       }
   });
 
@@ -251,18 +217,15 @@ export const moveGrid = (grid: Tile[], direction: Direction, size: number): Move
   const mergeCount = mergedIds.length;
   let comboMultiplier = 1;
   if (mergeCount > 1) {
-      comboMultiplier = 1 + (mergeCount - 1) * 0.5; // 2 merges = 1.5x, 3 merges = 2.0x, 4 merges = 2.5x
+      comboMultiplier = 1 + (mergeCount - 1) * 0.5;
   }
 
-  // Apply Multiplier
   xpGained = Math.floor(xpGained * comboMultiplier);
   goldGained = Math.floor(goldGained * comboMultiplier);
 
   return { grid: newGrid, score, xpGained, goldGained, moved, mergedIds, powerUpTriggered, combo: mergeCount, comboMultiplier };
 };
 
-// ... Power Up Logic Handlers (Midas, Chronos, Void) ...
-// (Keeping existing implementations for brevity, they are imported in App.tsx)
 export const applyMidasTouch = (grid: Tile[]): { grid: Tile[]; score: number; mergedCount: number } => {
     let currentGrid = [...grid];
     let totalScore = 0;
@@ -307,14 +270,9 @@ export const applyChronosShift = (grid: Tile[], size: number): Tile[] => {
 };
 
 export const applyVoidSingularity = (grid: Tile[], size: number): { grid: Tile[]; score: number } => {
-    const valueMap: Record<number, number> = {};
     let score = 0;
-    grid.forEach(t => { valueMap[t.value] = (valueMap[t.value] || 0) + 1; });
     
-    // Collapse logic... same as before
-    const newTiles: Tile[] = [];
-    const finalValues: number[] = [];
-    
+    // Collapse logic
     const process = (values: number[]) => {
         values.sort((a,b) => a - b);
         const nextValues: number[] = [];
@@ -339,6 +297,7 @@ export const applyVoidSingularity = (grid: Tile[], size: number): { grid: Tile[]
     }
     const sortedFinal = currentValues.sort((a,b) => b - a);
     let idx = 0;
+    const newTiles: Tile[] = [];
     for(let r=0; r<size; r++) {
         for(let c=0; c<size; c++) {
              if (idx < sortedFinal.length) {
@@ -424,6 +383,19 @@ export const isGameOver = (grid: Tile[], size: number): boolean => {
   return true;
 };
 
+// --- Achievement Persistence Logic ---
+
+export const getPersistentAchievements = (): string[] => {
+    try {
+        const raw = localStorage.getItem(ACHIEVEMENTS_STORAGE_KEY);
+        return raw ? JSON.parse(raw) : [];
+    } catch { return []; }
+};
+
+export const savePersistentAchievements = (ids: string[]) => {
+    localStorage.setItem(ACHIEVEMENTS_STORAGE_KEY, JSON.stringify(ids));
+};
+
 export const checkAchievements = (state: GameState): Achievement[] => {
     const newUnlocks: Achievement[] = [];
     
@@ -440,6 +412,7 @@ export const checkAchievements = (state: GameState): Achievement[] => {
 
 export const initializeGame = (loadFromStorage = false): GameState => {
   const initialStats: GameStats = { totalMerges: 0, highestCombo: 0, slimesMerged: 0, goldCollected: 0, highestTile: 0, totalMoves: 0 };
+  const persistentAchievements = getPersistentAchievements();
   
   if (loadFromStorage) {
     const saved = localStorage.getItem('2048_rpg_state_v3');
@@ -447,10 +420,13 @@ export const initializeGame = (loadFromStorage = false): GameState => {
       const parsed = JSON.parse(saved);
       // Migrations
       if (!parsed.stats) parsed.stats = initialStats;
-      if (!parsed.achievements) parsed.achievements = [];
       if (!parsed.effectCounters) parsed.effectCounters = {};
       if (typeof parsed.rerolls === 'undefined') parsed.rerolls = 0;
       
+      // Merge saved achievements with persistent ones to ensure they are up to date
+      const mergedAchievements = Array.from(new Set([...(parsed.achievements || []), ...persistentAchievements]));
+      parsed.achievements = mergedAchievements;
+
       if (!parsed.currentStage) {
           const stageConfig = getStage(parsed.level);
           parsed.currentStage = {
@@ -496,7 +472,7 @@ export const initializeGame = (loadFromStorage = false): GameState => {
     rerolls: 0,
     lastSpawnedTileId: undefined,
     stats: initialStats,
-    achievements: []
+    achievements: persistentAchievements // Start with persistent achievements
   };
 };
 
@@ -524,4 +500,5 @@ export const clearSaveData = () => {
     localStorage.removeItem('2048_rpg_state_v3');
     localStorage.removeItem(LEADERBOARD_KEY);
     localStorage.removeItem('2048_rpg_highscore');
+    localStorage.removeItem(ACHIEVEMENTS_STORAGE_KEY);
 }
