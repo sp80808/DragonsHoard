@@ -1,8 +1,9 @@
 
-import { Direction, GameState, Tile, TileType, MoveResult, LootResult, ItemType, InventoryItem, Stage } from '../types';
+import { Direction, GameState, Tile, TileType, MoveResult, LootResult, ItemType, InventoryItem, Stage, LeaderboardEntry } from '../types';
 import { GRID_SIZE_INITIAL, SHOP_ITEMS, getStage, getStageBackground } from '../constants';
 
 const createId = () => Math.random().toString(36).substr(2, 9);
+const LEADERBOARD_KEY = 'dragon_hoard_leaderboard';
 
 export const getEmptyCells = (grid: Tile[], size: number) => {
   const cells: { x: number; y: number }[] = [];
@@ -508,3 +509,42 @@ export const initializeGame = (loadFromStorage = false): GameState => {
     lastSpawnedTileId: undefined
   };
 };
+
+export const saveHighscore = (state: GameState) => {
+    try {
+        const raw = localStorage.getItem(LEADERBOARD_KEY);
+        let entries: LeaderboardEntry[] = raw ? JSON.parse(raw) : [];
+        
+        entries.push({
+            date: Date.now(),
+            score: state.score,
+            level: state.level,
+            gold: state.gold
+        });
+        
+        // Sort descending score
+        entries.sort((a, b) => b.score - a.score);
+        
+        // Keep top 20
+        entries = entries.slice(0, 20);
+        
+        localStorage.setItem(LEADERBOARD_KEY, JSON.stringify(entries));
+    } catch (e) {
+        console.error("Failed to save high score", e);
+    }
+};
+
+export const getHighscores = (): LeaderboardEntry[] => {
+    try {
+        const raw = localStorage.getItem(LEADERBOARD_KEY);
+        return raw ? JSON.parse(raw) : [];
+    } catch (e) {
+        return [];
+    }
+};
+
+export const clearSaveData = () => {
+    localStorage.removeItem('2048_rpg_state_v3');
+    localStorage.removeItem(LEADERBOARD_KEY);
+    localStorage.removeItem('2048_rpg_highscore');
+}

@@ -1,29 +1,45 @@
+
 class AudioService {
   private ctx: AudioContext | null = null;
   private masterGain: GainNode | null = null;
   private enabled: boolean = true;
+  private volume: number = 0.3;
 
   constructor() {
     try {
-      // Initialize on first user interaction usually, but we setup structure here
       const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
       if (AudioContextClass) {
         this.ctx = new AudioContextClass();
         this.masterGain = this.ctx.createGain();
         this.masterGain.connect(this.ctx.destination);
-        this.masterGain.gain.value = 0.3; // Default volume
+        this.masterGain.gain.value = this.volume;
       }
     } catch (e) {
       console.error("Web Audio API not supported");
     }
   }
 
+  setVolume(val: number) {
+    this.volume = Math.max(0, Math.min(1, val));
+    if (this.masterGain) {
+        this.masterGain.gain.value = this.enabled ? this.volume : 0;
+    }
+  }
+
+  getVolume() {
+      return this.volume;
+  }
+
   toggleMute() {
     this.enabled = !this.enabled;
     if (this.masterGain) {
-      this.masterGain.gain.value = this.enabled ? 0.3 : 0;
+      this.masterGain.gain.value = this.enabled ? this.volume : 0;
     }
     return this.enabled;
+  }
+
+  isMuted() {
+      return !this.enabled;
   }
 
   resume() {

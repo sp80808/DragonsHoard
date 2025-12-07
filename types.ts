@@ -102,6 +102,7 @@ export interface MoveResult {
   moved: boolean;
   mergedIds: string[];
   lastSpawnedTileId?: string;
+  powerUpTriggered?: TileType;
 }
 
 export interface LootResult {
@@ -110,3 +111,12 @@ export interface LootResult {
   gold?: number;
   xp?: number;
 }
+
+export interface LeaderboardEntry {
+  date: number;
+  score: number;
+  level: number;
+  gold: number;
+}
+
+export type View = 'SPLASH' | 'GAME' | 'LEADERBOARD' | 'SETTINGS';

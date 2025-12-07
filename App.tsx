@@ -3,11 +3,14 @@ import React, { useEffect, useReducer, useRef, useState } from 'react';
 import { Grid } from './components/Grid';
 import { HUD } from './components/HUD';
 import { Store } from './components/Store';
-import { Direction, GameState, TileType, InventoryItem, FloatingText, CraftingRecipe } from './types';
-import { initializeGame, moveGrid, spawnTile, getEmptyCells, isGameOver, checkLoot, useInventoryItem, applyMidasTouch, applyChronosShift, applyVoidSingularity, tryAutoMerge } from './services/gameLogic';
-import { SHOP_ITEMS, getXpThreshold, getStage, getStageBackground, getItemDefinition, POWER_UP_CONFIG } from './constants';
+import { SplashScreen } from './components/SplashScreen';
+import { Leaderboard } from './components/Leaderboard';
+import { Settings } from './components/Settings';
+import { Direction, GameState, TileType, InventoryItem, FloatingText, CraftingRecipe, View } from './types';
+import { initializeGame, moveGrid, spawnTile, getEmptyCells, isGameOver, checkLoot, useInventoryItem, applyMidasTouch, applyChronosShift, applyVoidSingularity, tryAutoMerge, saveHighscore } from './services/gameLogic';
+import { SHOP_ITEMS, getXpThreshold, getStage, getStageBackground, getItemDefinition } from './constants';
 import { audioService } from './services/audioService';
-import { Volume2, VolumeX, AlertTriangle, Crown, RefreshCw } from 'lucide-react';
+import { AlertTriangle, Crown, RefreshCw } from 'lucide-react';
 
 // Actions
 type Action = 
@@ -21,7 +24,8 @@ type Action =
   | { type: 'CLEAR_LOGS' }
   | { type: 'TRIGGER_POWERUP_EFFECT'; effect: string }
   | { type: 'APPLY_POWERUP_RESULT'; resultState: Partial<GameState> }
-  | { type: 'REROLL' };
+  | { type: 'REROLL' }
+  | { type: 'GAME_OVER_ACK' };
 
 const reducer = (state: GameState, action: Action): GameState => {
   switch (action.type) {
@@ -34,6 +38,10 @@ const reducer = (state: GameState, action: Action): GameState => {
     case 'CONTINUE':
       return { ...state, victory: false, gameWon: true };
     
+    case 'GAME_OVER_ACK':
+        saveHighscore(state);
+        return state;
+
     case 'CLEAR_LOGS':
         return { ...state, logs: [] };
 
@@ -317,8 +325,8 @@ const reducer = (state: GameState, action: Action): GameState => {
 
 const App: React.FC = () => {
   const [state, dispatch] = useReducer(reducer, null, () => initializeGame(true));
-  const [muted, setMuted] = React.useState(false);
-  const [showStore, setShowStore] = React.useState(false);
+  const [view, setView] = useState<View>('SPLASH');
+  const [showStore, setShowStore] = useState(false);
   
   // Visual Effects State
   const [floatingTexts, setFloatingTexts] = useState<FloatingText[]>([]);
@@ -329,7 +337,7 @@ const App: React.FC = () => {
   const prevGold = useRef(state.gold);
   const prevStage = useRef(state.currentStage.name);
 
-  // Power Up Effect Runner
+  // --- Effect: Power Up Logic ---
   useEffect(() => {
     if (state.powerUpEffect) {
         // Wait for animation
@@ -364,7 +372,7 @@ const App: React.FC = () => {
     }
   }, [state.powerUpEffect, state.grid, state.score, state.xp, state.gold, state.logs, state.gridSize]);
 
-  // Auto-clear logs
+  // --- Effect: Auto-clear logs ---
   useEffect(() => {
     if (state.logs.length > 0) {
         const timer = setTimeout(() => {
@@ -374,7 +382,7 @@ const App: React.FC = () => {
     }
   }, [state.logs]);
 
-  // Trigger Effects on State Change
+  // --- Effect: Floating Text & Announcements ---
   useEffect(() => {
     const texts: FloatingText[] = [];
     const now = Date.now();
@@ -382,7 +390,7 @@ const App: React.FC = () => {
     // XP Gains
     if (state.xp > prevXp.current && state.level === state.level) { 
         const diff = state.xp - prevXp.current;
-        if (diff > 0) texts.push({ id: Math.random().toString(), x: 50, y: 50, text: `+${diff} XP`, color: 'text-cyan-400', createdAt: now });
+        if (diff > 20) texts.push({ id: Math.random().toString(), x: 50, y: 50, text: `+${diff} XP`, color: 'text-cyan-400', createdAt: now });
     }
     prevXp.current = state.xp;
 
@@ -408,6 +416,7 @@ const App: React.FC = () => {
     }
   }, [state.xp, state.gold, state.currentStage.name, state.level]);
 
+  // --- Effect: Audio Resume ---
   useEffect(() => {
     const handleInteract = () => {
       audioService.resume();
@@ -422,9 +431,10 @@ const App: React.FC = () => {
     };
   }, []);
 
+  // --- Effect: Keyboard Controls ---
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (state.gameOver || state.victory || showStore) return;
+      if (view !== 'GAME' || state.gameOver || state.victory || showStore) return;
       
       switch (e.key) {
         case 'ArrowUp':
@@ -439,20 +449,20 @@ const App: React.FC = () => {
         case 'ArrowRight':
         case 'd':
         case 'D': e.preventDefault(); dispatch({ type: 'MOVE', direction: Direction.RIGHT }); break;
+        case 'Escape': setView('SETTINGS'); break;
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [state.gameOver, state.victory, showStore]);
+  }, [state.gameOver, state.victory, showStore, view]);
 
+  // --- Effect: Touch Controls ---
   const touchStart = useRef<{x: number, y: number} | null>(null);
-  
   const handleTouchStart = (e: React.TouchEvent) => {
     touchStart.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
   };
-
   const handleTouchEnd = (e: React.TouchEvent) => {
-    if (!touchStart.current || showStore) return;
+    if (!touchStart.current || showStore || view !== 'GAME') return;
     const dx = e.changedTouches[0].clientX - touchStart.current.x;
     const dy = e.changedTouches[0].clientY - touchStart.current.y;
     const absDx = Math.abs(dx);
@@ -467,9 +477,20 @@ const App: React.FC = () => {
     touchStart.current = null;
   };
 
-  const toggleMute = () => {
-    const isEnabled = audioService.toggleMute();
-    setMuted(!isEnabled);
+  // --- Handlers ---
+  const handleGameStart = () => {
+      dispatch({ type: 'RESTART' });
+      setView('GAME');
+  };
+
+  const handleContinue = () => {
+      // Just switch view, state is already loaded
+      setView('GAME');
+  };
+
+  const handleRestart = () => {
+      dispatch({ type: 'RESTART' });
+      setView('GAME'); // Ensure we are in game view
   };
 
   return (
@@ -485,129 +506,161 @@ const App: React.FC = () => {
             backgroundImage: `url('${state.currentStage.backgroundUrl}')`,
             backgroundSize: 'cover',
             backgroundPosition: 'center',
-            opacity: 0.3
+            opacity: view === 'GAME' ? 0.3 : 0.1 // Dim background in menus
         }}
       />
       <div className="scanlines"></div>
       <div className="vignette"></div>
       
-      {/* Floating Combat Text Container */}
-      <div className="absolute inset-0 pointer-events-none z-50 overflow-hidden">
-          {floatingTexts.map(ft => (
-              <div 
-                key={ft.id}
-                className={`absolute font-bold text-2xl floating-text ${ft.color}`}
-                style={{ left: `${ft.x}%`, top: `${ft.y}%` }}
-              >
-                  {ft.text}
-              </div>
-          ))}
-      </div>
-
-      {/* Power Up Overlays */}
-      {state.powerUpEffect === TileType.RUNE_MIDAS && (
-          <div className="absolute inset-0 z-40 bg-yellow-500/20 animate-pulse pointer-events-none border-[10px] border-yellow-400/50"></div>
-      )}
-      {state.powerUpEffect === TileType.RUNE_CHRONOS && (
-          <div className="absolute inset-0 z-40 bg-blue-500/20 animate-[shake_0.5s_infinite] pointer-events-none"></div>
-      )}
-      {state.powerUpEffect === TileType.RUNE_VOID && (
-          <div className="absolute inset-0 z-40 bg-purple-900/40 animate-[pulse_0.2s_infinite] pointer-events-none scale-110"></div>
+      {/* Views */}
+      {view === 'SPLASH' && (
+          <SplashScreen 
+            onStart={handleGameStart} 
+            onContinue={handleContinue}
+            onOpenLeaderboard={() => setView('LEADERBOARD')}
+            onOpenSettings={() => setView('SETTINGS')}
+            hasSave={!!localStorage.getItem('2048_rpg_state_v3')}
+          />
       )}
 
-
-      {/* Stage Announcement Overlay */}
-      {stageAnnouncement && (
-          <div className="absolute inset-0 z-50 flex items-center justify-center stage-transition pointer-events-none">
-              <div className="bg-black/80 px-8 py-4 rounded-xl border-y-2 border-yellow-500/50 backdrop-blur-sm">
-                <h2 className="text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-yellow-200 to-amber-500 fantasy-font tracking-widest uppercase text-center">
-                    {stageAnnouncement}
-                </h2>
-              </div>
-          </div>
+      {view === 'LEADERBOARD' && (
+          <Leaderboard onBack={() => setView('SPLASH')} />
       )}
 
-      <div className="relative z-10 w-full max-w-md flex flex-col items-center">
-        <HUD 
-          score={state.score} 
-          bestScore={state.bestScore} 
-          level={state.level} 
-          xp={state.xp} 
-          gold={state.gold}
-          inventory={state.inventory}
-          rerolls={state.rerolls}
-          onRestart={() => dispatch({ type: 'RESTART' })}
-          onOpenStore={() => setShowStore(true)}
-          onUseItem={(item) => dispatch({ type: 'USE_ITEM', item })}
-          onReroll={() => dispatch({ type: 'REROLL' })}
-        />
-
-        <div className="w-full h-8 mb-2 flex items-center justify-center text-xs sm:text-sm text-yellow-400/80 font-mono tracking-wide shadow-black drop-shadow-md">
-          {state.logs.length > 0 ? state.logs[state.logs.length - 1] : "The dungeon awaits..."}
-        </div>
-
-        <Grid grid={state.grid} size={state.gridSize} />
-
-        <div className="w-full mt-6 flex justify-between items-center text-slate-400 text-sm font-medium">
-          <div className="flex gap-4">
-            <button onClick={() => dispatch({ type: 'RESTART' })} className="hover:text-white transition-colors flex items-center gap-1">
-              <RefreshCw size={14} /> Restart
-            </button>
-            <button onClick={toggleMute} className="hover:text-white transition-colors flex items-center gap-1">
-              {muted ? <VolumeX size={14} /> : <Volume2 size={14} />} Sound
-            </button>
-          </div>
-          <div className={`hidden sm:block ${state.currentStage.colorTheme} transition-colors duration-500`}>
-             Location: {state.currentStage.name}
-          </div>
-        </div>
-      </div>
-
-      {showStore && (
-        <Store 
-          gold={state.gold} 
-          inventory={state.inventory}
-          onClose={() => setShowStore(false)} 
-          onBuy={(item) => dispatch({ type: 'BUY_ITEM', item })} 
-          onCraft={(recipe) => dispatch({ type: 'CRAFT_ITEM', recipe })}
-        />
+      {view === 'SETTINGS' && (
+          <Settings 
+            onBack={() => setView(state.score > 0 ? 'GAME' : 'SPLASH')} // Return to game if paused, else splash
+            onClearData={() => {
+                dispatch({ type: 'RESTART' });
+                setView('SPLASH');
+            }}
+          />
       )}
 
-      {state.gameOver && (
-        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/95 p-4 animate-in fade-in duration-500">
-          <div className="bg-slate-900/50 p-8 rounded-2xl border border-red-900/50 shadow-2xl text-center max-w-sm w-full backdrop-blur-md">
-            <AlertTriangle className="mx-auto text-red-600 mb-4 animate-bounce" size={48} />
-            <h2 className="text-3xl font-bold text-red-500 mb-2 fantasy-font">DEFEAT</h2>
-            <div className="grid grid-cols-2 gap-4 mb-6 text-sm text-slate-300">
-               <div className="bg-slate-950 p-2 rounded border border-slate-800">Score: {state.score}</div>
-               <div className="bg-slate-950 p-2 rounded border border-slate-800">Lvl: {state.level}</div>
+      {/* Main Game View */}
+      {view === 'GAME' && (
+          <>
+            <div className="absolute inset-0 pointer-events-none z-50 overflow-hidden">
+                {floatingTexts.map(ft => (
+                    <div 
+                        key={ft.id}
+                        className={`absolute font-bold text-2xl floating-text ${ft.color}`}
+                        style={{ left: `${ft.x}%`, top: `${ft.y}%` }}
+                    >
+                        {ft.text}
+                    </div>
+                ))}
             </div>
-            <button 
-              onClick={() => dispatch({ type: 'RESTART' })}
-              className="w-full py-3 bg-red-800 hover:bg-red-700 text-white font-bold rounded border border-red-600 shadow-[0_0_15px_rgba(220,38,38,0.5)] transition-all"
-            >
-              Rise Again
-            </button>
-          </div>
-        </div>
-      )}
 
-      {state.victory && (
-        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/95 p-4 animate-in fade-in duration-1000">
-          <div className="bg-slate-900/80 p-8 rounded-2xl border border-yellow-500/50 shadow-2xl text-center max-w-sm w-full backdrop-blur-md">
-            <Crown className="mx-auto text-yellow-400 mb-4 animate-pulse" size={64} />
-            <h2 className="text-3xl font-bold text-yellow-400 mb-2 fantasy-font">GOD SLAIN</h2>
-            <p className="text-yellow-200/60 mb-8 font-serif italic">The cycle continues...</p>
-            <div className="space-y-3">
-              <button 
-                onClick={() => dispatch({ type: 'CONTINUE' })}
-                className="w-full py-3 bg-yellow-700 hover:bg-yellow-600 text-white font-bold rounded border border-yellow-500 shadow-[0_0_20px_rgba(234,179,8,0.4)]"
-              >
-                Continue Endless
-              </button>
+            {/* Effects Overlays */}
+            {state.powerUpEffect === TileType.RUNE_MIDAS && (
+                <div className="absolute inset-0 z-40 bg-yellow-500/20 animate-pulse pointer-events-none border-[10px] border-yellow-400/50"></div>
+            )}
+            {state.powerUpEffect === TileType.RUNE_CHRONOS && (
+                <div className="absolute inset-0 z-40 bg-blue-500/20 animate-[shake_0.5s_infinite] pointer-events-none"></div>
+            )}
+            {state.powerUpEffect === TileType.RUNE_VOID && (
+                <div className="absolute inset-0 z-40 bg-purple-900/40 animate-[pulse_0.2s_infinite] pointer-events-none scale-110"></div>
+            )}
+
+            {stageAnnouncement && (
+                <div className="absolute inset-0 z-50 flex items-center justify-center stage-transition pointer-events-none">
+                    <div className="bg-black/80 px-8 py-4 rounded-xl border-y-2 border-yellow-500/50 backdrop-blur-sm">
+                        <h2 className="text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-yellow-200 to-amber-500 fantasy-font tracking-widest uppercase text-center">
+                            {stageAnnouncement}
+                        </h2>
+                    </div>
+                </div>
+            )}
+
+            <div className="relative z-10 w-full max-w-md flex flex-col items-center">
+                <HUD 
+                    score={state.score} 
+                    bestScore={state.bestScore} 
+                    level={state.level} 
+                    xp={state.xp} 
+                    gold={state.gold}
+                    inventory={state.inventory}
+                    rerolls={state.rerolls}
+                    onOpenStore={() => setShowStore(true)}
+                    onUseItem={(item) => dispatch({ type: 'USE_ITEM', item })}
+                    onReroll={() => dispatch({ type: 'REROLL' })}
+                    onMenu={() => setView('SETTINGS')}
+                />
+
+                <div className="w-full h-8 mb-2 flex items-center justify-center text-xs sm:text-sm text-yellow-400/80 font-mono tracking-wide shadow-black drop-shadow-md">
+                    {state.logs.length > 0 ? state.logs[state.logs.length - 1] : "The dungeon awaits..."}
+                </div>
+
+                <Grid grid={state.grid} size={state.gridSize} />
+
+                <div className="w-full mt-6 flex justify-between items-center text-slate-400 text-sm font-medium">
+                    <div className="flex gap-4">
+                        <button onClick={handleRestart} className="hover:text-white transition-colors flex items-center gap-1">
+                            <RefreshCw size={14} /> Restart
+                        </button>
+                    </div>
+                    <div className={`hidden sm:block ${state.currentStage.colorTheme} transition-colors duration-500`}>
+                        Location: {state.currentStage.name}
+                    </div>
+                </div>
             </div>
-          </div>
-        </div>
+
+            {showStore && (
+                <Store 
+                    gold={state.gold} 
+                    inventory={state.inventory}
+                    onClose={() => setShowStore(false)} 
+                    onBuy={(item) => dispatch({ type: 'BUY_ITEM', item })} 
+                    onCraft={(recipe) => dispatch({ type: 'CRAFT_ITEM', recipe })}
+                />
+            )}
+
+            {state.gameOver && (
+                <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/95 p-4 animate-in fade-in duration-500">
+                    <div className="bg-slate-900/50 p-8 rounded-2xl border border-red-900/50 shadow-2xl text-center max-w-sm w-full backdrop-blur-md">
+                        <AlertTriangle className="mx-auto text-red-600 mb-4 animate-bounce" size={48} />
+                        <h2 className="text-3xl font-bold text-red-500 mb-2 fantasy-font">DEFEAT</h2>
+                        <div className="grid grid-cols-2 gap-4 mb-6 text-sm text-slate-300">
+                            <div className="bg-slate-950 p-2 rounded border border-slate-800">Score: {state.score}</div>
+                            <div className="bg-slate-950 p-2 rounded border border-slate-800">Lvl: {state.level}</div>
+                        </div>
+                        <div className="space-y-3">
+                            <button 
+                                onClick={handleRestart}
+                                className="w-full py-3 bg-red-800 hover:bg-red-700 text-white font-bold rounded border border-red-600 shadow-[0_0_15px_rgba(220,38,38,0.5)] transition-all"
+                            >
+                                Rise Again
+                            </button>
+                            <button 
+                                onClick={() => { dispatch({type: 'GAME_OVER_ACK'}); setView('LEADERBOARD'); }}
+                                className="w-full py-3 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold rounded border border-slate-600 transition-all"
+                            >
+                                Leaderboard
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {state.victory && (
+                <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/95 p-4 animate-in fade-in duration-1000">
+                    <div className="bg-slate-900/80 p-8 rounded-2xl border border-yellow-500/50 shadow-2xl text-center max-w-sm w-full backdrop-blur-md">
+                        <Crown className="mx-auto text-yellow-400 mb-4 animate-pulse" size={64} />
+                        <h2 className="text-3xl font-bold text-yellow-400 mb-2 fantasy-font">GOD SLAIN</h2>
+                        <p className="text-yellow-200/60 mb-8 font-serif italic">The cycle continues...</p>
+                        <div className="space-y-3">
+                            <button 
+                                onClick={() => dispatch({ type: 'CONTINUE' })}
+                                className="w-full py-3 bg-yellow-700 hover:bg-yellow-600 text-white font-bold rounded border border-yellow-500 shadow-[0_0_20px_rgba(234,179,8,0.4)]"
+                            >
+                                Continue Endless
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+          </>
       )}
     </div>
   );

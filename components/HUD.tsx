@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { getXpThreshold } from '../constants';
-import { Trophy, Star, Sparkles, Store as StoreIcon, Coins, RefreshCw } from 'lucide-react';
+import { Trophy, Star, Store as StoreIcon, Coins, RefreshCw, Menu } from 'lucide-react';
 import { InventoryItem } from '../types';
 
 interface HUDProps {
@@ -12,13 +12,13 @@ interface HUDProps {
   gold: number;
   inventory: InventoryItem[];
   rerolls: number;
-  onRestart: () => void;
   onOpenStore: () => void;
   onUseItem: (item: InventoryItem) => void;
   onReroll: () => void;
+  onMenu: () => void;
 }
 
-export const HUD: React.FC<HUDProps> = ({ score, bestScore, level, xp, gold, inventory, rerolls, onRestart, onOpenStore, onUseItem, onReroll }) => {
+export const HUD: React.FC<HUDProps> = ({ score, bestScore, level, xp, gold, inventory, rerolls, onOpenStore, onUseItem, onReroll, onMenu }) => {
   const xpThreshold = getXpThreshold(level);
   const xpPercent = Math.min(100, (xp / xpThreshold) * 100);
   const canReroll = (level >= 15 && (rerolls > 0 || gold >= 50));
@@ -27,14 +27,19 @@ export const HUD: React.FC<HUDProps> = ({ score, bestScore, level, xp, gold, inv
     <div className="w-full mb-4 space-y-3">
       {/* Top Row: Title & Scores */}
       <div className="flex justify-between items-center bg-slate-900/90 p-3 rounded-xl border border-slate-700 shadow-xl backdrop-blur-md">
-        <div>
-          <h1 className="text-xl sm:text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-yellow-200 via-orange-400 to-red-500 fantasy-font drop-shadow-sm">
-            Dragon's Hoard
-          </h1>
-          <div className="flex items-center gap-3 text-xs text-slate-400 mt-1">
-            <span className="flex items-center gap-1"><Trophy size={10} /> Best: {bestScore}</span>
-            <span className="flex items-center gap-1 text-yellow-400 font-bold"><Coins size={10} /> {gold} G</span>
-          </div>
+        <div className="flex items-center gap-3">
+            <button onClick={onMenu} className="p-2 -ml-2 hover:bg-white/10 rounded-lg transition-colors text-slate-400 hover:text-white">
+                <Menu size={20} />
+            </button>
+            <div>
+            <h1 className="text-xl sm:text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-yellow-200 via-orange-400 to-red-500 fantasy-font drop-shadow-sm">
+                Dragon's Hoard
+            </h1>
+            <div className="flex items-center gap-3 text-xs text-slate-400 mt-1">
+                <span className="flex items-center gap-1"><Trophy size={10} /> {bestScore}</span>
+                <span className="flex items-center gap-1 text-yellow-400 font-bold"><Coins size={10} /> {gold} G</span>
+            </div>
+            </div>
         </div>
         <div className="text-right">
           <div className="text-xs text-slate-500 uppercase tracking-wider font-bold">Score</div>
