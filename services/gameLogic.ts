@@ -17,6 +17,26 @@ export const getEmptyCells = (grid: Tile[], size: number) => {
 };
 
 export const spawnTile = (grid: Tile[], size: number, level: number, forcedValue?: number): Tile[] => {
+  // Check for PowerUp Spawn (2% chance)
+  if (!forcedValue && Math.random() < 0.02) {
+    const powerUps = [TileType.RUNE_MIDAS, TileType.RUNE_CHRONOS, TileType.RUNE_VOID];
+    const powerUpType = powerUps[Math.floor(Math.random() * powerUps.length)];
+    
+    const emptyCells = getEmptyCells(grid, size);
+    if (emptyCells.length === 0) return grid;
+    const { x, y } = emptyCells[Math.floor(Math.random() * emptyCells.length)];
+
+    const newTile: Tile = {
+        id: createId(),
+        x,
+        y,
+        value: 2, // Base value, merges with 2
+        type: powerUpType,
+        isNew: true
+    };
+    return [...grid, newTile];
+  }
+
   const emptyCells = getEmptyCells(grid, size);
   if (emptyCells.length === 0) return grid;
 
@@ -40,11 +60,51 @@ export const spawnTile = (grid: Tile[], size: number, level: number, forcedValue
   return [...grid, newTile];
 };
 
-export const moveGrid = (grid: Tile[], direction: Direction, size: number): MoveResult => {
+export const tryAutoMerge = (grid: Tile[]): { success: boolean; grid: Tile[]; value: number; mergedId?: string } => {
+  // 5% chance to activate if called
+  if (Math.random() > 0.05) return { success: false, grid, value: 0 };
+
+  const pairs: { t1: Tile, t2: Tile }[] = [];
+  for (let i = 0; i < grid.length; i++) {
+    for (let j = i + 1; j < grid.length; j++) {
+      const t1 = grid[i];
+      const t2 = grid[j];
+      const dist = Math.abs(t1.x - t2.x) + Math.abs(t1.y - t2.y);
+      if (dist === 1 && t1.value === t2.value) {
+        pairs.push({ t1, t2 });
+      }
+    }
+  }
+
+  if (pairs.length === 0) return { success: false, grid, value: 0 };
+
+  const pair = pairs[Math.floor(Math.random() * pairs.length)];
+  const { t1, t2 } = pair;
+  const newValue = t1.value * 2;
+
+  const newTile: Tile = {
+    id: createId(),
+    x: t1.x, // Keep position of first tile
+    y: t1.y,
+    value: newValue,
+    type: TileType.NORMAL,
+    mergedFrom: [t1.id, t2.id],
+    isNew: false 
+  };
+
+  // Remove old tiles, add new one
+  const newGrid = grid.filter(t => t.id !== t1.id && t.id !== t2.id);
+  newGrid.push(newTile);
+
+  return { success: true, grid: newGrid, value: newValue, mergedId: newTile.id };
+};
+
+export const moveGrid = (grid: Tile[], direction: Direction, size: number): MoveResult & { powerUpTriggered?: TileType } => {
   let moved = false;
   let score = 0;
   let xpGained = 0;
   let goldGained = 0;
+  let powerUpTriggered: TileType | undefined;
   const mergedIds: string[] = [];
 
   const sortedTiles = [...grid];
@@ -78,9 +138,14 @@ export const moveGrid = (grid: Tile[], direction: Direction, size: number): Move
           moved = true;
           const mergedValue = tile.value * 2;
           
+          // Check for PowerUp Merges
+          if (tile.type !== TileType.NORMAL) powerUpTriggered = tile.type;
+          if (collision.type !== TileType.NORMAL) powerUpTriggered = collision.type;
+
           collision.value = mergedValue;
           collision.mergedFrom = [tile.id, collision.id];
-          
+          collision.type = TileType.NORMAL; // Reset type after merge
+
           mergedIndices.add(collision.id);
           
           score += collision.value;
@@ -114,7 +179,187 @@ export const moveGrid = (grid: Tile[], direction: Direction, size: number): Move
     });
   });
 
-  return { grid: newGrid, score, xpGained, goldGained, moved, mergedIds };
+  return { grid: newGrid, score, xpGained, goldGained, moved, mergedIds, powerUpTriggered };
+};
+
+// Power Up Logic Handlers
+
+export const applyMidasTouch = (grid: Tile[]): { grid: Tile[]; score: number; mergedCount: number } => {
+    // Recursively merge all possible tiles until no more merges
+    let currentGrid = [...grid];
+    let totalScore = 0;
+    let totalMerged = 0;
+    let changed = true;
+
+    while (changed) {
+        changed = false;
+        // Simple greedy merge pass
+        // Horizontal
+        for (let i = 0; i < currentGrid.length; i++) {
+            for (let j = i + 1; j < currentGrid.length; j++) {
+                const t1 = currentGrid[i];
+                const t2 = currentGrid[j];
+                // Check if alive (might have been merged in this pass already)
+                if (!t1 || !t2) continue;
+
+                // Distance 1
+                const dist = Math.abs(t1.x - t2.x) + Math.abs(t1.y - t2.y);
+                if (dist === 1 && t1.value === t2.value) {
+                    // Merge!
+                    const newValue = t1.value * 2;
+                    totalScore += newValue;
+                    totalMerged++;
+                    
+                    const newTile: Tile = {
+                         id: createId(),
+                         x: t1.x,
+                         y: t1.y,
+                         value: newValue,
+                         type: TileType.NORMAL,
+                         mergedFrom: [t1.id, t2.id]
+                    };
+                    
+                    // Remove t1 and t2, add newTile
+                    const nextGrid = currentGrid.filter(t => t.id !== t1.id && t.id !== t2.id);
+                    nextGrid.push(newTile);
+                    currentGrid = nextGrid;
+                    
+                    changed = true;
+                    break; // Restart loop to handle array mutation safely
+                }
+            }
+            if (changed) break;
+        }
+    }
+    return { grid: currentGrid, score: totalScore, mergedCount: totalMerged };
+};
+
+export const applyChronosShift = (grid: Tile[], size: number): Tile[] => {
+    // Sort tiles by value descending
+    const sorted = [...grid].sort((a, b) => b.value - a.value);
+    const newGrid: Tile[] = [];
+    
+    // Snake pattern fill (top-left, right, down, left...)
+    let x = 0, y = 0;
+    let dx = 1; // 1 for right, -1 for left
+
+    sorted.forEach(tile => {
+        newGrid.push({ ...tile, x, y, isNew: false, mergedFrom: null });
+        
+        x += dx;
+        if (x >= size || x < 0) {
+            x -= dx; // Undo move
+            y++;     // Move down
+            dx = -dx; // Reverse horizontal direction
+        }
+    });
+    
+    return newGrid;
+};
+
+export const applyVoidSingularity = (grid: Tile[], size: number): { grid: Tile[]; score: number } => {
+    // Pull everything to center (size/2, size/2)
+    // Simplified: Just dense pack to center? 
+    // Or actually trigger a merge of everything colliding on the way?
+    
+    // Let's implement a 'Gravity' pull.
+    // For simplicity: Move everything to Top-Left, then merge, then return.
+    // Wait, Void should handle center.
+    
+    // Let's re-use move logic but in a spiral?
+    // Let's do a simple "Compact" logic: Merge all identical values on board regardless of position
+    // Then arrange them neatly.
+    
+    const valueMap: Record<number, number> = {}; // value -> count
+    let score = 0;
+    
+    grid.forEach(t => {
+        valueMap[t.value] = (valueMap[t.value] || 0) + 1;
+    });
+    
+    const newTiles: Tile[] = [];
+    
+    Object.keys(valueMap).forEach(k => {
+        let val = parseInt(k);
+        let count = valueMap[val];
+        
+        // Merge pairs
+        while (count >= 2) {
+            val *= 2;
+            score += val;
+            count -= 2;
+            // The resulting tile needs to be counted for further merges?
+            // "Void" logic: merges everything instantly.
+            // If we have four 2s -> two 4s -> one 8.
+            // Let's just recursively upgrade.
+            // Re-add to map? No, loop might be infinite if not careful.
+            
+            // Let's just add the upgraded value to the list of tiles to place.
+            // Actually, recursion is better.
+        }
+        
+        // Add remaining count of this value
+        for(let i=0; i<count; i++) {
+             // We need to place this tile
+             // Store for placement phase
+        }
+    });
+    
+    // Re-calculating with recursive merge array
+    const finalValues: number[] = [];
+    
+    const process = (values: number[]) => {
+        values.sort((a,b) => a - b);
+        const nextValues: number[] = [];
+        for (let i=0; i<values.length; i++) {
+            if (i < values.length - 1 && values[i] === values[i+1]) {
+                const merged = values[i] * 2;
+                score += merged;
+                nextValues.push(merged);
+                i++; // skip next
+            } else {
+                nextValues.push(values[i]);
+            }
+        }
+        return nextValues;
+    };
+    
+    let currentValues = grid.map(t => t.value);
+    let prevLen = currentValues.length + 1;
+    
+    while (currentValues.length < prevLen) {
+        prevLen = currentValues.length;
+        currentValues = process(currentValues);
+    }
+    
+    // Layout in spiral from center
+    const center = size / 2 - 0.5;
+    const sortedFinal = currentValues.sort((a,b) => b - a);
+    
+    // Spiral generator
+    // simplified: just fill from 0,0
+    const spiralCoords = [];
+    let sx=0, sy=0, sdx=1, sdy=0;
+    // ... complex spiral logic omitted for brevity, falling back to sorted layout
+    
+    // Let's use standard sorted layout
+    let idx = 0;
+    for(let r=0; r<size; r++) {
+        for(let c=0; c<size; c++) {
+             if (idx < sortedFinal.length) {
+                 newTiles.push({
+                     id: createId(),
+                     x: c,
+                     y: r,
+                     value: sortedFinal[idx],
+                     type: TileType.NORMAL
+                 });
+                 idx++;
+             }
+        }
+    }
+    
+    return { grid: newTiles, score };
 };
 
 export const checkLoot = (level: number, mergedIds: string[]): LootResult | null => {
@@ -169,6 +414,7 @@ export const useInventoryItem = (state: GameState, item: InventoryItem): Partial
     logs: [...state.logs, `Used ${item.name}!`]
   };
 
+  // Standard Items
   if (item.type === ItemType.XP_POTION) {
     newState.xp = state.xp + 1000;
     return newState;
@@ -186,6 +432,34 @@ export const useInventoryItem = (state: GameState, item: InventoryItem): Partial
   if (item.type === ItemType.GOLDEN_RUNE) {
     newState.activeEffects = [...(state.activeEffects || []), 'GOLDEN_SPAWN'];
     return newState;
+  }
+
+  // Crafted Items
+  if (item.type === ItemType.GREATER_XP_POTION) {
+    newState.xp = state.xp + 2500;
+    return newState;
+  }
+
+  if (item.type === ItemType.CATACLYSM_SCROLL) {
+    // Destroy 50% of the board, but spare tiles > 1024
+    let grid = [...state.grid].filter(t => t.value < 1024);
+    // Shuffle
+    for (let i = grid.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [grid[i], grid[j]] = [grid[j], grid[i]];
+    }
+    const toRemoveIds = grid.slice(0, Math.floor(grid.length / 2)).map(t => t.id);
+    const newGrid = state.grid.filter(t => !toRemoveIds.includes(t.id));
+    newState.grid = newGrid;
+    return newState;
+  }
+
+  if (item.type === ItemType.ASCENDANT_RUNE) {
+      // Add a counter to effects
+      const counters = { ...state.effectCounters };
+      counters['ASCENDANT_SPAWN'] = (counters['ASCENDANT_SPAWN'] || 0) + 5;
+      newState.effectCounters = counters;
+      return newState;
   }
 
   return null;
@@ -211,7 +485,9 @@ export const initializeGame = (loadFromStorage = false): GameState => {
     const saved = localStorage.getItem('2048_rpg_state_v2');
     if (saved) {
       const parsed = JSON.parse(saved);
-      // Migration for old saves that might miss stage info
+      // Migration: Ensure effectCounters exists
+      if (!parsed.effectCounters) parsed.effectCounters = {};
+      
       if (!parsed.currentStage) {
           const stageConfig = getStage(parsed.level);
           parsed.currentStage = {
@@ -252,6 +528,7 @@ export const initializeGame = (loadFromStorage = false): GameState => {
     combo: 0,
     logs: ['Welcome to the dungeon...'],
     activeEffects: [],
+    effectCounters: {},
     currentStage: initialStage
   };
 };

@@ -3,9 +3,9 @@ import React, { useEffect, useReducer, useRef, useState } from 'react';
 import { Grid } from './components/Grid';
 import { HUD } from './components/HUD';
 import { Store } from './components/Store';
-import { Direction, GameState, TileType, InventoryItem, FloatingText } from './types';
-import { initializeGame, moveGrid, spawnTile, getEmptyCells, isGameOver, checkLoot, useInventoryItem } from './services/gameLogic';
-import { SHOP_ITEMS, getXpThreshold, getStage, getStageBackground } from './constants';
+import { Direction, GameState, TileType, InventoryItem, FloatingText, CraftingRecipe } from './types';
+import { initializeGame, moveGrid, spawnTile, getEmptyCells, isGameOver, checkLoot, useInventoryItem, applyMidasTouch, applyChronosShift, applyVoidSingularity, tryAutoMerge } from './services/gameLogic';
+import { SHOP_ITEMS, getXpThreshold, getStage, getStageBackground, getItemDefinition, POWER_UP_CONFIG } from './constants';
 import { audioService } from './services/audioService';
 import { Volume2, VolumeX, AlertTriangle, Crown, RefreshCw } from 'lucide-react';
 
@@ -16,8 +16,11 @@ type Action =
   | { type: 'CONTINUE' }
   | { type: 'LOAD_GAME'; state: GameState }
   | { type: 'BUY_ITEM'; item: typeof SHOP_ITEMS[0] }
+  | { type: 'CRAFT_ITEM'; recipe: CraftingRecipe }
   | { type: 'USE_ITEM'; item: InventoryItem }
-  | { type: 'CLEAR_LOGS' };
+  | { type: 'CLEAR_LOGS' }
+  | { type: 'TRIGGER_POWERUP_EFFECT'; effect: string }
+  | { type: 'APPLY_POWERUP_RESULT'; resultState: Partial<GameState> };
 
 const reducer = (state: GameState, action: Action): GameState => {
   switch (action.type) {
@@ -56,6 +59,51 @@ const reducer = (state: GameState, action: Action): GameState => {
       return newState;
     }
 
+    case 'CRAFT_ITEM': {
+        const { recipe } = action;
+        // Verify resources again just in case
+        if (state.gold < recipe.goldCost) return state;
+
+        // Remove Ingredients
+        let newInventory = [...state.inventory];
+        let missing = false;
+        
+        for (const ing of recipe.ingredients) {
+            let needed = ing.count;
+            // Filter out used items
+            newInventory = newInventory.filter(item => {
+                if (item.type === ing.type && needed > 0) {
+                    needed--;
+                    return false; // Remove this instance
+                }
+                return true;
+            });
+            if (needed > 0) missing = true;
+        }
+
+        if (missing) return { ...state, logs: [...state.logs, "Missing ingredients!"] };
+
+        // Create Result Item
+        const def = getItemDefinition(recipe.resultId);
+        const newItem: InventoryItem = {
+            id: Math.random().toString(36),
+            type: recipe.resultId,
+            name: def.name,
+            description: def.desc,
+            icon: def.icon
+        };
+
+        const newState = {
+            ...state,
+            gold: state.gold - recipe.goldCost,
+            inventory: [...newInventory, newItem],
+            logs: [...state.logs, `Crafted ${def.name}!`]
+        };
+        
+        localStorage.setItem('2048_rpg_state_v2', JSON.stringify(newState));
+        return newState;
+    }
+
     case 'USE_ITEM': {
         const result = useInventoryItem(state, action.item);
         if (!result) return state;
@@ -64,10 +112,18 @@ const reducer = (state: GameState, action: Action): GameState => {
         return newState as GameState;
     }
 
-    case 'MOVE': {
-      if (state.gameOver || (state.victory && !state.gameWon)) return state;
+    case 'TRIGGER_POWERUP_EFFECT':
+        return { ...state, powerUpEffect: action.effect };
 
-      const { grid: movedGrid, score, xpGained, goldGained, moved, mergedIds } = moveGrid(state.grid, action.direction, state.gridSize);
+    case 'APPLY_POWERUP_RESULT':
+        const nextState = { ...state, ...action.resultState, powerUpEffect: undefined };
+        localStorage.setItem('2048_rpg_state_v2', JSON.stringify(nextState));
+        return nextState as GameState;
+
+    case 'MOVE': {
+      if (state.gameOver || (state.victory && !state.gameWon) || state.powerUpEffect) return state;
+
+      const { grid: movedGrid, score, xpGained, goldGained, moved, mergedIds, powerUpTriggered } = moveGrid(state.grid, action.direction, state.gridSize);
 
       if (!moved) return state;
 
@@ -82,7 +138,10 @@ const reducer = (state: GameState, action: Action): GameState => {
       let newGridSize = state.gridSize;
       let newInventory = [...state.inventory];
       let currentStage = state.currentStage;
-      
+      let newEffectCounters = { ...state.effectCounters };
+      let activeEffects = state.activeEffects || [];
+      let nextPowerUpEffect = undefined;
+
       if (score > 0) audioService.playMerge(score);
 
       // Check for Loot
@@ -130,17 +189,44 @@ const reducer = (state: GameState, action: Action): GameState => {
 
       // Spawn new tile logic
       let forcedValue;
-      let activeEffects = state.activeEffects || [];
-      
+
+      // Single turn effect
       if (activeEffects.includes('GOLDEN_SPAWN')) {
           forcedValue = 16;
           newLogs.push("Rune activated! High tier spawn!");
           activeEffects = activeEffects.filter(e => e !== 'GOLDEN_SPAWN');
+      } 
+      // Multi-turn counter effect (Crafted Ascendant Rune)
+      else if ((newEffectCounters['ASCENDANT_SPAWN'] || 0) > 0) {
+          forcedValue = 16; // Spawn Troll or higher
+          newEffectCounters['ASCENDANT_SPAWN']--;
+          if (newEffectCounters['ASCENDANT_SPAWN'] === 0) {
+             newLogs.push("Ascendant Rune power faded.");
+          }
       }
 
       newGrid = spawnTile(newGrid, newGridSize, newLevel, forcedValue);
 
-      // Check Victory/Loss
+      // Level 20 Perk: Auto-Merge Boost
+      if (newLevel >= 20) {
+          const auto = tryAutoMerge(newGrid);
+          if (auto.success) {
+              newGrid = auto.grid;
+              const val = auto.value;
+              newScore += val;
+              newXp += val * 2 * (newLevel >= 7 ? 1.5 : 1);
+              newGold += 1 + Math.floor(val / 16);
+              newLogs.push("Auto-Merge Perk!");
+              audioService.playMerge(val);
+          }
+      }
+
+      if (powerUpTriggered) {
+          nextPowerUpEffect = powerUpTriggered;
+          // We don't change logic here, just flag the state so UI can animate and useEffect can trigger logic
+      }
+
+      // Check Victory/Loss (Only if not powering up, as powerup might clear board)
       const has2048 = newGrid.some(t => t.value === 2048);
       const isVic = has2048 && !state.gameWon;
       const isOver = isGameOver(newGrid, newGridSize);
@@ -159,10 +245,12 @@ const reducer = (state: GameState, action: Action): GameState => {
         gridSize: newGridSize,
         inventory: newInventory,
         activeEffects: activeEffects,
+        effectCounters: newEffectCounters,
         logs: newLogs.slice(-3),
         victory: isVic,
         gameOver: isOver,
-        currentStage: currentStage
+        currentStage: currentStage,
+        powerUpEffect: nextPowerUpEffect
       };
       
       localStorage.setItem('2048_rpg_state_v2', JSON.stringify(newState));
@@ -182,10 +270,45 @@ const App: React.FC = () => {
   const [floatingTexts, setFloatingTexts] = useState<FloatingText[]>([]);
   const [stageAnnouncement, setStageAnnouncement] = useState<string | null>(null);
   
-  // Refs for tracking changes to trigger effects
+  // Refs
   const prevXp = useRef(state.xp);
   const prevGold = useRef(state.gold);
   const prevStage = useRef(state.currentStage.name);
+
+  // Power Up Effect Runner
+  useEffect(() => {
+    if (state.powerUpEffect) {
+        // Wait for animation
+        const timer = setTimeout(() => {
+            let result: Partial<GameState> = {};
+            let logs = [...state.logs];
+            
+            if (state.powerUpEffect === TileType.RUNE_MIDAS) {
+                 const { grid, score } = applyMidasTouch(state.grid);
+                 result.grid = grid;
+                 result.score = state.score + score;
+                 result.xp = state.xp + (score * 2); // Bonus XP
+                 logs.push("Midas Touch! Massive Gold!");
+                 result.gold = state.gold + Math.floor(score / 4);
+                 audioService.playLevelUp(); // Epic sound
+            } else if (state.powerUpEffect === TileType.RUNE_CHRONOS) {
+                 result.grid = applyChronosShift(state.grid, state.gridSize);
+                 logs.push("Time Shift! Grid Reordered.");
+                 audioService.playMove();
+            } else if (state.powerUpEffect === TileType.RUNE_VOID) {
+                 const { grid, score } = applyVoidSingularity(state.grid, state.gridSize);
+                 result.grid = grid;
+                 result.score = state.score + score;
+                 logs.push("Void Consumed the Board...");
+                 audioService.playBomb();
+            }
+            
+            result.logs = logs;
+            dispatch({ type: 'APPLY_POWERUP_RESULT', resultState: result });
+        }, 1000);
+        return () => clearTimeout(timer);
+    }
+  }, [state.powerUpEffect, state.grid, state.score, state.xp, state.gold, state.logs, state.gridSize]);
 
   // Auto-clear logs
   useEffect(() => {
@@ -327,6 +450,18 @@ const App: React.FC = () => {
           ))}
       </div>
 
+      {/* Power Up Overlays */}
+      {state.powerUpEffect === TileType.RUNE_MIDAS && (
+          <div className="absolute inset-0 z-40 bg-yellow-500/20 animate-pulse pointer-events-none border-[10px] border-yellow-400/50"></div>
+      )}
+      {state.powerUpEffect === TileType.RUNE_CHRONOS && (
+          <div className="absolute inset-0 z-40 bg-blue-500/20 animate-[shake_0.5s_infinite] pointer-events-none"></div>
+      )}
+      {state.powerUpEffect === TileType.RUNE_VOID && (
+          <div className="absolute inset-0 z-40 bg-purple-900/40 animate-[pulse_0.2s_infinite] pointer-events-none scale-110"></div>
+      )}
+
+
       {/* Stage Announcement Overlay */}
       {stageAnnouncement && (
           <div className="absolute inset-0 z-50 flex items-center justify-center stage-transition pointer-events-none">
@@ -375,8 +510,10 @@ const App: React.FC = () => {
       {showStore && (
         <Store 
           gold={state.gold} 
+          inventory={state.inventory}
           onClose={() => setShowStore(false)} 
           onBuy={(item) => dispatch({ type: 'BUY_ITEM', item })} 
+          onCraft={(recipe) => dispatch({ type: 'CRAFT_ITEM', recipe })}
         />
       )}
 

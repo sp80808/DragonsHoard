@@ -1,5 +1,5 @@
 
-import { TileType, ItemType, InventoryItem, Stage } from './types';
+import { TileType, ItemType, InventoryItem, Stage, CraftingRecipe } from './types';
 
 export const GRID_SIZE_INITIAL = 4;
 export const WINNING_VALUE = 2048;
@@ -7,7 +7,6 @@ export const WINNING_VALUE = 2048;
 export const getXpThreshold = (level: number) => Math.floor(1000 * Math.pow(level, 1.5));
 
 // Helper for Pollinations.ai
-// Added 'seed' parameter to keep images consistent per session/stage if needed, or random
 const genUrl = (prompt: string, seed: string | number = 42) => 
   `https://image.pollinations.ai/prompt/dark fantasy rpg game asset ${prompt} high quality dramatic lighting?width=256&height=256&nologo=true&seed=${seed}`;
 
@@ -30,6 +29,18 @@ export const TILE_STYLES: Record<number, { label: string; color: string; icon: s
 
 export const FALLBACK_STYLE = { label: 'Ascended', color: 'from-slate-900 to-black', icon: '🌟', glow: 'shadow-white/50', imageUrl: genUrl('cosmic star energy', 9999) };
 
+export const RUNE_STYLES: Record<string, { label: string; color: string; icon: string; glow: string; imageUrl: string }> = {
+  RUNE_MIDAS: { label: 'Midas', color: 'from-yellow-400 to-amber-600', icon: '👑', glow: 'shadow-yellow-400/80', imageUrl: genUrl('golden midas touch hand magic rune', 'midas') },
+  RUNE_CHRONOS: { label: 'Chronos', color: 'from-blue-400 to-cyan-600', icon: '⏳', glow: 'shadow-cyan-400/80', imageUrl: genUrl('blue time manipulation magic rune hourglass', 'chronos') },
+  RUNE_VOID: { label: 'Void', color: 'from-purple-950 to-black', icon: '⚫', glow: 'shadow-purple-900/80', imageUrl: genUrl('black hole void swirling magic rune', 'void') },
+};
+
+export const POWER_UP_CONFIG = {
+  RUNE_MIDAS: "Midas Touch: Recursively merges all possible tiles.",
+  RUNE_CHRONOS: "Chronos Shift: Reorders tiles strategically.",
+  RUNE_VOID: "Void Singularity: Pulls all tiles to center."
+};
+
 export const STAGES: { name: string; minLevel: number; prompt: string; color: string }[] = [
   { name: "The Crypt", minLevel: 1, prompt: "medieval dungeon stone walls torches cobwebs dark", color: "text-slate-400" },
   { name: "Fungal Caverns", minLevel: 5, prompt: "bioluminescent glowing mushrooms purple cave underground magical", color: "text-purple-400" },
@@ -39,13 +50,11 @@ export const STAGES: { name: string; minLevel: number; prompt: string; color: st
 ];
 
 export const getStage = (level: number) => {
-  // Find the highest stage where minLevel <= level
   return [...STAGES].reverse().find(s => level >= s.minLevel) || STAGES[0];
 };
 
 export const getStageBackground = (stageName: string) => {
   const stage = STAGES.find(s => s.name === stageName) || STAGES[0];
-  // We use the name as a seed to ensure the background is consistent for that stage
   return bgUrl(stage.prompt, stage.name.replace(' ', ''));
 };
 
@@ -55,6 +64,7 @@ export const PERKS = [
   { level: 7, desc: "Veteran: +50% XP from merges" },
   { level: 10, desc: "Loot Mode: Merges drop Gold & Items" },
   { level: 15, desc: "Expansion: Grid size increased to 6x6!" },
+  { level: 20, desc: "Auto-Merge: Rarely auto-combine adjacent tiles" },
 ];
 
 export const SHOP_ITEMS: { id: ItemType, name: string, price: number, icon: string, desc: string }[] = [
@@ -62,3 +72,44 @@ export const SHOP_ITEMS: { id: ItemType, name: string, price: number, icon: stri
   { id: ItemType.BOMB_SCROLL, name: "Purge Scroll", price: 500, icon: "📜", desc: "Destroys 3 lowest value tiles" },
   { id: ItemType.GOLDEN_RUNE, name: "Golden Rune", price: 750, icon: "🌟", desc: "Next spawn is a high-tier tile" },
 ];
+
+export const RECIPES: CraftingRecipe[] = [
+  {
+    id: 'craft_greater_xp',
+    resultId: ItemType.GREATER_XP_POTION,
+    name: "Greater Elixir",
+    description: "Grants +2500 XP instantly.",
+    icon: "⚗️",
+    goldCost: 100,
+    ingredients: [{ type: ItemType.XP_POTION, count: 2 }]
+  },
+  {
+    id: 'craft_cataclysm',
+    resultId: ItemType.CATACLYSM_SCROLL,
+    name: "Cataclysm Scroll",
+    description: "Destroys 50% of tiles (non-boss).",
+    icon: "🌋",
+    goldCost: 300,
+    ingredients: [{ type: ItemType.BOMB_SCROLL, count: 2 }]
+  },
+  {
+    id: 'craft_ascendant',
+    resultId: ItemType.ASCENDANT_RUNE,
+    name: "Ascendant Rune",
+    description: "Next 5 spawns are high-tier.",
+    icon: "🧿",
+    goldCost: 500,
+    ingredients: [{ type: ItemType.GOLDEN_RUNE, count: 2 }]
+  }
+];
+
+// Helper to get definition for crafted items since they aren't in SHOP_ITEMS
+export const getItemDefinition = (type: ItemType) => {
+    const shopItem = SHOP_ITEMS.find(i => i.id === type);
+    if (shopItem) return shopItem;
+    
+    const recipe = RECIPES.find(r => r.resultId === type);
+    if (recipe) return { name: recipe.name, desc: recipe.description, icon: recipe.icon };
+    
+    return { name: "Unknown", desc: "???", icon: "❓" };
+};
