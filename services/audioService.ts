@@ -143,6 +143,25 @@ class AudioService {
     osc.stop(this.ctx.currentTime + 0.1);
   }
 
+  playHit() {
+    this.initContext();
+    if (!this.enabled || !this.ctx || !this.sfxGain) return;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.connect(gain);
+    gain.connect(this.sfxGain);
+    
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(100, this.ctx.currentTime);
+    osc.frequency.linearRampToValueAtTime(50, this.ctx.currentTime + 0.1);
+    
+    gain.gain.setValueAtTime(0.5, this.ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.1);
+    
+    osc.start();
+    osc.stop(this.ctx.currentTime + 0.1);
+  }
+
   playMerge(value: number) {
     this.initContext();
     if (!this.enabled || !this.ctx || !this.sfxGain) return;

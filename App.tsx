@@ -173,7 +173,7 @@ const reducer = (state: GameState, action: Action): GameState => {
     case 'MOVE': {
       if (state.gameOver || (state.victory && !state.gameWon) || state.powerUpEffect) return state;
 
-      const { grid: movedGrid, score, xpGained, goldGained, moved, mergedIds, powerUpTriggered, combo, comboMultiplier } = moveGrid(state.grid, action.direction, state.gridSize);
+      const { grid: movedGrid, score, xpGained, goldGained, moved, mergedIds, powerUpTriggered, combo, comboMultiplier, logs: moveLogs } = moveGrid(state.grid, action.direction, state.gridSize);
 
       if (!moved) return state;
 
@@ -184,7 +184,7 @@ const reducer = (state: GameState, action: Action): GameState => {
       let newXp = state.xp + (xpGained * (state.level >= 7 ? 1.5 : 1));
       let newGold = state.gold + goldGained;
       let newLevel = state.level;
-      let newLogs = [...state.logs];
+      let newLogs = [...state.logs, ...moveLogs];
       let newGridSize = state.gridSize;
       let newInventory = [...state.inventory];
       let currentStage = state.currentStage;
@@ -264,7 +264,20 @@ const reducer = (state: GameState, action: Action): GameState => {
 
       // Spawn new tile logic
       let forcedValue;
-      if (activeEffects.includes('GOLDEN_SPAWN')) {
+      let forcedType;
+      
+      // Boss Spawning
+      const existingBoss = newGrid.find(t => t.type === TileType.BOSS);
+      const shouldSpawnBoss = newLevel >= 5 && newLevel % 5 === 0 && !existingBoss && Math.random() < 0.2; 
+      // Actually, let's make it deterministic or high chance on level multiples to ensure players see them
+      // But avoid spawn camping. Let's say if no boss, and level % 5 == 0, 10% chance per move?
+      // Or simplify: logic in spawnTile handles probability?
+      // Let's force it here if condition met
+      
+      if (newLevel > 0 && newLevel % 5 === 0 && !existingBoss && Math.random() < 0.1) {
+          forcedType = TileType.BOSS;
+          newLogs.push("A BOSS APPEARED!");
+      } else if (activeEffects.includes('GOLDEN_SPAWN')) {
           forcedValue = 16;
           newLogs.push("Rune activated! High tier spawn!");
           activeEffects = activeEffects.filter(e => e !== 'GOLDEN_SPAWN');
@@ -277,7 +290,7 @@ const reducer = (state: GameState, action: Action): GameState => {
       }
 
       const gridBeforeSpawn = newGrid;
-      newGrid = spawnTile(newGrid, newGridSize, newLevel, forcedValue);
+      newGrid = spawnTile(newGrid, newGridSize, newLevel, { forcedValue, type: forcedType });
       const spawnedTile = newGrid.find(t => !gridBeforeSpawn.includes(t));
       const lastSpawnedTileId = spawnedTile?.id;
 

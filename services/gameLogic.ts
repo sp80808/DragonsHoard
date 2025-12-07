@@ -18,33 +18,69 @@ export const getEmptyCells = (grid: Tile[], size: number) => {
   return cells;
 };
 
-export const spawnTile = (grid: Tile[], size: number, level: number, forcedValue?: number): Tile[] => {
+interface SpawnOptions {
+  forcedValue?: number;
+  type?: TileType;
+  bossLevel?: number;
+}
+
+export const spawnTile = (grid: Tile[], size: number, level: number, options?: SpawnOptions | number): Tile[] => {
   let activeGrid = [...grid];
   
+  // Normalize args
+  let forcedValue: number | undefined;
+  let type: TileType = TileType.NORMAL;
+  let bossLevel = 0;
+
+  if (typeof options === 'number') {
+    forcedValue = options;
+  } else if (options) {
+    forcedValue = options.forcedValue;
+    type = options.type || TileType.NORMAL;
+    bossLevel = options.bossLevel || level;
+  }
+
   // Helper to place one tile
-  const placeOne = (currentGrid: Tile[], val?: number): Tile[] => {
+  const placeOne = (currentGrid: Tile[], val?: number, forceType?: TileType): Tile[] => {
       const empty = getEmptyCells(currentGrid, size);
       if (empty.length === 0) return currentGrid;
       
       const { x, y } = empty[Math.floor(Math.random() * empty.length)];
       
-      // Default Value Logic
-      let value = (level >= 3 && Math.random() < 0.1) ? 4 : 2;
-      if (val) value = val;
+      let value = 2;
+      let finalType = forceType || TileType.NORMAL;
+      let health, maxHealth;
+
+      if (finalType === TileType.BOSS) {
+          value = 0; // Boss has 0 value for merges
+          maxHealth = bossLevel * 100;
+          health = maxHealth;
+      } else {
+          // Default Value Logic
+          value = (level >= 3 && Math.random() < 0.1) ? 4 : 2;
+          if (val) value = val;
+      }
 
       const newTile: Tile = {
         id: createId(),
         x,
         y,
         value,
-        type: TileType.NORMAL,
+        type: finalType,
         isNew: true,
+        health,
+        maxHealth
       };
       return [...currentGrid, newTile];
   };
 
-  // Power Up Check (2%)
-  if (!forcedValue && Math.random() < 0.02) {
+  // If spawning a boss, prioritize it
+  if (type === TileType.BOSS) {
+      return placeOne(activeGrid, 0, TileType.BOSS);
+  }
+
+  // Power Up Check (2%) - Only if not forced
+  if (!forcedValue && type === TileType.NORMAL && Math.random() < 0.02) {
     const powerUps = [TileType.RUNE_MIDAS, TileType.RUNE_CHRONOS, TileType.RUNE_VOID];
     const powerUpType = powerUps[Math.floor(Math.random() * powerUps.length)];
     const empty = getEmptyCells(activeGrid, size);
@@ -55,11 +91,11 @@ export const spawnTile = (grid: Tile[], size: number, level: number, forcedValue
   }
 
   // Determine value to spawn
-  activeGrid = placeOne(activeGrid, forcedValue);
+  activeGrid = placeOne(activeGrid, forcedValue, type);
 
   // Slime Ability: 20% chance to spawn an extra slime if the spawned tile was a Slime (2)
   const lastTile = activeGrid[activeGrid.length - 1];
-  if (lastTile && lastTile.value === 2 && lastTile.isNew && Math.random() < 0.2) {
+  if (lastTile && lastTile.type === TileType.NORMAL && lastTile.value === 2 && lastTile.isNew && Math.random() < 0.2) {
       activeGrid = placeOne(activeGrid, 2);
   }
 
@@ -75,6 +111,9 @@ export const tryAutoMerge = (grid: Tile[]): { success: boolean; grid: Tile[]; va
     for (let j = i + 1; j < grid.length; j++) {
       const t1 = grid[i];
       const t2 = grid[j];
+      // Auto merge only works on normal tiles
+      if (t1.type === TileType.BOSS || t2.type === TileType.BOSS) continue;
+      
       const dist = Math.abs(t1.x - t2.x) + Math.abs(t1.y - t2.y);
       if (dist === 1 && t1.value === t2.value) {
         pairs.push({ t1, t2 });
@@ -112,6 +151,8 @@ export const moveGrid = (grid: Tile[], direction: Direction, size: number): Move
   let goldGained = 0;
   let powerUpTriggered: TileType | undefined;
   const mergedIds: string[] = [];
+  let bossDefeated = false;
+  const logs: string[] = [];
 
   const sortedTiles = [...grid];
   const vector = { x: 0, y: 0 };
@@ -128,6 +169,7 @@ export const moveGrid = (grid: Tile[], direction: Direction, size: number): Move
   let newGrid: Tile[] = [];
   const mergedIndices = new Set<string>();
 
+  // Movement Phase
   sortedTiles.forEach((tile) => {
     let { x, y } = tile;
     let nextX = x + vector.x;
@@ -142,6 +184,11 @@ export const moveGrid = (grid: Tile[], direction: Direction, size: number): Move
       const collision = newGrid.find(t => t.x === nextX && t.y === nextY);
       
       if (collision) {
+        // Boss Logic: Bosses act as walls. They don't merge, and nothing merges into them.
+        if (tile.type === TileType.BOSS || collision.type === TileType.BOSS) {
+            break; 
+        }
+
         if (!mergedIndices.has(collision.id) && collision.value === tile.value) {
           // MERGE HAPPENS
           moved = true;
@@ -201,6 +248,7 @@ export const moveGrid = (grid: Tile[], direction: Direction, size: number): Move
   drakeMerges.forEach(drake => {
       const neighbors = newGrid.filter(n => 
           n.id !== drake.id && 
+          n.type !== TileType.BOSS &&
           n.value < 32 &&
           Math.abs(n.x - drake.x) + Math.abs(n.y - drake.y) === 1
       );
@@ -213,6 +261,49 @@ export const moveGrid = (grid: Tile[], direction: Direction, size: number): Move
       }
   });
 
+  // Boss Damage Logic
+  // Iterate through new grid to find bosses
+  const bossTiles = newGrid.filter(t => t.type === TileType.BOSS);
+  let deadBossIds: string[] = [];
+
+  bossTiles.forEach(boss => {
+      if (!boss.health) return;
+
+      // Find merges that happened adjacent to this boss
+      const adjacentMerges = newGrid.filter(t => 
+          mergedIds.includes(t.id) &&
+          Math.abs(t.x - boss.x) + Math.abs(t.y - boss.y) === 1
+      );
+
+      if (adjacentMerges.length > 0) {
+          let totalDamage = 0;
+          adjacentMerges.forEach(m => totalDamage += m.value);
+          
+          boss.health -= totalDamage;
+          boss.mergedFrom = ['damage']; // Trigger shake/damage visual
+
+          logs.push(`Boss hit for ${totalDamage} damage!`);
+
+          if (boss.health <= 0) {
+              deadBossIds.push(boss.id);
+              bossDefeated = true;
+              
+              // Rewards
+              const rewardXP = (boss.maxHealth || 100) * 5;
+              const rewardGold = (boss.maxHealth || 100);
+              
+              xpGained += rewardXP;
+              goldGained += rewardGold;
+              logs.push(`Boss Defeated! +${rewardGold}G +${rewardXP}XP`);
+          }
+      }
+  });
+
+  if (deadBossIds.length > 0) {
+      newGrid = newGrid.filter(t => !deadBossIds.includes(t.id));
+      moved = true; 
+  }
+
   // Combo Calculation
   const mergeCount = mergedIds.length;
   let comboMultiplier = 1;
@@ -223,7 +314,7 @@ export const moveGrid = (grid: Tile[], direction: Direction, size: number): Move
   xpGained = Math.floor(xpGained * comboMultiplier);
   goldGained = Math.floor(goldGained * comboMultiplier);
 
-  return { grid: newGrid, score, xpGained, goldGained, moved, mergedIds, powerUpTriggered, combo: mergeCount, comboMultiplier };
+  return { grid: newGrid, score, xpGained, goldGained, moved, mergedIds, powerUpTriggered, combo: mergeCount, comboMultiplier, logs, bossDefeated };
 };
 
 export const applyMidasTouch = (grid: Tile[]): { grid: Tile[]; score: number; mergedCount: number } => {
@@ -238,6 +329,8 @@ export const applyMidasTouch = (grid: Tile[]): { grid: Tile[]; score: number; me
                 const t1 = currentGrid[i];
                 const t2 = currentGrid[j];
                 if (!t1 || !t2) continue;
+                if (t1.type === TileType.BOSS || t2.type === TileType.BOSS) continue;
+
                 const dist = Math.abs(t1.x - t2.x) + Math.abs(t1.y - t2.y);
                 if (dist === 1 && t1.value === t2.value) {
                     const newValue = t1.value * 2;
@@ -258,21 +351,41 @@ export const applyMidasTouch = (grid: Tile[]): { grid: Tile[]; score: number; me
 };
 
 export const applyChronosShift = (grid: Tile[], size: number): Tile[] => {
-    const sorted = [...grid].sort((a, b) => b.value - a.value);
+    const bosses = grid.filter(t => t.type === TileType.BOSS);
+    const normalTiles = grid.filter(t => t.type !== TileType.BOSS);
+
+    const sorted = [...normalTiles].sort((a, b) => b.value - a.value);
     const newGrid: Tile[] = [];
-    let x = 0, y = 0, dx = 1;
-    sorted.forEach(tile => {
-        newGrid.push({ ...tile, x, y, isNew: false, mergedFrom: null });
-        x += dx;
-        if (x >= size || x < 0) { x -= dx; y++; dx = -dx; }
-    });
+    
+    const occupied = new Set(bosses.map(b => `${b.x},${b.y}`));
+    let sortedIdx = 0;
+
+    for(let y=0; y<size; y++) {
+        for(let x=0; x<size; x++) {
+            if (occupied.has(`${x},${y}`)) {
+                const boss = bosses.find(b => b.x === x && b.y === y);
+                if (boss) newGrid.push(boss);
+            } else {
+                if (sortedIdx < sorted.length) {
+                    const t = sorted[sortedIdx];
+                    newGrid.push({ ...t, x, y, isNew: false, mergedFrom: null });
+                    sortedIdx++;
+                }
+            }
+        }
+    }
     return newGrid;
 };
 
 export const applyVoidSingularity = (grid: Tile[], size: number): { grid: Tile[]; score: number } => {
     let score = 0;
+    const bosses = grid.filter(t => t.type === TileType.BOSS);
     
-    // Collapse logic
+    bosses.forEach(b => {
+        if(b.health) b.health = Math.floor(b.health / 2); 
+    });
+    
+    const others = grid.filter(t => t.type !== TileType.BOSS);
     const process = (values: number[]) => {
         values.sort((a,b) => a - b);
         const nextValues: number[] = [];
@@ -289,18 +402,21 @@ export const applyVoidSingularity = (grid: Tile[], size: number): { grid: Tile[]
         return nextValues;
     };
     
-    let currentValues = grid.map(t => t.value);
+    let currentValues = others.map(t => t.value);
     let prevLen = currentValues.length + 1;
     while (currentValues.length < prevLen) {
         prevLen = currentValues.length;
         currentValues = process(currentValues);
     }
     const sortedFinal = currentValues.sort((a,b) => b - a);
+    
+    const occupied = new Set(bosses.map(b => `${b.x},${b.y}`));
+    const newTiles: Tile[] = [...bosses];
     let idx = 0;
-    const newTiles: Tile[] = [];
+    
     for(let r=0; r<size; r++) {
         for(let c=0; c<size; c++) {
-             if (idx < sortedFinal.length) {
+             if (!occupied.has(`${c},${r}`) && idx < sortedFinal.length) {
                  newTiles.push({ id: createId(), x: c, y: r, value: sortedFinal[idx], type: TileType.NORMAL });
                  idx++;
              }
@@ -338,9 +454,10 @@ export const useInventoryItem = (state: GameState, item: InventoryItem): Partial
   if (item.type === ItemType.XP_POTION) { newState.xp = state.xp + (500 * state.level); return newState; }
   if (item.type === ItemType.BOMB_SCROLL) {
     let grid = [...state.grid];
-    grid.sort((a, b) => a.value - b.value);
-    const toRemove = grid.slice(0, 3).map(t => t.id);
-    newState.grid = state.grid.filter(t => !toRemove.includes(t.id));
+    const candidates = grid.filter(t => t.type !== TileType.BOSS);
+    candidates.sort((a, b) => a.value - b.value);
+    const toRemoveIds = candidates.slice(0, 3).map(t => t.id);
+    newState.grid = state.grid.filter(t => !toRemoveIds.includes(t.id));
     return newState;
   }
   if (item.type === ItemType.GOLDEN_RUNE) { newState.activeEffects = [...(state.activeEffects || []), 'GOLDEN_SPAWN']; return newState; }
@@ -351,154 +468,149 @@ export const useInventoryItem = (state: GameState, item: InventoryItem): Partial
       newState.effectCounters = counters;
       return newState;
   }
-  if (item.type === ItemType.GREATER_XP_POTION) { newState.xp = state.xp + (2000 * state.level); return newState; }
+  
+  // Crafted items logic
+  if (item.type === ItemType.GREATER_XP_POTION) { newState.xp = state.xp + 2500; return newState; }
   if (item.type === ItemType.CATACLYSM_SCROLL) {
-    let grid = [...state.grid].filter(t => t.value < 1024);
-    for (let i = grid.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [grid[i], grid[j]] = [grid[j], grid[i]]; }
-    const toRemoveIds = grid.slice(0, Math.floor(grid.length / 2)).map(t => t.id);
-    newState.grid = state.grid.filter(t => !toRemoveIds.includes(t.id));
-    return newState;
+      const nonBoss = state.grid.filter(t => t.type !== TileType.BOSS);
+      const shuffled = nonBoss.sort(() => 0.5 - Math.random());
+      const toRemoveCount = Math.floor(shuffled.length / 2);
+      const toRemoveIds = shuffled.slice(0, toRemoveCount).map(t => t.id);
+      newState.grid = state.grid.filter(t => !toRemoveIds.includes(t.id));
+      return newState;
   }
   if (item.type === ItemType.ASCENDANT_RUNE) {
       const counters = { ...state.effectCounters };
-      counters['ASCENDANT_SPAWN'] = (counters['ASCENDANT_SPAWN'] || 0) + 5;
+      counters['ASCENDANT_SPAWN'] = 5;
       newState.effectCounters = counters;
       return newState;
   }
+
   return null;
 };
 
+export const initializeGame = (reset = false): GameState => {
+  const saved = localStorage.getItem('2048_rpg_state_v3');
+  if (saved && !reset) {
+    try {
+        const parsed = JSON.parse(saved);
+        const stageConfig = getStage(parsed.level || 1);
+        parsed.currentStage = {
+            name: stageConfig.name,
+            minLevel: stageConfig.minLevel,
+            backgroundUrl: getStageBackground(stageConfig.name),
+            colorTheme: stageConfig.color
+        };
+        return parsed;
+    } catch (e) {
+        console.error("Failed to load save", e);
+    }
+  }
+
+  const initialSize = GRID_SIZE_INITIAL;
+  let grid: Tile[] = [];
+  grid = spawnTile(grid, initialSize, 1, 2);
+  grid = spawnTile(grid, initialSize, 1, 2);
+
+  const savedAchievements = localStorage.getItem(ACHIEVEMENTS_STORAGE_KEY);
+  const achievements = savedAchievements ? JSON.parse(savedAchievements) : [];
+  const savedHighscore = localStorage.getItem('2048_rpg_highscore');
+  
+  const startStageConfig = getStage(1);
+  const startStage: Stage = {
+      name: startStageConfig.name,
+      minLevel: startStageConfig.minLevel,
+      backgroundUrl: getStageBackground(startStageConfig.name),
+      colorTheme: startStageConfig.color
+  };
+
+  return {
+    grid,
+    score: 0,
+    bestScore: savedHighscore ? parseInt(savedHighscore) : 0,
+    xp: 0,
+    level: 1,
+    gold: 0,
+    inventory: [],
+    gridSize: initialSize,
+    gameOver: false,
+    victory: false,
+    gameWon: false,
+    combo: 0,
+    logs: ["Welcome to the Dungeon."],
+    activeEffects: [],
+    effectCounters: {},
+    currentStage: startStage,
+    rerolls: 0,
+    stats: {
+        totalMerges: 0,
+        highestCombo: 0,
+        slimesMerged: 0,
+        bossesDefeated: 0,
+        goldCollected: 0,
+        highestTile: 2,
+        totalMoves: 0
+    },
+    achievements
+  };
+};
+
 export const isGameOver = (grid: Tile[], size: number): boolean => {
-  if (getEmptyCells(grid, size).length > 0) return false;
+  if (grid.length < size * size) return false;
   for (let i = 0; i < grid.length; i++) {
-    const t = grid[i];
-    const neighbors = [
-      grid.find(n => n.x === t.x + 1 && n.y === t.y),
-      grid.find(n => n.x === t.x && n.y === t.y + 1)
-    ];
+    const t1 = grid[i];
+    const neighbors = grid.filter(t => 
+      (Math.abs(t.x - t1.x) === 1 && t.y === t1.y) || 
+      (Math.abs(t.y - t1.y) === 1 && t.x === t1.x)
+    );
     for (const n of neighbors) {
-      if (n && n.value === t.value) return false;
+      if (t1.type !== TileType.BOSS && n.type !== TileType.BOSS && t1.value === n.value) return false;
     }
   }
   return true;
 };
 
-// --- Achievement Persistence Logic ---
+export const saveHighscore = (state: GameState) => {
+    const scores = getHighscores();
+    scores.push({
+        date: Date.now(),
+        score: state.score,
+        level: state.level,
+        gold: state.gold
+    });
+    scores.sort((a, b) => b.score - a.score);
+    const top10 = scores.slice(0, 10);
+    localStorage.setItem(LEADERBOARD_KEY, JSON.stringify(top10));
+};
 
-export const getPersistentAchievements = (): string[] => {
+export const getHighscores = (): LeaderboardEntry[] => {
     try {
-        const raw = localStorage.getItem(ACHIEVEMENTS_STORAGE_KEY);
-        return raw ? JSON.parse(raw) : [];
-    } catch { return []; }
+        const data = localStorage.getItem(LEADERBOARD_KEY);
+        return data ? JSON.parse(data) : [];
+    } catch {
+        return [];
+    }
+};
+
+export const checkAchievements = (state: GameState): Achievement[] => {
+    const unlocked: Achievement[] = [];
+    ACHIEVEMENTS.forEach(ach => {
+        if (!state.achievements.includes(ach.id)) {
+            if (ach.condition(state.stats, state)) {
+                unlocked.push(ach);
+            }
+        }
+    });
+    return unlocked;
 };
 
 export const savePersistentAchievements = (ids: string[]) => {
     localStorage.setItem(ACHIEVEMENTS_STORAGE_KEY, JSON.stringify(ids));
 };
 
-export const checkAchievements = (state: GameState): Achievement[] => {
-    const newUnlocks: Achievement[] = [];
-    
-    ACHIEVEMENTS.forEach(ach => {
-        if (!state.achievements.includes(ach.id)) {
-            if (ach.condition(state.stats, state)) {
-                newUnlocks.push(ach);
-            }
-        }
-    });
-    
-    return newUnlocks;
-};
-
-export const initializeGame = (loadFromStorage = false): GameState => {
-  const initialStats: GameStats = { totalMerges: 0, highestCombo: 0, slimesMerged: 0, goldCollected: 0, highestTile: 0, totalMoves: 0 };
-  const persistentAchievements = getPersistentAchievements();
-  
-  if (loadFromStorage) {
-    const saved = localStorage.getItem('2048_rpg_state_v3');
-    if (saved) {
-      const parsed = JSON.parse(saved);
-      // Migrations
-      if (!parsed.stats) parsed.stats = initialStats;
-      if (!parsed.effectCounters) parsed.effectCounters = {};
-      if (typeof parsed.rerolls === 'undefined') parsed.rerolls = 0;
-      
-      // Merge saved achievements with persistent ones to ensure they are up to date
-      const mergedAchievements = Array.from(new Set([...(parsed.achievements || []), ...persistentAchievements]));
-      parsed.achievements = mergedAchievements;
-
-      if (!parsed.currentStage) {
-          const stageConfig = getStage(parsed.level);
-          parsed.currentStage = {
-              name: stageConfig.name,
-              minLevel: stageConfig.minLevel,
-              backgroundUrl: getStageBackground(stageConfig.name),
-              colorTheme: stageConfig.color
-          };
-      }
-      return parsed;
-    }
-  }
-
-  let startGrid: Tile[] = [];
-  startGrid = spawnTile(startGrid, GRID_SIZE_INITIAL, 1);
-  startGrid = spawnTile(startGrid, GRID_SIZE_INITIAL, 1);
-
-  const stageConfig = getStage(1);
-  const initialStage: Stage = {
-      name: stageConfig.name,
-      minLevel: stageConfig.minLevel,
-      backgroundUrl: getStageBackground(stageConfig.name),
-      colorTheme: stageConfig.color
-  };
-
-  return {
-    grid: startGrid,
-    score: 0,
-    bestScore: parseInt(localStorage.getItem('2048_rpg_highscore') || '0'),
-    xp: 0,
-    gold: 0,
-    level: 1,
-    inventory: [],
-    gridSize: GRID_SIZE_INITIAL,
-    gameOver: false,
-    victory: false,
-    gameWon: false,
-    combo: 0,
-    logs: ['Welcome to the dungeon...'],
-    activeEffects: [],
-    effectCounters: {},
-    currentStage: initialStage,
-    rerolls: 0,
-    lastSpawnedTileId: undefined,
-    stats: initialStats,
-    achievements: persistentAchievements // Start with persistent achievements
-  };
-};
-
-export const saveHighscore = (state: GameState) => {
-    try {
-        const raw = localStorage.getItem(LEADERBOARD_KEY);
-        let entries: LeaderboardEntry[] = raw ? JSON.parse(raw) : [];
-        entries.push({ date: Date.now(), score: state.score, level: state.level, gold: state.gold });
-        entries.sort((a, b) => b.score - a.score);
-        entries = entries.slice(0, 20);
-        localStorage.setItem(LEADERBOARD_KEY, JSON.stringify(entries));
-    } catch (e) {
-        console.error("Failed to save high score", e);
-    }
-};
-
-export const getHighscores = (): LeaderboardEntry[] => {
-    try {
-        const raw = localStorage.getItem(LEADERBOARD_KEY);
-        return raw ? JSON.parse(raw) : [];
-    } catch (e) { return []; }
-};
-
 export const clearSaveData = () => {
     localStorage.removeItem('2048_rpg_state_v3');
-    localStorage.removeItem(LEADERBOARD_KEY);
     localStorage.removeItem('2048_rpg_highscore');
+    localStorage.removeItem(LEADERBOARD_KEY);
     localStorage.removeItem(ACHIEVEMENTS_STORAGE_KEY);
-}
+};

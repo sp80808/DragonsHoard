@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { Tile, TileType } from '../types';
-import { TILE_STYLES, FALLBACK_STYLE } from '../constants';
+import { TILE_STYLES, BOSS_STYLE, FALLBACK_STYLE } from '../constants';
 
 interface TileProps {
   tile: Tile;
@@ -9,7 +9,10 @@ interface TileProps {
 }
 
 export const TileComponent: React.FC<TileProps> = ({ tile, gridSize }) => {
-  const style = TILE_STYLES[tile.value] || FALLBACK_STYLE;
+  let style = TILE_STYLES[tile.value] || FALLBACK_STYLE;
+  if (tile.type === TileType.BOSS) {
+      style = BOSS_STYLE;
+  }
   const [imgError, setImgError] = useState(false);
   
   const xPos = (tile.x / gridSize) * 100;
@@ -56,12 +59,12 @@ export const TileComponent: React.FC<TileProps> = ({ tile, gridSize }) => {
 
         {/* Content Overlay */}
         <div className="absolute inset-0 flex flex-col items-center justify-center z-10 p-1">
-            {/* Value */}
+            {/* Value (Hidden for Bosses) */}
             <span className={`font-serif font-black text-white drop-shadow-[0_2px_4px_rgba(0,0,0,1)] tracking-tighter
                 ${gridSize > 5 ? 'text-lg' : 'text-3xl'}
                 ${tile.value > 1000 ? 'text-yellow-200' : ''}
             `}>
-                {tile.value}
+                {tile.type !== TileType.BOSS ? tile.value : ''}
             </span>
             
             {/* Label */}
@@ -69,6 +72,16 @@ export const TileComponent: React.FC<TileProps> = ({ tile, gridSize }) => {
                 {style.label}
             </span>
         </div>
+
+        {/* Boss Health Bar */}
+        {tile.type === TileType.BOSS && tile.health !== undefined && tile.maxHealth !== undefined && (
+             <div className="absolute bottom-1 left-1 right-1 h-1.5 bg-slate-900 rounded-full overflow-hidden border border-white/20 z-20">
+                 <div 
+                    className="h-full bg-red-600 transition-all duration-300" 
+                    style={{ width: `${(tile.health / tile.maxHealth) * 100}%` }}
+                 />
+             </div>
+        )}
 
         {/* Special Indicators */}
         {tile.type === TileType.BOMB && <div className="absolute top-1 right-1 text-xs z-20 animate-pulse bg-red-500/80 rounded-full w-4 h-4 flex items-center justify-center">💣</div>}

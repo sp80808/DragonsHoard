@@ -27,6 +27,14 @@ export const TILE_STYLES: Record<number, { label: string; color: string; icon: s
   2048: { label: 'God', color: 'from-yellow-500 via-orange-500 to-red-500', icon: '🐲', glow: 'shadow-yellow-500/80', imageUrl: genUrl('ultimate cosmic dragon god glowing eyes', 2048) },
 };
 
+export const BOSS_STYLE = { 
+  label: 'BOSS', 
+  color: 'from-red-950 via-black to-red-900', 
+  icon: '☠️', 
+  glow: 'shadow-red-500/80', 
+  imageUrl: genUrl('terrifying giant raid boss monster red eyes smoke', 'BOSS') 
+};
+
 export const FALLBACK_STYLE = { label: 'Ascended', color: 'from-slate-900 to-black', icon: '🌟', glow: 'shadow-white/50', imageUrl: genUrl('cosmic star energy', 9999) };
 
 export const RUNE_STYLES: Record<string, { label: string; color: string; icon: string; glow: string; imageUrl: string }> = {
@@ -55,6 +63,7 @@ export const getStageBackground = (stageName: string) => {
 export const PERKS = [
   { level: 3, desc: "Luck of the Goblin: 5% chance for 4-spawn" },
   { level: 5, desc: "Expansion: Grid size increased to 5x5!" },
+  { level: 5, desc: "BOSSES: Dangerous bosses appear every 5 levels!" },
   { level: 7, desc: "Veteran: +50% XP from merges" },
   { level: 10, desc: "Loot Mode: Merges drop Gold & Items" },
   { level: 10, desc: "Expansion: Grid size increased to 6x6!" },
@@ -128,6 +137,14 @@ export const ACHIEVEMENTS: Achievement[] = [
     icon: '🟢',
     condition: (stats) => stats.slimesMerged >= 50,
     reward: { xp: 500 }
+  },
+  {
+    id: 'boss_slayer',
+    name: 'Boss Slayer',
+    description: 'Defeat your first Boss.',
+    icon: '☠️',
+    condition: (stats) => stats.bossesDefeated >= 1,
+    reward: { gold: 500, xp: 1000 }
   },
   {
     id: 'combo_novice',

@@ -8,6 +8,7 @@ export enum Direction {
 
 export enum TileType {
   NORMAL = 'NORMAL',
+  BOSS = 'BOSS',
   BOMB = 'BOMB', // Clears 3x3
   GOLDEN = 'GOLDEN', // Worth 2x
   RUNE_MIDAS = 'RUNE_MIDAS',
@@ -54,6 +55,8 @@ export interface Tile {
   type: TileType;
   mergedFrom?: string[] | null;
   isNew?: boolean;
+  health?: number;
+  maxHealth?: number;
 }
 
 export interface Stage {
@@ -76,6 +79,7 @@ export interface GameStats {
   totalMerges: number;
   highestCombo: number;
   slimesMerged: number; // Value 2
+  bossesDefeated: number;
   goldCollected: number;
   highestTile: number;
   totalMoves: number;
@@ -126,6 +130,8 @@ export interface MoveResult {
   powerUpTriggered?: TileType;
   combo: number;
   comboMultiplier: number;
+  logs: string[];
+  bossDefeated?: boolean;
 }
 
 export interface LootResult {
