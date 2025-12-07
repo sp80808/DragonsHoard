@@ -1,6 +1,6 @@
 import React from 'react';
 import { getXpThreshold } from '../constants';
-import { Trophy, Star, Store as StoreIcon, Coins, RefreshCw, Menu } from 'lucide-react';
+import { Trophy, Star, Store as StoreIcon, Coins, RefreshCw, Menu, Clover, Skull } from 'lucide-react';
 import { InventoryItem } from '../types';
 
 interface HUDProps {
@@ -11,13 +11,14 @@ interface HUDProps {
   gold: number;
   inventory: InventoryItem[];
   rerolls: number;
+  effectCounters: Record<string, number>;
   onOpenStore: () => void;
   onUseItem: (item: InventoryItem) => void;
   onReroll: () => void;
   onMenu: () => void;
 }
 
-export const HUD: React.FC<HUDProps> = ({ score, bestScore, level, xp, gold, inventory, rerolls, onOpenStore, onUseItem, onReroll, onMenu }) => {
+export const HUD: React.FC<HUDProps> = ({ score, bestScore, level, xp, gold, inventory, rerolls, effectCounters, onOpenStore, onUseItem, onReroll, onMenu }) => {
   const xpThreshold = getXpThreshold(level);
   const xpPercent = Math.min(100, (xp / xpThreshold) * 100);
   const canReroll = (level >= 15 && (rerolls > 0 || gold >= 50));
@@ -51,13 +52,16 @@ export const HUD: React.FC<HUDProps> = ({ score, bestScore, level, xp, gold, inv
   };
 
   const theme = getTheme(level);
-  
-  // Calculate animation speed - gets faster as level increases
-  // Range: Starts at ~3s, drops to ~1s by level 40
-  const shimmerDuration = Math.max(0.8, 3.0 - (level * 0.05)) + 's';
+  const shimmerDuration = Math.max(1.0, 3.5 - (level * 0.05)) + 's';
+
+  // Format active buffs for display
+  const buffs = [];
+  if ((effectCounters['LUCKY_LOOT'] || 0) > 0) buffs.push({ id: 'luck', icon: <Clover size={12} className="text-green-400" />, label: 'LUCK', count: effectCounters['LUCKY_LOOT'], color: 'bg-green-900/40 border-green-500/30' });
+  if ((effectCounters['ASCENDANT_SPAWN'] || 0) > 0) buffs.push({ id: 'asc', icon: <Star size={12} className="text-yellow-400" />, label: 'RUNE', count: effectCounters['ASCENDANT_SPAWN'], color: 'bg-yellow-900/40 border-yellow-500/30' });
+  if ((effectCounters['DEMON_CURSE'] || 0) > 0) buffs.push({ id: 'curse', icon: <Skull size={12} className="text-red-400" />, label: 'CURSE', count: effectCounters['DEMON_CURSE'], color: 'bg-red-900/40 border-red-500/30' });
 
   return (
-    <div className="w-full mb-4 space-y-3">
+    <div className="w-full mb-4 space-y-2">
       {/* Top Row: Title & Scores */}
       <div className="flex justify-between items-center bg-slate-900/90 p-3 rounded-xl border border-slate-700 shadow-xl backdrop-blur-md">
         <div className="flex items-center gap-3">
@@ -80,12 +84,23 @@ export const HUD: React.FC<HUDProps> = ({ score, bestScore, level, xp, gold, inv
         </div>
       </div>
 
+      {/* Buffs Row (Conditional) */}
+      {buffs.length > 0 && (
+          <div className="flex gap-2 justify-center animate-in fade-in slide-in-from-top-1">
+              {buffs.map(b => (
+                  <div key={b.id} className={`px-2 py-1 rounded border flex items-center gap-2 ${b.color} shadow-sm backdrop-blur-sm`}>
+                      {b.icon}
+                      <span className="text-[9px] font-bold text-slate-200 tracking-wide">{b.label}</span>
+                      <span className="text-[10px] font-mono text-white bg-black/40 px-1 rounded">{b.count}</span>
+                  </div>
+              ))}
+          </div>
+      )}
+
       {/* RPG Stats & Inventory Row */}
       <div className="flex gap-2 h-14">
-        {/* XP Bar Container */}
+        {/* XP Bar */}
         <div className={`flex-1 bg-slate-950/80 p-1.5 rounded-lg border ${theme.borderColor} relative flex flex-col justify-center shadow-lg transition-colors duration-500`}>
-          
-          {/* Level Badge & Label */}
           <div className="flex justify-between items-end mb-1 px-1 z-10 relative">
              <div className="flex items-center gap-1.5">
                 <div className={`w-5 h-5 flex items-center justify-center rounded bg-gradient-to-br ${theme.barGradient} text-[10px] font-bold text-white shadow-sm`}>
@@ -98,21 +113,18 @@ export const HUD: React.FC<HUDProps> = ({ score, bestScore, level, xp, gold, inv
              </span>
           </div>
 
-          {/* The Bar Itself */}
           <div className="w-full h-4 bg-slate-900 rounded bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0IiBoZWlnaHQ9IjQiPgo8cmVjdCB3aWR0aD0iNCIgaGVpZ2h0PSI0IiBmaWxsPSIjMGUxMTE3Ii8+CjxyZWN0IHdpZHRoPSIxIiBoZWlnaHQ9IjEiIGZpbGw9IiMxZTJmNDUiLz4KPC9zdmc+')] shadow-inner relative overflow-hidden ring-1 ring-white/5">
             <div 
               className={`h-full bg-gradient-to-r ${theme.barGradient} transition-all duration-500 ease-out relative shadow-[0_0_10px_rgba(0,0,0,0.5)]`}
               style={{ width: `${xpPercent}%` }}
             >
-                {/* Shimmer Overlay */}
                 <div 
-                    className="absolute inset-0 w-full h-full bg-[linear-gradient(90deg,transparent,rgba(255,255,255,0.4),transparent)]"
+                    className="absolute inset-0 w-full h-full"
                     style={{ 
+                        background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.1) 40%, rgba(255,255,255,0.6) 50%, rgba(255,255,255,0.1) 60%, transparent)',
                         animation: `shimmer ${shimmerDuration} infinite linear`
                     }}
                 ></div>
-                
-                {/* Leading Edge Glow */}
                 <div className="absolute right-0 top-0 bottom-0 w-[2px] bg-white/80 blur-[2px] shadow-[0_0_8px_white]"></div>
             </div>
           </div>
@@ -131,7 +143,6 @@ export const HUD: React.FC<HUDProps> = ({ score, bestScore, level, xp, gold, inv
 
       {/* Inventory & Reroll Row */}
       <div className="flex gap-2">
-        {/* Inventory Slots */}
         <div className="flex flex-1 gap-2">
             {[0, 1, 2].map((slotIndex) => {
                 const item = inventory[slotIndex];
@@ -142,7 +153,7 @@ export const HUD: React.FC<HUDProps> = ({ score, bestScore, level, xp, gold, inv
                                 onClick={() => onUseItem(item)}
                                 className="w-full h-full flex items-center justify-center hover:bg-white/5 transition-colors relative"
                             >
-                                <span className="text-2xl drop-shadow-md">{item.icon}</span>
+                                <span className="text-2xl drop-shadow-md transform group-hover:scale-110 transition-transform">{item.icon}</span>
                                 <span className="absolute bottom-0 right-1 text-[8px] text-slate-400 font-bold tracking-tighter opacity-70">{item.name.split(' ')[0]}</span>
                             </button>
                         ) : (
@@ -155,7 +166,6 @@ export const HUD: React.FC<HUDProps> = ({ score, bestScore, level, xp, gold, inv
             })}
         </div>
 
-        {/* Reroll Button (Lvl 15+) */}
         <button 
             onClick={canReroll ? onReroll : undefined}
             disabled={!canReroll}

@@ -20,8 +20,21 @@ export const TileComponent: React.FC<TileProps> = ({ tile, gridSize }) => {
   const size = 100 / gridSize;
 
   const isNewClass = tile.isNew ? 'tile-animation-enter' : '';
-  const isMergedClass = tile.mergedFrom ? 'tile-animation-merge damage-flash' : '';
-  const isSlash = tile.mergedFrom && tile.value >= 32 ? 'slash-effect' : '';
+  
+  // Determine animation type based on merge source
+  let animationClass = '';
+  if (tile.mergedFrom) {
+      if (tile.mergedFrom[0] === 'damage') {
+          // Boss took damage: Violent shake and red flash
+          animationClass = 'hit-flash shake'; 
+      } else {
+          // Normal Merge: Pulse and glow
+          animationClass = 'tile-animation-merge upgrade-flash';
+      }
+  }
+
+  // Slash effect for high level merges only
+  const isSlash = tile.mergedFrom && tile.value >= 32 && tile.mergedFrom[0] !== 'damage' ? 'slash-effect' : '';
   
   return (
     <div
@@ -33,7 +46,7 @@ export const TileComponent: React.FC<TileProps> = ({ tile, gridSize }) => {
       }}
     >
       <div
-        className={`w-full h-full rounded-lg relative overflow-hidden shadow-2xl ${isNewClass} ${isMergedClass} ${isSlash} group`}
+        className={`w-full h-full rounded-lg relative overflow-hidden shadow-2xl ${isNewClass} ${animationClass} ${isSlash} group`}
       >
         {/* Glow Container */}
         <div className={`absolute inset-0 transition-opacity duration-300 ${style.glow} opacity-0 group-hover:opacity-100`}></div>

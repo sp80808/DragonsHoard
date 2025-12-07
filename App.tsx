@@ -6,7 +6,7 @@ import { Store } from './components/Store';
 import { SplashScreen } from './components/SplashScreen';
 import { Leaderboard } from './components/Leaderboard';
 import { Settings } from './components/Settings';
-import { Direction, GameState, TileType, InventoryItem, FloatingText, CraftingRecipe, View, Achievement } from './types';
+import { Direction, GameState, TileType, InventoryItem, FloatingText, CraftingRecipe, View, Achievement, ItemType } from './types';
 import { initializeGame, moveGrid, spawnTile, isGameOver, checkLoot, useInventoryItem, applyMidasTouch, applyChronosShift, applyVoidSingularity, tryAutoMerge, saveHighscore, checkAchievements, savePersistentAchievements } from './services/gameLogic';
 import { SHOP_ITEMS, getXpThreshold, getStage, getStageBackground, getItemDefinition } from './constants';
 import { audioService } from './services/audioService';
@@ -31,7 +31,7 @@ type Action =
 const reducer = (state: GameState, action: Action): GameState => {
   switch (action.type) {
     case 'RESTART':
-      return initializeGame();
+      return initializeGame(true); // Force reset true to ignore localStorage save
       
     case 'LOAD_GAME':
       return action.state;
@@ -268,12 +268,6 @@ const reducer = (state: GameState, action: Action): GameState => {
       
       // Boss Spawning
       const existingBoss = newGrid.find(t => t.type === TileType.BOSS);
-      const shouldSpawnBoss = newLevel >= 5 && newLevel % 5 === 0 && !existingBoss && Math.random() < 0.2; 
-      // Actually, let's make it deterministic or high chance on level multiples to ensure players see them
-      // But avoid spawn camping. Let's say if no boss, and level % 5 == 0, 10% chance per move?
-      // Or simplify: logic in spawnTile handles probability?
-      // Let's force it here if condition met
-      
       if (newLevel > 0 && newLevel % 5 === 0 && !existingBoss && Math.random() < 0.1) {
           forcedType = TileType.BOSS;
           newLogs.push("A BOSS APPEARED!");
@@ -356,10 +350,22 @@ const App: React.FC = () => {
   const [floatingTexts, setFloatingTexts] = useState<FloatingText[]>([]);
   const [stageAnnouncement, setStageAnnouncement] = useState<string | null>(null);
   const [achievementToast, setAchievementToast] = useState<Achievement | null>(null);
+  const [itemEffect, setItemEffect] = useState<ItemType | null>(null);
   
   const prevXp = useRef(state.xp);
   const prevGold = useRef(state.gold);
   const prevStage = useRef(state.currentStage.name);
+
+  // Check if boss is present for visual effect
+  const bossPresent = state && state.grid ? state.grid.some(t => t.type === TileType.BOSS) : false;
+
+  // Clear item effect after animation
+  useEffect(() => {
+    if (itemEffect) {
+      const timer = setTimeout(() => setItemEffect(null), 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [itemEffect]);
 
   // Check Achievements on state change
   useEffect(() => {
@@ -511,6 +517,41 @@ const App: React.FC = () => {
   const handleContinue = () => { setView('GAME'); };
   const handleRestart = () => { dispatch({ type: 'RESTART' }); setView('GAME'); };
 
+  const handleUseItem = (item: InventoryItem) => {
+      setItemEffect(item.type);
+      dispatch({ type: 'USE_ITEM', item });
+  };
+  
+  const handleReroll = () => {
+      setItemEffect(ItemType.REROLL_TOKEN);
+      dispatch({ type: 'REROLL' });
+  }
+
+  // Determine which effect overlay to show
+  let effectOverlayClass = '';
+  if (itemEffect) {
+    switch (itemEffect) {
+        case ItemType.XP_POTION:
+        case ItemType.GREATER_XP_POTION:
+            effectOverlayClass = 'effect-xp';
+            break;
+        case ItemType.BOMB_SCROLL:
+        case ItemType.CATACLYSM_SCROLL:
+            effectOverlayClass = 'effect-bomb';
+            break;
+        case ItemType.GOLDEN_RUNE:
+        case ItemType.ASCENDANT_RUNE:
+            effectOverlayClass = 'effect-gold';
+            break;
+        case ItemType.LUCKY_CHARM:
+            effectOverlayClass = 'effect-luck';
+            break;
+        case ItemType.REROLL_TOKEN:
+            effectOverlayClass = 'effect-reroll';
+            break;
+    }
+  }
+
   return (
     <div 
       className="min-h-screen bg-[#050505] text-slate-200 flex flex-col items-center justify-center p-4 relative overflow-hidden font-sans select-none"
@@ -526,8 +567,9 @@ const App: React.FC = () => {
             opacity: view === 'GAME' ? 0.3 : 0.1
         }}
       />
+      {/* Dynamic Vignette - Pulses red if boss is present */}
+      <div className={`vignette ${bossPresent ? 'boss-mode' : ''}`}></div>
       <div className="scanlines"></div>
-      <div className="vignette"></div>
       
       {view === 'SPLASH' && (
           <SplashScreen 
@@ -544,6 +586,9 @@ const App: React.FC = () => {
 
       {view === 'GAME' && (
           <>
+            {/* Visual Effect Overlay */}
+            {effectOverlayClass && <div className={`absolute inset-0 ${effectOverlayClass}`}></div>}
+            
             <div className="absolute inset-0 pointer-events-none z-50 overflow-hidden">
                 {floatingTexts.map(ft => (
                     <div 
@@ -593,9 +638,10 @@ const App: React.FC = () => {
                     gold={state.gold}
                     inventory={state.inventory}
                     rerolls={state.rerolls}
+                    effectCounters={state.effectCounters}
                     onOpenStore={() => setShowStore(true)}
-                    onUseItem={(item) => dispatch({ type: 'USE_ITEM', item })}
-                    onReroll={() => dispatch({ type: 'REROLL' })}
+                    onUseItem={handleUseItem}
+                    onReroll={handleReroll}
                     onMenu={() => setView('SETTINGS')}
                 />
 
@@ -632,7 +678,7 @@ const App: React.FC = () => {
                     onClose={() => setShowStore(false)} 
                     onBuy={(item) => dispatch({ type: 'BUY_ITEM', item })} 
                     onCraft={(recipe) => dispatch({ type: 'CRAFT_ITEM', recipe })}
-                    onUseItem={(item) => dispatch({ type: 'USE_ITEM', item })}
+                    onUseItem={handleUseItem}
                 />
             )}
 
