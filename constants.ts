@@ -1,5 +1,5 @@
 
-import { TileType, ItemType, InventoryItem, Stage, CraftingRecipe } from './types';
+import { TileType, ItemType, InventoryItem, Stage, CraftingRecipe, Achievement } from './types';
 
 export const GRID_SIZE_INITIAL = 4;
 export const WINNING_VALUE = 2048;
@@ -33,12 +33,6 @@ export const RUNE_STYLES: Record<string, { label: string; color: string; icon: s
   RUNE_MIDAS: { label: 'Midas', color: 'from-yellow-400 to-amber-600', icon: '👑', glow: 'shadow-yellow-400/80', imageUrl: genUrl('golden midas touch hand magic rune', 'midas') },
   RUNE_CHRONOS: { label: 'Chronos', color: 'from-blue-400 to-cyan-600', icon: '⏳', glow: 'shadow-cyan-400/80', imageUrl: genUrl('blue time manipulation magic rune hourglass', 'chronos') },
   RUNE_VOID: { label: 'Void', color: 'from-purple-950 to-black', icon: '⚫', glow: 'shadow-purple-900/80', imageUrl: genUrl('black hole void swirling magic rune', 'void') },
-};
-
-export const POWER_UP_CONFIG = {
-  RUNE_MIDAS: "Midas Touch: Recursively merges all possible tiles.",
-  RUNE_CHRONOS: "Chronos Shift: Reorders tiles strategically.",
-  RUNE_VOID: "Void Singularity: Pulls all tiles to center."
 };
 
 export const STAGES: { name: string; minLevel: number; prompt: string; color: string }[] = [
@@ -108,7 +102,6 @@ export const RECIPES: CraftingRecipe[] = [
   }
 ];
 
-// Helper to get definition for crafted items since they aren't in SHOP_ITEMS
 export const getItemDefinition = (type: ItemType) => {
     const shopItem = SHOP_ITEMS.find(i => i.id === type);
     if (shopItem) return shopItem;
@@ -118,3 +111,54 @@ export const getItemDefinition = (type: ItemType) => {
     
     return { name: "Unknown", desc: "???", icon: "❓" };
 };
+
+export const ACHIEVEMENTS: Achievement[] = [
+  {
+    id: 'first_blood',
+    name: 'First Blood',
+    description: 'Merge your first tiles.',
+    icon: '⚔️',
+    condition: (stats) => stats.totalMerges > 0,
+    reward: { gold: 50 }
+  },
+  {
+    id: 'slime_hunter',
+    name: 'Slime Hunter',
+    description: 'Merge 50 Slimes (Value 2).',
+    icon: '🟢',
+    condition: (stats) => stats.slimesMerged >= 50,
+    reward: { xp: 500 }
+  },
+  {
+    id: 'combo_novice',
+    name: 'Combo Novice',
+    description: 'Achieve a 4x Combo.',
+    icon: '🔥',
+    condition: (stats) => stats.highestCombo >= 4,
+    reward: { gold: 100 }
+  },
+  {
+    id: 'dragon_tamer',
+    name: 'Dragon Tamer',
+    description: 'Create a Drake (32).',
+    icon: '🦎',
+    condition: (stats) => stats.highestTile >= 32,
+    reward: { gold: 250, xp: 250 }
+  },
+  {
+    id: 'hoarder',
+    name: 'Gold Hoarder',
+    description: 'Collect 1000 Gold total.',
+    icon: '💰',
+    condition: (stats) => stats.goldCollected >= 1000,
+    reward: { item: ItemType.LUCKY_CHARM }
+  },
+  {
+    id: 'legendary',
+    name: 'Legendary',
+    description: 'Create a Legend (512).',
+    icon: '⚡',
+    condition: (stats) => stats.highestTile >= 512,
+    reward: { item: ItemType.GOLDEN_RUNE, gold: 1000 }
+  }
+];

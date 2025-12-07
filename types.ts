@@ -72,6 +72,25 @@ export interface FloatingText {
   createdAt: number;
 }
 
+export interface GameStats {
+  totalMerges: number;
+  highestCombo: number;
+  slimesMerged: number; // Value 2
+  goldCollected: number;
+  highestTile: number;
+  totalMoves: number;
+}
+
+export interface Achievement {
+  id: string;
+  name: string;
+  description: string;
+  icon: string;
+  condition: (stats: GameStats, state: GameState) => boolean;
+  reward?: { gold?: number; xp?: number; item?: ItemType };
+  isSecret?: boolean;
+}
+
 export interface GameState {
   grid: Tile[];
   score: number;
@@ -92,6 +111,8 @@ export interface GameState {
   powerUpEffect?: string;
   rerolls: number;
   lastSpawnedTileId?: string;
+  stats: GameStats;
+  achievements: string[]; // IDs of unlocked achievements
 }
 
 export interface MoveResult {
@@ -103,6 +124,8 @@ export interface MoveResult {
   mergedIds: string[];
   lastSpawnedTileId?: string;
   powerUpTriggered?: TileType;
+  combo: number;
+  comboMultiplier: number;
 }
 
 export interface LootResult {

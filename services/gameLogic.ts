@@ -1,6 +1,6 @@
 
-import { Direction, GameState, Tile, TileType, MoveResult, LootResult, ItemType, InventoryItem, Stage, LeaderboardEntry } from '../types';
-import { GRID_SIZE_INITIAL, SHOP_ITEMS, getStage, getStageBackground } from '../constants';
+import { Direction, GameState, Tile, TileType, MoveResult, LootResult, ItemType, InventoryItem, Stage, LeaderboardEntry, GameStats, Achievement } from '../types';
+import { GRID_SIZE_INITIAL, SHOP_ITEMS, getStage, getStageBackground, ACHIEVEMENTS } from '../constants';
 
 const createId = () => Math.random().toString(36).substr(2, 9);
 const LEADERBOARD_KEY = 'dragon_hoard_leaderboard';
@@ -18,47 +18,56 @@ export const getEmptyCells = (grid: Tile[], size: number) => {
 };
 
 export const spawnTile = (grid: Tile[], size: number, level: number, forcedValue?: number): Tile[] => {
-  // Check for PowerUp Spawn (2% chance)
-  if (!forcedValue && Math.random() < 0.02) {
-    const powerUps = [TileType.RUNE_MIDAS, TileType.RUNE_CHRONOS, TileType.RUNE_VOID];
-    const powerUpType = powerUps[Math.floor(Math.random() * powerUps.length)];
-    
-    const emptyCells = getEmptyCells(grid, size);
-    if (emptyCells.length === 0) return grid;
-    const { x, y } = emptyCells[Math.floor(Math.random() * emptyCells.length)];
+  let activeGrid = [...grid];
+  
+  // Helper to place one tile
+  const placeOne = (currentGrid: Tile[], val?: number): Tile[] => {
+      const empty = getEmptyCells(currentGrid, size);
+      if (empty.length === 0) return currentGrid;
+      
+      const { x, y } = empty[Math.floor(Math.random() * empty.length)];
+      
+      // Default Value Logic
+      let value = (level >= 3 && Math.random() < 0.1) ? 4 : 2;
+      if (val) value = val;
 
-    const newTile: Tile = {
+      const newTile: Tile = {
         id: createId(),
         x,
         y,
-        value: 2, // Base value, merges with 2
-        type: powerUpType,
-        isNew: true
-    };
-    return [...grid, newTile];
-  }
-
-  const emptyCells = getEmptyCells(grid, size);
-  if (emptyCells.length === 0) return grid;
-
-  const { x, y } = emptyCells[Math.floor(Math.random() * emptyCells.length)];
-  
-  // Default logic: Level 3 Perk: 5% chance for 4-spawn
-  let value = (level >= 3 && Math.random() < 0.1) ? 4 : 2; // Slight bump to 10%
-  
-  // Override if forced (e.g. from Golden Rune item)
-  if (forcedValue) value = forcedValue;
-
-  const newTile: Tile = {
-    id: createId(),
-    x,
-    y,
-    value,
-    type: TileType.NORMAL,
-    isNew: true,
+        value,
+        type: TileType.NORMAL,
+        isNew: true,
+      };
+      return [...currentGrid, newTile];
   };
 
-  return [...grid, newTile];
+  // Power Up Check (2%)
+  if (!forcedValue && Math.random() < 0.02) {
+    const powerUps = [TileType.RUNE_MIDAS, TileType.RUNE_CHRONOS, TileType.RUNE_VOID];
+    const powerUpType = powerUps[Math.floor(Math.random() * powerUps.length)];
+    const empty = getEmptyCells(activeGrid, size);
+    if (empty.length > 0) {
+        const { x, y } = empty[Math.floor(Math.random() * empty.length)];
+        return [...activeGrid, { id: createId(), x, y, value: 2, type: powerUpType, isNew: true }];
+    }
+  }
+
+  // Determine value to spawn
+  // Demon Curse Effect: If cursed, spawn 8 or 16
+  // We need to pass state/counters here ideally, but for now we'll rely on the caller passing `forcedValue` if there is a curse
+  // However, the `forcedValue` arg handles the curse from the reducer level.
+  
+  activeGrid = placeOne(activeGrid, forcedValue);
+
+  // Slime Ability: 20% chance to spawn an extra slime if the spawned tile was a Slime (2)
+  // We check the last added tile
+  const lastTile = activeGrid[activeGrid.length - 1];
+  if (lastTile && lastTile.value === 2 && lastTile.isNew && Math.random() < 0.2) {
+      activeGrid = placeOne(activeGrid, 2);
+  }
+
+  return activeGrid;
 };
 
 export const tryAutoMerge = (grid: Tile[]): { success: boolean; grid: Tile[]; value: number; mergedId?: string } => {
@@ -120,14 +129,39 @@ export const moveGrid = (grid: Tile[], direction: Direction, size: number): Move
   if (direction === Direction.DOWN) sortedTiles.sort((a, b) => b.y - a.y);
   if (direction === Direction.UP) sortedTiles.sort((a, b) => a.y - b.y);
 
-  const newGrid: Tile[] = [];
+  let newGrid: Tile[] = [];
   const mergedIndices = new Set<string>();
 
+  // Temporary grid for processing movements
+  let tempGrid = sortedTiles.map(t => ({...t}));
+
+  // Logic to process moves/merges
+  // We rebuild the grid tile by tile
+  // But wait, the standard 2048 alg requires processing in order.
+  
+  // Let's restart the loop properly
+  newGrid = []; // We will push final positions here
+  
+  // Track processed to avoid double merge
+  // We need to group by rows/cols based on direction to process correctly
+  // Actually the sortedTiles approach works if we process one by one and check the *newGrid* state?
+  // No, checking *newGrid* is hard.
+  // Let's stick to the existing logic but refine it.
+  
+  // Standard 2048 Algorithm
+  // 1. Group by line
+  // 2. Process each line: Slide, Merge, Slide
+  
+  // ... Or stick to the simpler collision logic if it works, but 2048 usually needs distinct phases.
+  // The existing implementation uses a collision check against `newGrid`.
+  
   sortedTiles.forEach((tile) => {
     let { x, y } = tile;
     let nextX = x + vector.x;
     let nextY = y + vector.y;
+    let merged = false;
     
+    // Simulate slide
     while (
       nextX >= 0 && nextX < size &&
       nextY >= 0 && nextY < size
@@ -136,7 +170,9 @@ export const moveGrid = (grid: Tile[], direction: Direction, size: number): Move
       
       if (collision) {
         if (!mergedIndices.has(collision.id) && collision.value === tile.value) {
+          // MERGE HAPPENS
           moved = true;
+          merged = true;
           const mergedValue = tile.value * 2;
           
           // Check for PowerUp Merges
@@ -144,21 +180,30 @@ export const moveGrid = (grid: Tile[], direction: Direction, size: number): Move
           if (collision.type !== TileType.NORMAL) powerUpTriggered = collision.type;
 
           collision.value = mergedValue;
-          collision.mergedFrom = [tile.id, collision.id];
-          collision.type = TileType.NORMAL; // Reset type after merge
+          collision.mergedFrom = [tile.id, collision.id]; // Animation source
+          collision.type = TileType.NORMAL; 
 
           mergedIndices.add(collision.id);
+          mergedIds.push(collision.id);
           
           score += collision.value;
           xpGained += collision.value * 2;
           
-          // Gold Formula: 0.5 Gold per value, + bonus for high tier merges
+          // Base Gold
           goldGained += Math.ceil(collision.value * 0.5);
 
-          mergedIds.push(collision.id);
+          // Goblin Ability: Bonus Gold (Value 4 merging into 8)
+          // If we just created an 8 (from 4s), add bonus
+          if (collision.value === 8) {
+              goldGained += 5; // Steal extra gold
+          }
+          
+          // Demon Ability: Check later in reducer, but we can flag it? 
+          // Actually we can just check merged values in reducer or return stats
+          
           return;
         } else {
-          break; 
+          break; // Hit a block
         }
       }
       x = nextX;
@@ -171,62 +216,76 @@ export const moveGrid = (grid: Tile[], direction: Direction, size: number): Move
       moved = true;
     }
 
-    newGrid.push({
-      ...tile,
-      x,
-      y,
-      mergedFrom: null,
-      isNew: false
-    });
+    if (!merged) {
+        newGrid.push({
+            ...tile,
+            x,
+            y,
+            mergedFrom: null,
+            isNew: false
+        });
+    }
   });
 
-  return { grid: newGrid, score, xpGained, goldGained, moved, mergedIds, powerUpTriggered };
+  // Post-Process Abilities
+  // Drake (32) Ability: Burn/Upgrade adjacent low tile
+  // Find tiles that became 32 (or higher if we want) in this turn
+  const drakeMerges = newGrid.filter(t => t.value === 32 && t.mergedFrom);
+  drakeMerges.forEach(drake => {
+      // Find a neighbor < 32
+      const neighbors = newGrid.filter(n => 
+          n.id !== drake.id && 
+          n.value < 32 &&
+          Math.abs(n.x - drake.x) + Math.abs(n.y - drake.y) === 1
+      );
+      
+      if (neighbors.length > 0) {
+          const victim = neighbors[Math.floor(Math.random() * neighbors.length)];
+          victim.value *= 2; // Upgrade!
+          victim.mergedFrom = [victim.id]; // Trigger animation
+          xpGained += victim.value; // Bonus XP for the burn
+      }
+  });
+
+  // Combo Calculation
+  const mergeCount = mergedIds.length;
+  let comboMultiplier = 1;
+  if (mergeCount > 1) {
+      comboMultiplier = 1 + (mergeCount - 1) * 0.5; // 2 merges = 1.5x, 3 merges = 2.0x, 4 merges = 2.5x
+  }
+
+  // Apply Multiplier
+  xpGained = Math.floor(xpGained * comboMultiplier);
+  goldGained = Math.floor(goldGained * comboMultiplier);
+
+  return { grid: newGrid, score, xpGained, goldGained, moved, mergedIds, powerUpTriggered, combo: mergeCount, comboMultiplier };
 };
 
-// Power Up Logic Handlers
-
+// ... Power Up Logic Handlers (Midas, Chronos, Void) ...
+// (Keeping existing implementations for brevity, they are imported in App.tsx)
 export const applyMidasTouch = (grid: Tile[]): { grid: Tile[]; score: number; mergedCount: number } => {
-    // Recursively merge all possible tiles until no more merges
     let currentGrid = [...grid];
     let totalScore = 0;
     let totalMerged = 0;
     let changed = true;
-
     while (changed) {
         changed = false;
-        // Simple greedy merge pass
-        // Horizontal
         for (let i = 0; i < currentGrid.length; i++) {
             for (let j = i + 1; j < currentGrid.length; j++) {
                 const t1 = currentGrid[i];
                 const t2 = currentGrid[j];
-                // Check if alive (might have been merged in this pass already)
                 if (!t1 || !t2) continue;
-
-                // Distance 1
                 const dist = Math.abs(t1.x - t2.x) + Math.abs(t1.y - t2.y);
                 if (dist === 1 && t1.value === t2.value) {
-                    // Merge!
                     const newValue = t1.value * 2;
                     totalScore += newValue;
                     totalMerged++;
-                    
-                    const newTile: Tile = {
-                         id: createId(),
-                         x: t1.x,
-                         y: t1.y,
-                         value: newValue,
-                         type: TileType.NORMAL,
-                         mergedFrom: [t1.id, t2.id]
-                    };
-                    
-                    // Remove t1 and t2, add newTile
+                    const newTile: Tile = { id: createId(), x: t1.x, y: t1.y, value: newValue, type: TileType.NORMAL, mergedFrom: [t1.id, t2.id] };
                     const nextGrid = currentGrid.filter(t => t.id !== t1.id && t.id !== t2.id);
                     nextGrid.push(newTile);
                     currentGrid = nextGrid;
-                    
                     changed = true;
-                    break; // Restart loop to handle array mutation safely
+                    break;
                 }
             }
             if (changed) break;
@@ -236,36 +295,23 @@ export const applyMidasTouch = (grid: Tile[]): { grid: Tile[]; score: number; me
 };
 
 export const applyChronosShift = (grid: Tile[], size: number): Tile[] => {
-    // Sort tiles by value descending
     const sorted = [...grid].sort((a, b) => b.value - a.value);
     const newGrid: Tile[] = [];
-    
-    // Snake pattern fill (top-left, right, down, left...)
-    let x = 0, y = 0;
-    let dx = 1; // 1 for right, -1 for left
-
+    let x = 0, y = 0, dx = 1;
     sorted.forEach(tile => {
         newGrid.push({ ...tile, x, y, isNew: false, mergedFrom: null });
-        
         x += dx;
-        if (x >= size || x < 0) {
-            x -= dx; // Undo move
-            y++;     // Move down
-            dx = -dx; // Reverse horizontal direction
-        }
+        if (x >= size || x < 0) { x -= dx; y++; dx = -dx; }
     });
-    
     return newGrid;
 };
 
 export const applyVoidSingularity = (grid: Tile[], size: number): { grid: Tile[]; score: number } => {
-    const valueMap: Record<number, number> = {}; // value -> count
+    const valueMap: Record<number, number> = {};
     let score = 0;
+    grid.forEach(t => { valueMap[t.value] = (valueMap[t.value] || 0) + 1; });
     
-    grid.forEach(t => {
-        valueMap[t.value] = (valueMap[t.value] || 0) + 1;
-    });
-    
+    // Collapse logic... same as before
     const newTiles: Tile[] = [];
     const finalValues: number[] = [];
     
@@ -277,7 +323,7 @@ export const applyVoidSingularity = (grid: Tile[], size: number): { grid: Tile[]
                 const merged = values[i] * 2;
                 score += merged;
                 nextValues.push(merged);
-                i++; // skip next
+                i++; 
             } else {
                 nextValues.push(values[i]);
             }
@@ -287,80 +333,36 @@ export const applyVoidSingularity = (grid: Tile[], size: number): { grid: Tile[]
     
     let currentValues = grid.map(t => t.value);
     let prevLen = currentValues.length + 1;
-    
     while (currentValues.length < prevLen) {
         prevLen = currentValues.length;
         currentValues = process(currentValues);
     }
-    
-    // Layout in spiral from center (simplified to sorted fill)
     const sortedFinal = currentValues.sort((a,b) => b - a);
-    
     let idx = 0;
     for(let r=0; r<size; r++) {
         for(let c=0; c<size; c++) {
              if (idx < sortedFinal.length) {
-                 newTiles.push({
-                     id: createId(),
-                     x: c,
-                     y: r,
-                     value: sortedFinal[idx],
-                     type: TileType.NORMAL
-                 });
+                 newTiles.push({ id: createId(), x: c, y: r, value: sortedFinal[idx], type: TileType.NORMAL });
                  idx++;
              }
         }
     }
-    
     return { grid: newTiles, score };
 };
 
 export const checkLoot = (level: number, mergedIds: string[], hasLuckyCharm: boolean = false): LootResult | null => {
   if (mergedIds.length === 0) return null;
-  
-  // Loot rolls
-  // Chance increases slightly with merged IDs count
   const chance = (0.05 + (mergedIds.length * 0.01)) * (hasLuckyCharm ? 2 : 1);
-  
   if (Math.random() < chance) {
     const roll = Math.random();
-
     if (roll > 0.95 && level >= 5) {
-      const item: InventoryItem = {
-        id: createId(),
-        type: ItemType.GOLDEN_RUNE,
-        name: "Golden Rune",
-        description: "Next spawn is upgraded.",
-        icon: "🌟"
-      };
-      return { message: "Loot: Golden Rune!", item };
+      return { message: "Loot: Golden Rune!", item: { id: createId(), type: ItemType.GOLDEN_RUNE, name: "Golden Rune", description: "Next spawn is upgraded.", icon: "🌟" } };
     } else if (roll > 0.85 && level >= 3) {
-      const item: InventoryItem = {
-        id: createId(),
-        type: ItemType.BOMB_SCROLL,
-        name: "Purge Scroll",
-        description: "Clears weak enemies.",
-        icon: "📜"
-      };
-      return { message: "Loot: Purge Scroll!", item };
+      return { message: "Loot: Purge Scroll!", item: { id: createId(), type: ItemType.BOMB_SCROLL, name: "Purge Scroll", description: "Clears weak enemies.", icon: "📜" } };
     } else if (roll > 0.7 && level >= 15) {
-       const item: InventoryItem = {
-        id: createId(),
-        type: ItemType.REROLL_TOKEN,
-        name: "Reroll Token",
-        description: "Free Board Reroll",
-        icon: "🔄"
-      };
-      return { message: "Loot: Reroll Token!", item }; 
+       return { message: "Loot: Reroll Token!", item: { id: createId(), type: ItemType.REROLL_TOKEN, name: "Reroll Token", description: "Free Board Reroll", icon: "🔄" } }; 
     } else if (roll > 0.6) {
-      const item: InventoryItem = {
-        id: createId(),
-        type: ItemType.XP_POTION,
-        name: "XP Potion",
-        description: "+500 XP",
-        icon: "🧪"
-      };
-      return { message: "Loot: XP Potion!", item };
+      return { message: "Loot: XP Potion!", item: { id: createId(), type: ItemType.XP_POTION, name: "XP Potion", description: "+500 XP", icon: "🧪" } };
     } else {
       const goldAmount = Math.floor(Math.random() * 50) + 10;
       return { message: `Loot: ${goldAmount} Gold`, gold: goldAmount };
@@ -369,73 +371,41 @@ export const checkLoot = (level: number, mergedIds: string[], hasLuckyCharm: boo
   return null;
 };
 
-// Item Logic
 export const useInventoryItem = (state: GameState, item: InventoryItem): Partial<GameState> | null => {
   const newState: Partial<GameState> = {
     inventory: state.inventory.filter(i => i.id !== item.id),
     logs: [...state.logs, `Used ${item.name}!`]
   };
-
-  // Standard Items
-  if (item.type === ItemType.XP_POTION) {
-    newState.xp = state.xp + (500 * state.level);
-    return newState;
-  }
-
+  if (item.type === ItemType.XP_POTION) { newState.xp = state.xp + (500 * state.level); return newState; }
   if (item.type === ItemType.BOMB_SCROLL) {
     let grid = [...state.grid];
     grid.sort((a, b) => a.value - b.value);
     const toRemove = grid.slice(0, 3).map(t => t.id);
-    const newGrid = state.grid.filter(t => !toRemove.includes(t.id));
-    newState.grid = newGrid;
+    newState.grid = state.grid.filter(t => !toRemove.includes(t.id));
     return newState;
   }
-
-  if (item.type === ItemType.GOLDEN_RUNE) {
-    newState.activeEffects = [...(state.activeEffects || []), 'GOLDEN_SPAWN'];
-    return newState;
-  }
-
-  if (item.type === ItemType.REROLL_TOKEN) {
-      newState.rerolls = (state.rerolls || 0) + 1;
-      return newState;
-  }
-
-  if (item.type === ItemType.LUCKY_CHARM) {
+  if (item.type === ItemType.GOLDEN_RUNE) { newState.activeEffects = [...(state.activeEffects || []), 'GOLDEN_SPAWN']; return newState; }
+  if (item.type === ItemType.REROLL_TOKEN) { newState.rerolls = (state.rerolls || 0) + 1; return newState; }
+  if (item.type === ItemType.LUCKY_CHARM) { 
       const counters = { ...state.effectCounters };
       counters['LUCKY_LOOT'] = (counters['LUCKY_LOOT'] || 0) + 3;
       newState.effectCounters = counters;
       return newState;
   }
-
-  // Crafted Items
-  if (item.type === ItemType.GREATER_XP_POTION) {
-    newState.xp = state.xp + (2000 * state.level);
-    return newState;
-  }
-
+  if (item.type === ItemType.GREATER_XP_POTION) { newState.xp = state.xp + (2000 * state.level); return newState; }
   if (item.type === ItemType.CATACLYSM_SCROLL) {
-    // Destroy 50% of the board, but spare tiles > 1024
     let grid = [...state.grid].filter(t => t.value < 1024);
-    // Shuffle
-    for (let i = grid.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [grid[i], grid[j]] = [grid[j], grid[i]];
-    }
+    for (let i = grid.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [grid[i], grid[j]] = [grid[j], grid[i]]; }
     const toRemoveIds = grid.slice(0, Math.floor(grid.length / 2)).map(t => t.id);
-    const newGrid = state.grid.filter(t => !toRemoveIds.includes(t.id));
-    newState.grid = newGrid;
+    newState.grid = state.grid.filter(t => !toRemoveIds.includes(t.id));
     return newState;
   }
-
   if (item.type === ItemType.ASCENDANT_RUNE) {
-      // Add a counter to effects
       const counters = { ...state.effectCounters };
       counters['ASCENDANT_SPAWN'] = (counters['ASCENDANT_SPAWN'] || 0) + 5;
       newState.effectCounters = counters;
       return newState;
   }
-
   return null;
 };
 
@@ -454,12 +424,30 @@ export const isGameOver = (grid: Tile[], size: number): boolean => {
   return true;
 };
 
+export const checkAchievements = (state: GameState): Achievement[] => {
+    const newUnlocks: Achievement[] = [];
+    
+    ACHIEVEMENTS.forEach(ach => {
+        if (!state.achievements.includes(ach.id)) {
+            if (ach.condition(state.stats, state)) {
+                newUnlocks.push(ach);
+            }
+        }
+    });
+    
+    return newUnlocks;
+};
+
 export const initializeGame = (loadFromStorage = false): GameState => {
+  const initialStats: GameStats = { totalMerges: 0, highestCombo: 0, slimesMerged: 0, goldCollected: 0, highestTile: 0, totalMoves: 0 };
+  
   if (loadFromStorage) {
     const saved = localStorage.getItem('2048_rpg_state_v3');
     if (saved) {
       const parsed = JSON.parse(saved);
-      // Migration: Ensure new fields exist
+      // Migrations
+      if (!parsed.stats) parsed.stats = initialStats;
+      if (!parsed.achievements) parsed.achievements = [];
       if (!parsed.effectCounters) parsed.effectCounters = {};
       if (typeof parsed.rerolls === 'undefined') parsed.rerolls = 0;
       
@@ -506,7 +494,9 @@ export const initializeGame = (loadFromStorage = false): GameState => {
     effectCounters: {},
     currentStage: initialStage,
     rerolls: 0,
-    lastSpawnedTileId: undefined
+    lastSpawnedTileId: undefined,
+    stats: initialStats,
+    achievements: []
   };
 };
 
@@ -514,20 +504,9 @@ export const saveHighscore = (state: GameState) => {
     try {
         const raw = localStorage.getItem(LEADERBOARD_KEY);
         let entries: LeaderboardEntry[] = raw ? JSON.parse(raw) : [];
-        
-        entries.push({
-            date: Date.now(),
-            score: state.score,
-            level: state.level,
-            gold: state.gold
-        });
-        
-        // Sort descending score
+        entries.push({ date: Date.now(), score: state.score, level: state.level, gold: state.gold });
         entries.sort((a, b) => b.score - a.score);
-        
-        // Keep top 20
         entries = entries.slice(0, 20);
-        
         localStorage.setItem(LEADERBOARD_KEY, JSON.stringify(entries));
     } catch (e) {
         console.error("Failed to save high score", e);
@@ -538,9 +517,7 @@ export const getHighscores = (): LeaderboardEntry[] => {
     try {
         const raw = localStorage.getItem(LEADERBOARD_KEY);
         return raw ? JSON.parse(raw) : [];
-    } catch (e) {
-        return [];
-    }
+    } catch (e) { return []; }
 };
 
 export const clearSaveData = () => {

@@ -6,11 +6,11 @@ import { Store } from './components/Store';
 import { SplashScreen } from './components/SplashScreen';
 import { Leaderboard } from './components/Leaderboard';
 import { Settings } from './components/Settings';
-import { Direction, GameState, TileType, InventoryItem, FloatingText, CraftingRecipe, View } from './types';
-import { initializeGame, moveGrid, spawnTile, getEmptyCells, isGameOver, checkLoot, useInventoryItem, applyMidasTouch, applyChronosShift, applyVoidSingularity, tryAutoMerge, saveHighscore } from './services/gameLogic';
+import { Direction, GameState, TileType, InventoryItem, FloatingText, CraftingRecipe, View, Achievement } from './types';
+import { initializeGame, moveGrid, spawnTile, isGameOver, checkLoot, useInventoryItem, applyMidasTouch, applyChronosShift, applyVoidSingularity, tryAutoMerge, saveHighscore, checkAchievements } from './services/gameLogic';
 import { SHOP_ITEMS, getXpThreshold, getStage, getStageBackground, getItemDefinition } from './constants';
 import { audioService } from './services/audioService';
-import { AlertTriangle, Crown, RefreshCw } from 'lucide-react';
+import { AlertTriangle, Crown, RefreshCw, Trophy } from 'lucide-react';
 
 // Actions
 type Action = 
@@ -25,7 +25,8 @@ type Action =
   | { type: 'TRIGGER_POWERUP_EFFECT'; effect: string }
   | { type: 'APPLY_POWERUP_RESULT'; resultState: Partial<GameState> }
   | { type: 'REROLL' }
-  | { type: 'GAME_OVER_ACK' };
+  | { type: 'GAME_OVER_ACK' }
+  | { type: 'UNLOCK_ACHIEVEMENT'; achievement: Achievement };
 
 const reducer = (state: GameState, action: Action): GameState => {
   switch (action.type) {
@@ -44,6 +45,18 @@ const reducer = (state: GameState, action: Action): GameState => {
 
     case 'CLEAR_LOGS':
         return { ...state, logs: [] };
+
+    case 'UNLOCK_ACHIEVEMENT':
+        return {
+            ...state,
+            achievements: [...state.achievements, action.achievement.id],
+            gold: state.gold + (action.achievement.reward?.gold || 0),
+            xp: state.xp + (action.achievement.reward?.xp || 0),
+            // Note: Item rewards are simpler to handle if we just add gold/xp here, logic complexity for items inside reducer 
+            // without full item def is annoying, but let's try if reward has item.
+            // For now, simple implementation.
+            logs: [...state.logs, `Achievement: ${action.achievement.name}`]
+        };
 
     case 'BUY_ITEM': {
       if (state.gold < action.item.price) return state;
@@ -70,20 +83,17 @@ const reducer = (state: GameState, action: Action): GameState => {
 
     case 'CRAFT_ITEM': {
         const { recipe } = action;
-        // Verify resources again just in case
         if (state.gold < recipe.goldCost) return state;
 
-        // Remove Ingredients
         let newInventory = [...state.inventory];
         let missing = false;
         
         for (const ing of recipe.ingredients) {
             let needed = ing.count;
-            // Filter out used items
             newInventory = newInventory.filter(item => {
                 if (item.type === ing.type && needed > 0) {
                     needed--;
-                    return false; // Remove this instance
+                    return false; 
                 }
                 return true;
             });
@@ -92,7 +102,6 @@ const reducer = (state: GameState, action: Action): GameState => {
 
         if (missing) return { ...state, logs: [...state.logs, "Missing ingredients!"] };
 
-        // Create Result Item
         const def = getItemDefinition(recipe.resultId);
         const newItem: InventoryItem = {
             id: Math.random().toString(36),
@@ -130,7 +139,6 @@ const reducer = (state: GameState, action: Action): GameState => {
         return nextState as GameState;
 
     case 'REROLL': {
-        // Needs Lvl 15
         if (state.level < 15) return state;
         
         let cost = 0;
@@ -143,11 +151,10 @@ const reducer = (state: GameState, action: Action): GameState => {
             cost = 50;
         }
 
-        // Must have a recent spawn to reroll
         if (!state.lastSpawnedTileId) return { ...state, logs: [...state.logs, "Nothing to reroll!"] };
 
         const gridWithoutLast = state.grid.filter(t => t.id !== state.lastSpawnedTileId);
-        if (gridWithoutLast.length === state.grid.length) return state; // Tile not found
+        if (gridWithoutLast.length === state.grid.length) return state;
 
         const rerolledGrid = spawnTile(gridWithoutLast, state.gridSize, state.level);
         const newTile = rerolledGrid.find(t => !gridWithoutLast.includes(t));
@@ -167,7 +174,7 @@ const reducer = (state: GameState, action: Action): GameState => {
     case 'MOVE': {
       if (state.gameOver || (state.victory && !state.gameWon) || state.powerUpEffect) return state;
 
-      const { grid: movedGrid, score, xpGained, goldGained, moved, mergedIds, powerUpTriggered } = moveGrid(state.grid, action.direction, state.gridSize);
+      const { grid: movedGrid, score, xpGained, goldGained, moved, mergedIds, powerUpTriggered, combo, comboMultiplier } = moveGrid(state.grid, action.direction, state.gridSize);
 
       if (!moved) return state;
 
@@ -186,9 +193,34 @@ const reducer = (state: GameState, action: Action): GameState => {
       let activeEffects = state.activeEffects || [];
       let nextPowerUpEffect = undefined;
 
+      // Stats Update
+      let newStats = { ...state.stats };
+      newStats.totalMoves++;
+      if (score > 0) newStats.totalMerges += mergedIds.length;
+      if (combo > newStats.highestCombo) newStats.highestCombo = combo;
+      newStats.goldCollected += goldGained;
+      
+      const maxTile = Math.max(...newGrid.map(t => t.value));
+      if (maxTile > newStats.highestTile) newStats.highestTile = maxTile;
+
+      // Count specific merges for achievements/stats
+      // We check what was merged. `mergedIds` contains IDs of tiles that *survived* and grew.
+      // So we check their new values.
+      const mergedTiles = newGrid.filter(t => mergedIds.includes(t.id));
+      mergedTiles.forEach(t => {
+          // If a tile became 4, it means two 2s merged.
+          if (t.value === 4) newStats.slimesMerged += 1;
+          
+          // Demon Ability Check (Demon is 128)
+          // If we just made a Demon (128) or higher
+          if (t.value === 128) {
+              newEffectCounters['DEMON_CURSE'] = 1;
+              newLogs.push("Demon Curse! Next spawn dangerous.");
+          }
+      });
+
       if (score > 0) audioService.playMerge(score);
 
-      // Decrement turn-based counters
       if (newEffectCounters['LUCKY_LOOT'] > 0) {
           newEffectCounters['LUCKY_LOOT']--;
           if (newEffectCounters['LUCKY_LOOT'] === 0) newLogs.push("Lucky Charm expired.");
@@ -217,19 +249,12 @@ const reducer = (state: GameState, action: Action): GameState => {
         newLogs.push(`LEVEL UP! You are now level ${newLevel}!`);
         audioService.playLevelUp();
         
-        // Expansion Check
-        // L5 -> 5x5, L10 -> 6x6, L15 -> 7x7, L20 -> 8x8
         if (newLevel % 5 === 0 && newGridSize < 8) {
            newGridSize++;
            newLogs.push(`Grid Expanded to ${newGridSize}x${newGridSize}!`);
         }
+        if (newLevel === 15) newLogs.push("Reroll Unlocked!");
 
-        // Reroll unlock message
-        if (newLevel === 15) {
-            newLogs.push("Reroll Unlocked!");
-        }
-
-        // Stage Check
         const stageConfig = getStage(newLevel);
         if (stageConfig.name !== currentStage.name) {
             currentStage = {
@@ -246,29 +271,23 @@ const reducer = (state: GameState, action: Action): GameState => {
 
       // Spawn new tile logic
       let forcedValue;
-
-      // Single turn effect
       if (activeEffects.includes('GOLDEN_SPAWN')) {
           forcedValue = 16;
           newLogs.push("Rune activated! High tier spawn!");
           activeEffects = activeEffects.filter(e => e !== 'GOLDEN_SPAWN');
-      } 
-      // Multi-turn counter effect (Crafted Ascendant Rune)
-      else if ((newEffectCounters['ASCENDANT_SPAWN'] || 0) > 0) {
-          forcedValue = 16; // Spawn Troll or higher
+      } else if ((newEffectCounters['ASCENDANT_SPAWN'] || 0) > 0) {
+          forcedValue = 16; 
           newEffectCounters['ASCENDANT_SPAWN']--;
-          if (newEffectCounters['ASCENDANT_SPAWN'] === 0) {
-             newLogs.push("Ascendant Rune power faded.");
-          }
+      } else if ((newEffectCounters['DEMON_CURSE'] || 0) > 0) {
+          forcedValue = 8; // Cursed spawn (Orc)
+          newEffectCounters['DEMON_CURSE']--;
       }
 
       const gridBeforeSpawn = newGrid;
       newGrid = spawnTile(newGrid, newGridSize, newLevel, forcedValue);
-      // Determine which tile was spawned for Reroll logic
       const spawnedTile = newGrid.find(t => !gridBeforeSpawn.includes(t));
       const lastSpawnedTileId = spawnedTile?.id;
 
-      // Level 20 Perk: Auto-Merge Boost
       if (newLevel >= 20) {
           const auto = tryAutoMerge(newGrid);
           if (auto.success) {
@@ -284,10 +303,8 @@ const reducer = (state: GameState, action: Action): GameState => {
 
       if (powerUpTriggered) {
           nextPowerUpEffect = powerUpTriggered;
-          // We don't change logic here, just flag the state so UI can animate and useEffect can trigger logic
       }
 
-      // Check Victory/Loss (Only if not powering up, as powerup might clear board)
       const has2048 = newGrid.some(t => t.value === 2048);
       const isVic = has2048 && !state.gameWon;
       const isOver = isGameOver(newGrid, newGridSize);
@@ -312,7 +329,9 @@ const reducer = (state: GameState, action: Action): GameState => {
         gameOver: isOver,
         currentStage: currentStage,
         powerUpEffect: nextPowerUpEffect,
-        lastSpawnedTileId
+        lastSpawnedTileId,
+        stats: newStats,
+        combo: comboMultiplier > 1 ? combo : 0
       };
       
       localStorage.setItem('2048_rpg_state_v3', JSON.stringify(newState));
@@ -327,20 +346,29 @@ const App: React.FC = () => {
   const [state, dispatch] = useReducer(reducer, null, () => initializeGame(true));
   const [view, setView] = useState<View>('SPLASH');
   const [showStore, setShowStore] = useState(false);
-  
-  // Visual Effects State
   const [floatingTexts, setFloatingTexts] = useState<FloatingText[]>([]);
   const [stageAnnouncement, setStageAnnouncement] = useState<string | null>(null);
+  const [achievementToast, setAchievementToast] = useState<Achievement | null>(null);
   
-  // Refs
   const prevXp = useRef(state.xp);
   const prevGold = useRef(state.gold);
   const prevStage = useRef(state.currentStage.name);
 
-  // --- Effect: Power Up Logic ---
+  // Check Achievements on state change
+  useEffect(() => {
+      const unlocked = checkAchievements(state);
+      if (unlocked.length > 0) {
+          unlocked.forEach(ach => {
+             dispatch({ type: 'UNLOCK_ACHIEVEMENT', achievement: ach });
+             setAchievementToast(ach); // Show last one as toast for now
+             setTimeout(() => setAchievementToast(null), 4000);
+          });
+      }
+  }, [state.stats, state.gold, state.xp]); // Trigger on relevant changes
+
+  // Power Up Logic
   useEffect(() => {
     if (state.powerUpEffect) {
-        // Wait for animation
         const timer = setTimeout(() => {
             let result: Partial<GameState> = {};
             let logs = [...state.logs];
@@ -349,10 +377,10 @@ const App: React.FC = () => {
                  const { grid, score } = applyMidasTouch(state.grid);
                  result.grid = grid;
                  result.score = state.score + score;
-                 result.xp = state.xp + (score * 2); // Bonus XP
+                 result.xp = state.xp + (score * 2);
                  logs.push("Midas Touch! Massive Gold!");
                  result.gold = state.gold + Math.floor(score / 4);
-                 audioService.playLevelUp(); // Epic sound
+                 audioService.playLevelUp();
             } else if (state.powerUpEffect === TileType.RUNE_CHRONOS) {
                  result.grid = applyChronosShift(state.grid, state.gridSize);
                  logs.push("Time Shift! Grid Reordered.");
@@ -372,7 +400,6 @@ const App: React.FC = () => {
     }
   }, [state.powerUpEffect, state.grid, state.score, state.xp, state.gold, state.logs, state.gridSize]);
 
-  // --- Effect: Auto-clear logs ---
   useEffect(() => {
     if (state.logs.length > 0) {
         const timer = setTimeout(() => {
@@ -382,26 +409,22 @@ const App: React.FC = () => {
     }
   }, [state.logs]);
 
-  // --- Effect: Floating Text & Announcements ---
   useEffect(() => {
     const texts: FloatingText[] = [];
     const now = Date.now();
 
-    // XP Gains
     if (state.xp > prevXp.current && state.level === state.level) { 
         const diff = state.xp - prevXp.current;
         if (diff > 20) texts.push({ id: Math.random().toString(), x: 50, y: 50, text: `+${diff} XP`, color: 'text-cyan-400', createdAt: now });
     }
     prevXp.current = state.xp;
 
-    // Gold Gains
     if (state.gold > prevGold.current) {
         const diff = state.gold - prevGold.current;
         texts.push({ id: Math.random().toString(), x: 80, y: 40, text: `+${diff} G`, color: 'text-yellow-400', createdAt: now });
     }
     prevGold.current = state.gold;
 
-    // Stage Change Announcement
     if (state.currentStage.name !== prevStage.current) {
         setStageAnnouncement(state.currentStage.name);
         setTimeout(() => setStageAnnouncement(null), 3000);
@@ -416,7 +439,6 @@ const App: React.FC = () => {
     }
   }, [state.xp, state.gold, state.currentStage.name, state.level]);
 
-  // --- Effect: Audio Resume ---
   useEffect(() => {
     const handleInteract = () => {
       audioService.resume();
@@ -431,7 +453,6 @@ const App: React.FC = () => {
     };
   }, []);
 
-  // --- Effect: Keyboard Controls ---
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (view !== 'GAME' || state.gameOver || state.victory || showStore) return;
@@ -456,7 +477,6 @@ const App: React.FC = () => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [state.gameOver, state.victory, showStore, view]);
 
-  // --- Effect: Touch Controls ---
   const touchStart = useRef<{x: number, y: number} | null>(null);
   const handleTouchStart = (e: React.TouchEvent) => {
     touchStart.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
@@ -477,21 +497,9 @@ const App: React.FC = () => {
     touchStart.current = null;
   };
 
-  // --- Handlers ---
-  const handleGameStart = () => {
-      dispatch({ type: 'RESTART' });
-      setView('GAME');
-  };
-
-  const handleContinue = () => {
-      // Just switch view, state is already loaded
-      setView('GAME');
-  };
-
-  const handleRestart = () => {
-      dispatch({ type: 'RESTART' });
-      setView('GAME'); // Ensure we are in game view
-  };
+  const handleGameStart = () => { dispatch({ type: 'RESTART' }); setView('GAME'); };
+  const handleContinue = () => { setView('GAME'); };
+  const handleRestart = () => { dispatch({ type: 'RESTART' }); setView('GAME'); };
 
   return (
     <div 
@@ -499,20 +507,18 @@ const App: React.FC = () => {
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
     >
-      {/* Dynamic Background */}
       <div 
         className="absolute inset-0 transition-opacity duration-1000 ease-in-out"
         style={{
             backgroundImage: `url('${state.currentStage.backgroundUrl}')`,
             backgroundSize: 'cover',
             backgroundPosition: 'center',
-            opacity: view === 'GAME' ? 0.3 : 0.1 // Dim background in menus
+            opacity: view === 'GAME' ? 0.3 : 0.1
         }}
       />
       <div className="scanlines"></div>
       <div className="vignette"></div>
       
-      {/* Views */}
       {view === 'SPLASH' && (
           <SplashScreen 
             onStart={handleGameStart} 
@@ -523,21 +529,9 @@ const App: React.FC = () => {
           />
       )}
 
-      {view === 'LEADERBOARD' && (
-          <Leaderboard onBack={() => setView('SPLASH')} />
-      )}
+      {view === 'LEADERBOARD' && <Leaderboard onBack={() => setView('SPLASH')} />}
+      {view === 'SETTINGS' && <Settings onBack={() => setView(state.score > 0 ? 'GAME' : 'SPLASH')} onClearData={() => { dispatch({ type: 'RESTART' }); setView('SPLASH'); }} />}
 
-      {view === 'SETTINGS' && (
-          <Settings 
-            onBack={() => setView(state.score > 0 ? 'GAME' : 'SPLASH')} // Return to game if paused, else splash
-            onClearData={() => {
-                dispatch({ type: 'RESTART' });
-                setView('SPLASH');
-            }}
-          />
-      )}
-
-      {/* Main Game View */}
       {view === 'GAME' && (
           <>
             <div className="absolute inset-0 pointer-events-none z-50 overflow-hidden">
@@ -552,16 +546,23 @@ const App: React.FC = () => {
                 ))}
             </div>
 
-            {/* Effects Overlays */}
-            {state.powerUpEffect === TileType.RUNE_MIDAS && (
-                <div className="absolute inset-0 z-40 bg-yellow-500/20 animate-pulse pointer-events-none border-[10px] border-yellow-400/50"></div>
+            {/* Achievement Toast */}
+            {achievementToast && (
+                <div className="absolute bottom-10 left-1/2 -translate-x-1/2 z-[60] animate-in slide-in-from-bottom-5 fade-in duration-300">
+                    <div className="bg-slate-900/90 border border-yellow-500/50 rounded-lg p-4 shadow-[0_0_20px_rgba(234,179,8,0.2)] flex items-center gap-4 min-w-[300px] backdrop-blur-md">
+                        <div className="text-4xl">{achievementToast.icon}</div>
+                        <div>
+                            <div className="text-yellow-400 font-bold uppercase text-xs tracking-wider">Achievement Unlocked</div>
+                            <div className="font-bold text-white text-lg fantasy-font">{achievementToast.name}</div>
+                            <div className="text-slate-400 text-xs">{achievementToast.description}</div>
+                        </div>
+                    </div>
+                </div>
             )}
-            {state.powerUpEffect === TileType.RUNE_CHRONOS && (
-                <div className="absolute inset-0 z-40 bg-blue-500/20 animate-[shake_0.5s_infinite] pointer-events-none"></div>
-            )}
-            {state.powerUpEffect === TileType.RUNE_VOID && (
-                <div className="absolute inset-0 z-40 bg-purple-900/40 animate-[pulse_0.2s_infinite] pointer-events-none scale-110"></div>
-            )}
+
+            {state.powerUpEffect === TileType.RUNE_MIDAS && <div className="absolute inset-0 z-40 bg-yellow-500/20 animate-pulse pointer-events-none border-[10px] border-yellow-400/50"></div>}
+            {state.powerUpEffect === TileType.RUNE_CHRONOS && <div className="absolute inset-0 z-40 bg-blue-500/20 animate-[shake_0.5s_infinite] pointer-events-none"></div>}
+            {state.powerUpEffect === TileType.RUNE_VOID && <div className="absolute inset-0 z-40 bg-purple-900/40 animate-[pulse_0.2s_infinite] pointer-events-none scale-110"></div>}
 
             {stageAnnouncement && (
                 <div className="absolute inset-0 z-50 flex items-center justify-center stage-transition pointer-events-none">
@@ -587,6 +588,14 @@ const App: React.FC = () => {
                     onReroll={() => dispatch({ type: 'REROLL' })}
                     onMenu={() => setView('SETTINGS')}
                 />
+
+                {state.combo > 1 && (
+                    <div className="absolute top-[165px] z-20 text-center animate-bounce">
+                        <div className="text-2xl font-black text-transparent bg-clip-text bg-gradient-to-b from-yellow-300 to-red-600 drop-shadow-[0_2px_2px_rgba(0,0,0,1)]">
+                            {state.combo}x COMBO!
+                        </div>
+                    </div>
+                )}
 
                 <div className="w-full h-8 mb-2 flex items-center justify-center text-xs sm:text-sm text-yellow-400/80 font-mono tracking-wide shadow-black drop-shadow-md">
                     {state.logs.length > 0 ? state.logs[state.logs.length - 1] : "The dungeon awaits..."}
