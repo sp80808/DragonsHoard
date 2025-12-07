@@ -43,7 +43,7 @@ export const spawnTile = (grid: Tile[], size: number, level: number, forcedValue
   const { x, y } = emptyCells[Math.floor(Math.random() * emptyCells.length)];
   
   // Default logic: Level 3 Perk: 5% chance for 4-spawn
-  let value = (level >= 3 && Math.random() < 0.05) ? 4 : 2;
+  let value = (level >= 3 && Math.random() < 0.1) ? 4 : 2; // Slight bump to 10%
   
   // Override if forced (e.g. from Golden Rune item)
   if (forcedValue) value = forcedValue;
@@ -151,8 +151,8 @@ export const moveGrid = (grid: Tile[], direction: Direction, size: number): Move
           score += collision.value;
           xpGained += collision.value * 2;
           
-          // Gold Formula: 1 Gold per merge, + bonus for high tier merges
-          goldGained += 1 + Math.floor(collision.value / 16);
+          // Gold Formula: 0.5 Gold per value, + bonus for high tier merges
+          goldGained += Math.ceil(collision.value * 0.5);
 
           mergedIds.push(collision.id);
           return;
@@ -258,18 +258,6 @@ export const applyChronosShift = (grid: Tile[], size: number): Tile[] => {
 };
 
 export const applyVoidSingularity = (grid: Tile[], size: number): { grid: Tile[]; score: number } => {
-    // Pull everything to center (size/2, size/2)
-    // Simplified: Just dense pack to center? 
-    // Or actually trigger a merge of everything colliding on the way?
-    
-    // Let's implement a 'Gravity' pull.
-    // For simplicity: Move everything to Top-Left, then merge, then return.
-    // Wait, Void should handle center.
-    
-    // Let's re-use move logic but in a spiral?
-    // Let's do a simple "Compact" logic: Merge all identical values on board regardless of position
-    // Then arrange them neatly.
-    
     const valueMap: Record<number, number> = {}; // value -> count
     let score = 0;
     
@@ -278,34 +266,6 @@ export const applyVoidSingularity = (grid: Tile[], size: number): { grid: Tile[]
     });
     
     const newTiles: Tile[] = [];
-    
-    Object.keys(valueMap).forEach(k => {
-        let val = parseInt(k);
-        let count = valueMap[val];
-        
-        // Merge pairs
-        while (count >= 2) {
-            val *= 2;
-            score += val;
-            count -= 2;
-            // The resulting tile needs to be counted for further merges?
-            // "Void" logic: merges everything instantly.
-            // If we have four 2s -> two 4s -> one 8.
-            // Let's just recursively upgrade.
-            // Re-add to map? No, loop might be infinite if not careful.
-            
-            // Let's just add the upgraded value to the list of tiles to place.
-            // Actually, recursion is better.
-        }
-        
-        // Add remaining count of this value
-        for(let i=0; i<count; i++) {
-             // We need to place this tile
-             // Store for placement phase
-        }
-    });
-    
-    // Re-calculating with recursive merge array
     const finalValues: number[] = [];
     
     const process = (values: number[]) => {
@@ -332,17 +292,9 @@ export const applyVoidSingularity = (grid: Tile[], size: number): { grid: Tile[]
         currentValues = process(currentValues);
     }
     
-    // Layout in spiral from center
-    const center = size / 2 - 0.5;
+    // Layout in spiral from center (simplified to sorted fill)
     const sortedFinal = currentValues.sort((a,b) => b - a);
     
-    // Spiral generator
-    // simplified: just fill from 0,0
-    const spiralCoords = [];
-    let sx=0, sy=0, sdx=1, sdy=0;
-    // ... complex spiral logic omitted for brevity, falling back to sorted layout
-    
-    // Let's use standard sorted layout
     let idx = 0;
     for(let r=0; r<size; r++) {
         for(let c=0; c<size; c++) {
@@ -362,12 +314,12 @@ export const applyVoidSingularity = (grid: Tile[], size: number): { grid: Tile[]
     return { grid: newTiles, score };
 };
 
-export const checkLoot = (level: number, mergedIds: string[]): LootResult | null => {
+export const checkLoot = (level: number, mergedIds: string[], hasLuckyCharm: boolean = false): LootResult | null => {
   if (mergedIds.length === 0) return null;
   
   // Loot rolls
   // Chance increases slightly with merged IDs count
-  const chance = 0.05 + (mergedIds.length * 0.01);
+  const chance = (0.05 + (mergedIds.length * 0.01)) * (hasLuckyCharm ? 2 : 1);
   
   if (Math.random() < chance) {
     const roll = Math.random();
@@ -390,6 +342,15 @@ export const checkLoot = (level: number, mergedIds: string[]): LootResult | null
         icon: "📜"
       };
       return { message: "Loot: Purge Scroll!", item };
+    } else if (roll > 0.7 && level >= 15) {
+       const item: InventoryItem = {
+        id: createId(),
+        type: ItemType.REROLL_TOKEN,
+        name: "Reroll Token",
+        description: "Free Board Reroll",
+        icon: "🔄"
+      };
+      return { message: "Loot: Reroll Token!", item }; 
     } else if (roll > 0.6) {
       const item: InventoryItem = {
         id: createId(),
@@ -416,7 +377,7 @@ export const useInventoryItem = (state: GameState, item: InventoryItem): Partial
 
   // Standard Items
   if (item.type === ItemType.XP_POTION) {
-    newState.xp = state.xp + 1000;
+    newState.xp = state.xp + (500 * state.level);
     return newState;
   }
 
@@ -434,9 +395,21 @@ export const useInventoryItem = (state: GameState, item: InventoryItem): Partial
     return newState;
   }
 
+  if (item.type === ItemType.REROLL_TOKEN) {
+      newState.rerolls = (state.rerolls || 0) + 1;
+      return newState;
+  }
+
+  if (item.type === ItemType.LUCKY_CHARM) {
+      const counters = { ...state.effectCounters };
+      counters['LUCKY_LOOT'] = (counters['LUCKY_LOOT'] || 0) + 3;
+      newState.effectCounters = counters;
+      return newState;
+  }
+
   // Crafted Items
   if (item.type === ItemType.GREATER_XP_POTION) {
-    newState.xp = state.xp + 2500;
+    newState.xp = state.xp + (2000 * state.level);
     return newState;
   }
 
@@ -482,11 +455,12 @@ export const isGameOver = (grid: Tile[], size: number): boolean => {
 
 export const initializeGame = (loadFromStorage = false): GameState => {
   if (loadFromStorage) {
-    const saved = localStorage.getItem('2048_rpg_state_v2');
+    const saved = localStorage.getItem('2048_rpg_state_v3');
     if (saved) {
       const parsed = JSON.parse(saved);
-      // Migration: Ensure effectCounters exists
+      // Migration: Ensure new fields exist
       if (!parsed.effectCounters) parsed.effectCounters = {};
+      if (typeof parsed.rerolls === 'undefined') parsed.rerolls = 0;
       
       if (!parsed.currentStage) {
           const stageConfig = getStage(parsed.level);
@@ -529,6 +503,8 @@ export const initializeGame = (loadFromStorage = false): GameState => {
     logs: ['Welcome to the dungeon...'],
     activeEffects: [],
     effectCounters: {},
-    currentStage: initialStage
+    currentStage: initialStage,
+    rerolls: 0,
+    lastSpawnedTileId: undefined
   };
 };

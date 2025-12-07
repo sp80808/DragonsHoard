@@ -43,10 +43,10 @@ export const POWER_UP_CONFIG = {
 
 export const STAGES: { name: string; minLevel: number; prompt: string; color: string }[] = [
   { name: "The Crypt", minLevel: 1, prompt: "medieval dungeon stone walls torches cobwebs dark", color: "text-slate-400" },
-  { name: "Fungal Caverns", minLevel: 5, prompt: "bioluminescent glowing mushrooms purple cave underground magical", color: "text-purple-400" },
-  { name: "Magma Core", minLevel: 10, prompt: "volcanic lava cave flowing magma fire rocks heat", color: "text-orange-500" },
-  { name: "The Void", minLevel: 15, prompt: "cosmic void deep space nebula stars purple black ethereal", color: "text-indigo-400" },
-  { name: "Elysium", minLevel: 25, prompt: "heavenly clouds gold gates divine light bright sky", color: "text-yellow-300" }
+  { name: "Fungal Caverns", minLevel: 10, prompt: "bioluminescent glowing mushrooms purple cave underground magical", color: "text-purple-400" },
+  { name: "Magma Core", minLevel: 20, prompt: "volcanic lava cave flowing magma fire rocks heat", color: "text-orange-500" },
+  { name: "The Void", minLevel: 30, prompt: "cosmic void deep space nebula stars purple black ethereal", color: "text-indigo-400" },
+  { name: "Elysium", minLevel: 40, prompt: "heavenly clouds gold gates divine light bright sky", color: "text-yellow-300" }
 ];
 
 export const getStage = (level: number) => {
@@ -63,14 +63,19 @@ export const PERKS = [
   { level: 5, desc: "Expansion: Grid size increased to 5x5!" },
   { level: 7, desc: "Veteran: +50% XP from merges" },
   { level: 10, desc: "Loot Mode: Merges drop Gold & Items" },
-  { level: 15, desc: "Expansion: Grid size increased to 6x6!" },
+  { level: 10, desc: "Expansion: Grid size increased to 6x6!" },
+  { level: 15, desc: "Reroll Unlocked: 1 Free Reroll per level" },
+  { level: 15, desc: "Expansion: Grid size increased to 7x7!" },
   { level: 20, desc: "Auto-Merge: Rarely auto-combine adjacent tiles" },
+  { level: 20, desc: "Expansion: Grid size increased to 8x8!" },
 ];
 
 export const SHOP_ITEMS: { id: ItemType, name: string, price: number, icon: string, desc: string }[] = [
-  { id: ItemType.XP_POTION, name: "XP Elixir", price: 250, icon: "🧪", desc: "+1000 XP instantly" },
-  { id: ItemType.BOMB_SCROLL, name: "Purge Scroll", price: 500, icon: "📜", desc: "Destroys 3 lowest value tiles" },
+  { id: ItemType.XP_POTION, name: "XP Elixir", price: 50, icon: "🧪", desc: "+1000 XP instantly" },
+  { id: ItemType.BOMB_SCROLL, name: "Purge Scroll", price: 100, icon: "📜", desc: "Destroys 3 lowest value tiles" },
+  { id: ItemType.REROLL_TOKEN, name: "Reroll Token", price: 75, icon: "🔄", desc: "One free board reroll" },
   { id: ItemType.GOLDEN_RUNE, name: "Golden Rune", price: 750, icon: "🌟", desc: "Next spawn is a high-tier tile" },
+  { id: ItemType.LUCKY_CHARM, name: "Lucky Charm", price: 150, icon: "🍀", desc: "Better loot chance (3 turns)" },
 ];
 
 export const RECIPES: CraftingRecipe[] = [
@@ -89,7 +94,7 @@ export const RECIPES: CraftingRecipe[] = [
     name: "Cataclysm Scroll",
     description: "Destroys 50% of tiles (non-boss).",
     icon: "🌋",
-    goldCost: 300,
+    goldCost: 200,
     ingredients: [{ type: ItemType.BOMB_SCROLL, count: 2 }]
   },
   {

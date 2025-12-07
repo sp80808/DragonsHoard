@@ -20,7 +20,8 @@ type Action =
   | { type: 'USE_ITEM'; item: InventoryItem }
   | { type: 'CLEAR_LOGS' }
   | { type: 'TRIGGER_POWERUP_EFFECT'; effect: string }
-  | { type: 'APPLY_POWERUP_RESULT'; resultState: Partial<GameState> };
+  | { type: 'APPLY_POWERUP_RESULT'; resultState: Partial<GameState> }
+  | { type: 'REROLL' };
 
 const reducer = (state: GameState, action: Action): GameState => {
   switch (action.type) {
@@ -55,7 +56,7 @@ const reducer = (state: GameState, action: Action): GameState => {
           logs: [...state.logs, `Bought ${action.item.name}`]
       };
       
-      localStorage.setItem('2048_rpg_state_v2', JSON.stringify(newState));
+      localStorage.setItem('2048_rpg_state_v3', JSON.stringify(newState));
       return newState;
     }
 
@@ -100,7 +101,7 @@ const reducer = (state: GameState, action: Action): GameState => {
             logs: [...state.logs, `Crafted ${def.name}!`]
         };
         
-        localStorage.setItem('2048_rpg_state_v2', JSON.stringify(newState));
+        localStorage.setItem('2048_rpg_state_v3', JSON.stringify(newState));
         return newState;
     }
 
@@ -108,7 +109,7 @@ const reducer = (state: GameState, action: Action): GameState => {
         const result = useInventoryItem(state, action.item);
         if (!result) return state;
         const newState = { ...state, ...result };
-        localStorage.setItem('2048_rpg_state_v2', JSON.stringify(newState));
+        localStorage.setItem('2048_rpg_state_v3', JSON.stringify(newState));
         return newState as GameState;
     }
 
@@ -117,8 +118,43 @@ const reducer = (state: GameState, action: Action): GameState => {
 
     case 'APPLY_POWERUP_RESULT':
         const nextState = { ...state, ...action.resultState, powerUpEffect: undefined };
-        localStorage.setItem('2048_rpg_state_v2', JSON.stringify(nextState));
+        localStorage.setItem('2048_rpg_state_v3', JSON.stringify(nextState));
         return nextState as GameState;
+
+    case 'REROLL': {
+        // Needs Lvl 15
+        if (state.level < 15) return state;
+        
+        let cost = 0;
+        let newRerolls = state.rerolls;
+        
+        if (state.rerolls > 0) {
+            newRerolls = state.rerolls - 1;
+        } else {
+            if (state.gold < 50) return { ...state, logs: [...state.logs, "Not enough Gold!"] };
+            cost = 50;
+        }
+
+        // Must have a recent spawn to reroll
+        if (!state.lastSpawnedTileId) return { ...state, logs: [...state.logs, "Nothing to reroll!"] };
+
+        const gridWithoutLast = state.grid.filter(t => t.id !== state.lastSpawnedTileId);
+        if (gridWithoutLast.length === state.grid.length) return state; // Tile not found
+
+        const rerolledGrid = spawnTile(gridWithoutLast, state.gridSize, state.level);
+        const newTile = rerolledGrid.find(t => !gridWithoutLast.includes(t));
+
+        audioService.playMove();
+
+        return {
+            ...state,
+            grid: rerolledGrid,
+            gold: state.gold - cost,
+            rerolls: newRerolls,
+            lastSpawnedTileId: newTile?.id,
+            logs: [...state.logs, "Fate Rerolled..."]
+        };
+    }
 
     case 'MOVE': {
       if (state.gameOver || (state.victory && !state.gameWon) || state.powerUpEffect) return state;
@@ -144,8 +180,15 @@ const reducer = (state: GameState, action: Action): GameState => {
 
       if (score > 0) audioService.playMerge(score);
 
+      // Decrement turn-based counters
+      if (newEffectCounters['LUCKY_LOOT'] > 0) {
+          newEffectCounters['LUCKY_LOOT']--;
+          if (newEffectCounters['LUCKY_LOOT'] === 0) newLogs.push("Lucky Charm expired.");
+      }
+
       // Check for Loot
-      const loot = checkLoot(state.level, mergedIds);
+      const hasLuckyCharm = (newEffectCounters['LUCKY_LOOT'] || 0) > 0;
+      const loot = checkLoot(state.level, mergedIds, hasLuckyCharm);
       if (loot) {
         newLogs.push(loot.message);
         if (loot.gold) newGold += loot.gold;
@@ -167,9 +210,15 @@ const reducer = (state: GameState, action: Action): GameState => {
         audioService.playLevelUp();
         
         // Expansion Check
+        // L5 -> 5x5, L10 -> 6x6, L15 -> 7x7, L20 -> 8x8
         if (newLevel % 5 === 0 && newGridSize < 8) {
            newGridSize++;
            newLogs.push(`Grid Expanded to ${newGridSize}x${newGridSize}!`);
+        }
+
+        // Reroll unlock message
+        if (newLevel === 15) {
+            newLogs.push("Reroll Unlocked!");
         }
 
         // Stage Check
@@ -205,7 +254,11 @@ const reducer = (state: GameState, action: Action): GameState => {
           }
       }
 
+      const gridBeforeSpawn = newGrid;
       newGrid = spawnTile(newGrid, newGridSize, newLevel, forcedValue);
+      // Determine which tile was spawned for Reroll logic
+      const spawnedTile = newGrid.find(t => !gridBeforeSpawn.includes(t));
+      const lastSpawnedTileId = spawnedTile?.id;
 
       // Level 20 Perk: Auto-Merge Boost
       if (newLevel >= 20) {
@@ -215,8 +268,8 @@ const reducer = (state: GameState, action: Action): GameState => {
               const val = auto.value;
               newScore += val;
               newXp += val * 2 * (newLevel >= 7 ? 1.5 : 1);
-              newGold += 1 + Math.floor(val / 16);
-              newLogs.push("Auto-Merge Perk!");
+              newGold += Math.ceil(val * 0.5);
+              newLogs.push("⚡ Auto-Merge triggered!");
               audioService.playMerge(val);
           }
       }
@@ -250,10 +303,11 @@ const reducer = (state: GameState, action: Action): GameState => {
         victory: isVic,
         gameOver: isOver,
         currentStage: currentStage,
-        powerUpEffect: nextPowerUpEffect
+        powerUpEffect: nextPowerUpEffect,
+        lastSpawnedTileId
       };
       
-      localStorage.setItem('2048_rpg_state_v2', JSON.stringify(newState));
+      localStorage.setItem('2048_rpg_state_v3', JSON.stringify(newState));
       return newState;
     }
     default:
@@ -481,9 +535,11 @@ const App: React.FC = () => {
           xp={state.xp} 
           gold={state.gold}
           inventory={state.inventory}
+          rerolls={state.rerolls}
           onRestart={() => dispatch({ type: 'RESTART' })}
           onOpenStore={() => setShowStore(true)}
           onUseItem={(item) => dispatch({ type: 'USE_ITEM', item })}
+          onReroll={() => dispatch({ type: 'REROLL' })}
         />
 
         <div className="w-full h-8 mb-2 flex items-center justify-center text-xs sm:text-sm text-yellow-400/80 font-mono tracking-wide shadow-black drop-shadow-md">

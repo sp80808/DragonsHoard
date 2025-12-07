@@ -17,7 +17,8 @@ export const TileComponent: React.FC<TileProps> = ({ tile, gridSize }) => {
   const size = 100 / gridSize;
 
   const isNewClass = tile.isNew ? 'tile-animation-enter' : '';
-  const isMergedClass = tile.mergedFrom ? 'tile-animation-merge' : '';
+  const isMergedClass = tile.mergedFrom ? 'tile-animation-merge damage-flash' : '';
+  const isSlash = tile.mergedFrom && tile.value >= 32 ? 'slash-effect' : '';
   
   return (
     <div
@@ -29,7 +30,7 @@ export const TileComponent: React.FC<TileProps> = ({ tile, gridSize }) => {
       }}
     >
       <div
-        className={`w-full h-full rounded-lg relative overflow-hidden shadow-2xl ${isNewClass} ${isMergedClass} group`}
+        className={`w-full h-full rounded-lg relative overflow-hidden shadow-2xl ${isNewClass} ${isMergedClass} ${isSlash} group`}
       >
         {/* Glow Container */}
         <div className={`absolute inset-0 transition-opacity duration-300 ${style.glow} opacity-0 group-hover:opacity-100`}></div>

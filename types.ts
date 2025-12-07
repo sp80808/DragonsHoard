@@ -19,6 +19,8 @@ export enum ItemType {
   XP_POTION = 'XP_POTION',
   BOMB_SCROLL = 'BOMB_SCROLL', // Clears lowest 3 tiles
   GOLDEN_RUNE = 'GOLDEN_RUNE', // Next spawn is upgraded
+  REROLL_TOKEN = 'REROLL_TOKEN',
+  LUCKY_CHARM = 'LUCKY_CHARM',
   
   // Crafted Items
   GREATER_XP_POTION = 'GREATER_XP_POTION',
@@ -85,9 +87,11 @@ export interface GameState {
   combo: number;
   logs: string[];
   activeEffects: string[];
-  effectCounters: Record<string, number>; // New: Track duration of effects (e.g. { 'ASCENDANT_SPAWN': 3 })
+  effectCounters: Record<string, number>; 
   currentStage: Stage;
   powerUpEffect?: string;
+  rerolls: number;
+  lastSpawnedTileId?: string;
 }
 
 export interface MoveResult {
@@ -97,6 +101,7 @@ export interface MoveResult {
   goldGained: number;
   moved: boolean;
   mergedIds: string[];
+  lastSpawnedTileId?: string;
 }
 
 export interface LootResult {

@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { getXpThreshold } from '../constants';
-import { Trophy, Star, Sparkles, Store as StoreIcon, Coins } from 'lucide-react';
+import { Trophy, Star, Sparkles, Store as StoreIcon, Coins, RefreshCw } from 'lucide-react';
 import { InventoryItem } from '../types';
 
 interface HUDProps {
@@ -11,14 +11,17 @@ interface HUDProps {
   xp: number;
   gold: number;
   inventory: InventoryItem[];
+  rerolls: number;
   onRestart: () => void;
   onOpenStore: () => void;
   onUseItem: (item: InventoryItem) => void;
+  onReroll: () => void;
 }
 
-export const HUD: React.FC<HUDProps> = ({ score, bestScore, level, xp, gold, inventory, onRestart, onOpenStore, onUseItem }) => {
+export const HUD: React.FC<HUDProps> = ({ score, bestScore, level, xp, gold, inventory, rerolls, onRestart, onOpenStore, onUseItem, onReroll }) => {
   const xpThreshold = getXpThreshold(level);
   const xpPercent = Math.min(100, (xp / xpThreshold) * 100);
+  const canReroll = (level >= 15 && (rerolls > 0 || gold >= 50));
 
   return (
     <div className="w-full mb-4 space-y-3">
@@ -65,26 +68,44 @@ export const HUD: React.FC<HUDProps> = ({ score, bestScore, level, xp, gold, inv
         </button>
       </div>
 
-      {/* Inventory Slots */}
+      {/* Inventory & Reroll Row */}
       <div className="flex gap-2">
-        {[0, 1, 2].map((slotIndex) => {
-            const item = inventory[slotIndex];
-            return (
-                <div key={slotIndex} className="flex-1 h-12 bg-slate-900/50 border border-slate-800 rounded-lg relative flex items-center justify-center group">
-                    {item ? (
-                        <button 
-                            onClick={() => onUseItem(item)}
-                            className="w-full h-full flex items-center justify-center hover:bg-white/5 rounded-lg transition-colors relative"
-                        >
-                            <span className="text-2xl">{item.icon}</span>
-                            <span className="absolute bottom-0 right-1 text-[8px] text-slate-400">{item.name.split(' ')[0]}</span>
-                        </button>
-                    ) : (
-                        <span className="text-slate-800 text-xs">Empty</span>
-                    )}
-                </div>
-            );
-        })}
+        {/* Inventory Slots */}
+        <div className="flex flex-1 gap-2">
+            {[0, 1, 2].map((slotIndex) => {
+                const item = inventory[slotIndex];
+                return (
+                    <div key={slotIndex} className="flex-1 h-12 bg-slate-900/50 border border-slate-800 rounded-lg relative flex items-center justify-center group">
+                        {item ? (
+                            <button 
+                                onClick={() => onUseItem(item)}
+                                className="w-full h-full flex items-center justify-center hover:bg-white/5 rounded-lg transition-colors relative"
+                            >
+                                <span className="text-2xl">{item.icon}</span>
+                                <span className="absolute bottom-0 right-1 text-[8px] text-slate-400">{item.name.split(' ')[0]}</span>
+                            </button>
+                        ) : (
+                            <span className="text-slate-800 text-xs">Empty</span>
+                        )}
+                    </div>
+                );
+            })}
+        </div>
+
+        {/* Reroll Button (Lvl 15+) */}
+        <button 
+            onClick={canReroll ? onReroll : undefined}
+            disabled={!canReroll}
+            className={`w-14 h-12 rounded-lg flex flex-col items-center justify-center border transition-all relative
+                ${canReroll 
+                    ? 'bg-purple-900/30 hover:bg-purple-800/50 border-purple-500/50 text-purple-300' 
+                    : 'bg-slate-900/30 border-slate-800 text-slate-700 opacity-50 cursor-not-allowed'}`}
+        >
+            <RefreshCw size={16} />
+            <div className="text-[8px] font-bold mt-1">
+                {level < 15 ? 'Lvl 15' : (rerolls > 0 ? `Free: ${rerolls}` : '50G')}
+            </div>
+        </button>
       </div>
     </div>
   );
