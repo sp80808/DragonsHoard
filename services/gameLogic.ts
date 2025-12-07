@@ -1,6 +1,6 @@
 
-import { Direction, GameState, Tile, TileType, MoveResult, LootResult, ItemType, InventoryItem } from '../types';
-import { GRID_SIZE_INITIAL, SHOP_ITEMS } from '../constants';
+import { Direction, GameState, Tile, TileType, MoveResult, LootResult, ItemType, InventoryItem, Stage } from '../types';
+import { GRID_SIZE_INITIAL, SHOP_ITEMS, getStage, getStageBackground } from '../constants';
 
 const createId = () => Math.random().toString(36).substr(2, 9);
 
@@ -128,7 +128,6 @@ export const checkLoot = (level: number, mergedIds: string[]): LootResult | null
     const roll = Math.random();
 
     if (roll > 0.95 && level >= 5) {
-      // Rare Item
       const item: InventoryItem = {
         id: createId(),
         type: ItemType.GOLDEN_RUNE,
@@ -136,9 +135,8 @@ export const checkLoot = (level: number, mergedIds: string[]): LootResult | null
         description: "Next spawn is upgraded.",
         icon: "🌟"
       };
-      return { message: "Loot: Golden Rune found!", item };
+      return { message: "Loot: Golden Rune!", item };
     } else if (roll > 0.85 && level >= 3) {
-      // Uncommon Item
       const item: InventoryItem = {
         id: createId(),
         type: ItemType.BOMB_SCROLL,
@@ -146,9 +144,8 @@ export const checkLoot = (level: number, mergedIds: string[]): LootResult | null
         description: "Clears weak enemies.",
         icon: "📜"
       };
-      return { message: "Loot: Purge Scroll found!", item };
+      return { message: "Loot: Purge Scroll!", item };
     } else if (roll > 0.6) {
-      // Common Item
       const item: InventoryItem = {
         id: createId(),
         type: ItemType.XP_POTION,
@@ -156,11 +153,10 @@ export const checkLoot = (level: number, mergedIds: string[]): LootResult | null
         description: "+500 XP",
         icon: "🧪"
       };
-      return { message: "Loot: XP Potion found!", item };
+      return { message: "Loot: XP Potion!", item };
     } else {
-      // Gold Pouch
       const goldAmount = Math.floor(Math.random() * 50) + 10;
-      return { message: `Loot: Found ${goldAmount} Gold!`, gold: goldAmount };
+      return { message: `Loot: ${goldAmount} Gold`, gold: goldAmount };
     }
   }
   return null;
@@ -179,21 +175,15 @@ export const useInventoryItem = (state: GameState, item: InventoryItem): Partial
   }
 
   if (item.type === ItemType.BOMB_SCROLL) {
-    // Remove 3 lowest value tiles
     let grid = [...state.grid];
-    // Sort by value ascending
     grid.sort((a, b) => a.value - b.value);
-    
-    // Remove first 3
     const toRemove = grid.slice(0, 3).map(t => t.id);
     const newGrid = state.grid.filter(t => !toRemove.includes(t.id));
-    
     newState.grid = newGrid;
     return newState;
   }
 
   if (item.type === ItemType.GOLDEN_RUNE) {
-    // Add effect flag to state to be used in next spawn
     newState.activeEffects = [...(state.activeEffects || []), 'GOLDEN_SPAWN'];
     return newState;
   }
@@ -220,13 +210,32 @@ export const initializeGame = (loadFromStorage = false): GameState => {
   if (loadFromStorage) {
     const saved = localStorage.getItem('2048_rpg_state_v2');
     if (saved) {
-      return JSON.parse(saved);
+      const parsed = JSON.parse(saved);
+      // Migration for old saves that might miss stage info
+      if (!parsed.currentStage) {
+          const stageConfig = getStage(parsed.level);
+          parsed.currentStage = {
+              name: stageConfig.name,
+              minLevel: stageConfig.minLevel,
+              backgroundUrl: getStageBackground(stageConfig.name),
+              colorTheme: stageConfig.color
+          };
+      }
+      return parsed;
     }
   }
 
   let startGrid: Tile[] = [];
   startGrid = spawnTile(startGrid, GRID_SIZE_INITIAL, 1);
   startGrid = spawnTile(startGrid, GRID_SIZE_INITIAL, 1);
+
+  const stageConfig = getStage(1);
+  const initialStage: Stage = {
+      name: stageConfig.name,
+      minLevel: stageConfig.minLevel,
+      backgroundUrl: getStageBackground(stageConfig.name),
+      colorTheme: stageConfig.color
+  };
 
   return {
     grid: startGrid,
@@ -242,6 +251,7 @@ export const initializeGame = (loadFromStorage = false): GameState => {
     gameWon: false,
     combo: 0,
     logs: ['Welcome to the dungeon...'],
-    activeEffects: []
+    activeEffects: [],
+    currentStage: initialStage
   };
 };

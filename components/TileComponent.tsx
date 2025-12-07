@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import { Tile, TileType } from '../types';
 import { TILE_STYLES, FALLBACK_STYLE } from '../constants';
 
@@ -10,6 +10,7 @@ interface TileProps {
 
 export const TileComponent: React.FC<TileProps> = ({ tile, gridSize }) => {
   const style = TILE_STYLES[tile.value] || FALLBACK_STYLE;
+  const [imgError, setImgError] = useState(false);
   
   const xPos = (tile.x / gridSize) * 100;
   const yPos = (tile.y / gridSize) * 100;
@@ -24,44 +25,56 @@ export const TileComponent: React.FC<TileProps> = ({ tile, gridSize }) => {
       style={{
         width: `${size}%`,
         height: `${size}%`,
-        transform: `translate(${xPos * gridSize}%, ${yPos * gridSize}%)`
+        transform: `translate(${tile.x * 100}%, ${tile.y * 100}%)`
       }}
     >
       <div
-        className={`w-full h-full rounded-lg relative overflow-hidden shadow-lg ${isNewClass} ${isMergedClass} border-2 border-slate-900 group`}
+        className={`w-full h-full rounded-lg relative overflow-hidden shadow-2xl ${isNewClass} ${isMergedClass} group`}
       >
+        {/* Glow Container */}
+        <div className={`absolute inset-0 transition-opacity duration-300 ${style.glow} opacity-0 group-hover:opacity-100`}></div>
+
         {/* Generative Background Image */}
-        <div className="absolute inset-0 bg-slate-900">
-             <img 
-                src={style.imageUrl} 
-                alt={style.label}
-                className="w-full h-full object-cover opacity-80 group-hover:scale-110 transition-transform duration-500"
-                loading="lazy"
-             />
-             <div className={`absolute inset-0 bg-gradient-to-t ${style.color} opacity-60 mix-blend-overlay`}></div>
-             <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-black/90"></div>
+        <div className={`absolute inset-0 bg-slate-900 bg-gradient-to-br ${style.color}`}>
+             {!imgError && (
+                 <img 
+                    src={style.imageUrl} 
+                    alt={style.label}
+                    className="w-full h-full object-cover transition-transform duration-700 ease-out group-hover:scale-110 opacity-80 mix-blend-overlay"
+                    loading="lazy"
+                    onError={() => setImgError(true)}
+                 />
+             )}
+             
+             {/* Gradient Overlays for Readability */}
+             <div className="absolute inset-0 bg-gradient-to-b from-transparent via-black/10 to-black/80"></div>
+             
+             {/* Shine Effect */}
+             <div className="absolute inset-0 bg-gradient-to-tr from-white/0 via-white/10 to-white/0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none"></div>
         </div>
 
         {/* Content Overlay */}
-        <div className="absolute inset-0 flex flex-col items-center justify-center z-10">
-             {/* Value */}
-            <span className={`font-serif font-bold text-white drop-shadow-[0_2px_2px_rgba(0,0,0,1)] 
-                ${gridSize > 5 ? 'text-xl' : 'text-3xl'}`}>
+        <div className="absolute inset-0 flex flex-col items-center justify-center z-10 p-1">
+            {/* Value */}
+            <span className={`font-serif font-black text-white drop-shadow-[0_2px_4px_rgba(0,0,0,1)] tracking-tighter
+                ${gridSize > 5 ? 'text-lg' : 'text-3xl'}
+                ${tile.value > 1000 ? 'text-yellow-200' : ''}
+            `}>
                 {tile.value}
             </span>
             
             {/* Label */}
-            <span className={`text-[10px] uppercase tracking-widest text-slate-300 font-bold mt-1 drop-shadow-md`}>
+            <span className={`text-[8px] sm:text-[10px] uppercase tracking-widest text-slate-200 font-bold mt-0.5 drop-shadow-md opacity-80`}>
                 {style.label}
             </span>
         </div>
 
         {/* Special Indicators */}
-        {tile.type === TileType.BOMB && <div className="absolute top-1 right-1 text-xs z-20 animate-pulse">💣</div>}
-        {tile.type === TileType.GOLDEN && <div className="absolute top-1 right-1 text-xs z-20 animate-pulse">✨</div>}
+        {tile.type === TileType.BOMB && <div className="absolute top-1 right-1 text-xs z-20 animate-pulse bg-red-500/80 rounded-full w-4 h-4 flex items-center justify-center">💣</div>}
+        {tile.type === TileType.GOLDEN && <div className="absolute top-1 right-1 text-xs z-20 animate-pulse text-yellow-300">✨</div>}
         
-        {/* Frame Glow */}
-        <div className={`absolute inset-0 border-2 border-white/10 rounded-lg pointer-events-none ${style.glow}`}></div>
+        {/* Inner Border/Frame */}
+        <div className={`absolute inset-0 border-2 border-white/10 rounded-lg pointer-events-none box-border`}></div>
       </div>
     </div>
   );

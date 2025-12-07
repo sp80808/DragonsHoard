@@ -36,21 +36,38 @@ export interface Tile {
   isNew?: boolean;
 }
 
+export interface Stage {
+  name: string;
+  minLevel: number;
+  backgroundUrl: string;
+  colorTheme: string;
+}
+
+export interface FloatingText {
+  id: string;
+  x: number; // Percentage or pixel
+  y: number;
+  text: string;
+  color: string;
+  createdAt: number;
+}
+
 export interface GameState {
   grid: Tile[];
   score: number;
   bestScore: number;
   xp: number;
   level: number;
-  gold: number; // New currency
-  inventory: InventoryItem[]; // New inventory
+  gold: number;
+  inventory: InventoryItem[];
   gridSize: number;
   gameOver: boolean;
   victory: boolean;
   gameWon: boolean;
   combo: number;
   logs: string[];
-  activeEffects: string[]; // Track active buffs
+  activeEffects: string[];
+  currentStage: Stage;
 }
 
 export interface MoveResult {
