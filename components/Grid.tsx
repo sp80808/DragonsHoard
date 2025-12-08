@@ -18,7 +18,7 @@ export const Grid: React.FC<GridProps> = ({ grid, size, equippedCosmetics = [] }
         {/* Ambient Glow behind Grid */}
         <div className="absolute -inset-1 bg-gradient-to-r from-purple-600/20 to-blue-600/20 rounded-2xl blur-xl"></div>
         
-        <div className="relative w-full aspect-square bg-black/60 rounded-xl p-2 border border-slate-700/50 shadow-2xl overflow-hidden backdrop-blur-md">
+        <div className="relative w-full aspect-square bg-black/60 rounded-xl p-2 module-sample shadow-2xl overflow-hidden backdrop-blur-md">
         {/* Background Grid */}
         <div 
             className="w-full h-full grid"

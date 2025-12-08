@@ -531,7 +531,7 @@ const App: React.FC = () => {
 
   return (
     <div 
-      className="min-h-screen bg-[#050505] text-slate-200 flex flex-col items-center justify-center p-4 relative overflow-hidden font-sans select-none"
+      className="noise min-h-screen bg-[#050505] text-slate-200 flex flex-col items-center justify-center p-4 relative overflow-hidden font-sans select-none"
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
     >

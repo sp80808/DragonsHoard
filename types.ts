@@ -121,6 +121,8 @@ export interface GameState {
   achievements: string[]; // IDs of unlocked achievements
   dailyChallenges: DailyChallenge[];
   sessionStats: SessionStats;
+  cascadeActive?: boolean;
+  cascadeCount?: number;
 }
 
 export interface MoveResult {
@@ -136,6 +138,15 @@ export interface MoveResult {
   comboMultiplier: number;
   logs: string[];
   bossDefeated?: boolean;
+  cascadeCount?: number;
+  cascadeRewards?: { xp: number; gold: number };
+}
+
+export interface CascadeResult {
+  cascadeCount: number;
+  totalRewards: { xp: number; gold: number };
+  grid: Tile[];
+  mergedIds: string[];
 }
 
 export interface LootResult {

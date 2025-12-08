@@ -142,6 +142,115 @@ export const tryAutoMerge = (grid: Tile[]): { success: boolean; grid: Tile[]; va
   return { success: true, grid: newGrid, value: newValue, mergedId: newTile.id };
 };
 
+// CASCADE SYSTEM - Phase 1: Core Functionality
+
+/**
+ * Find all adjacent pairs of tiles with the same value
+ * Used for cascade detection after player moves
+ */
+export const findAdjacentPairs = (grid: Tile[]): { t1: Tile; t2: Tile }[] => {
+  const pairs: { t1: Tile; t2: Tile }[] = [];
+  
+  for (let i = 0; i < grid.length; i++) {
+    for (let j = i + 1; j < grid.length; j++) {
+      const t1 = grid[i];
+      const t2 = grid[j];
+      
+      // Skip bosses and power-ups
+      if (t1.type !== TileType.NORMAL || t2.type !== TileType.NORMAL) continue;
+      
+      // Check if adjacent (distance = 1)
+      const dist = Math.abs(t1.x - t2.x) + Math.abs(t1.y - t2.y);
+      
+      if (dist === 1 && t1.value === t2.value) {
+        pairs.push({ t1, t2 });
+      }
+    }
+  }
+  
+  return pairs;
+};
+
+/**
+ * Execute a single cascade merge
+ * Returns new grid and rewards for this cascade
+ */
+export const executeSingleCascade = (
+  grid: Tile[], 
+  pair: { t1: Tile; t2: Tile },
+  cascadeNumber: number
+): { grid: Tile[]; xp: number; gold: number; mergedId: string } => {
+  const { t1, t2 } = pair;
+  const newValue = t1.value * 2;
+  
+  // Calculate rewards with cascade multiplier (+10% per cascade)
+  const multiplier = 1 + cascadeNumber * 0.1;
+  const baseXP = newValue * 2;
+  const baseGold = Math.ceil(newValue * 0.5);
+  
+  const xp = Math.floor(baseXP * multiplier);
+  const gold = Math.floor(baseGold * multiplier);
+  
+  // Create merged tile at position of first tile
+  const newTile: Tile = {
+    id: createId(),
+    x: t1.x,
+    y: t1.y,
+    value: newValue,
+    type: TileType.NORMAL,
+    mergedFrom: [t1.id, t2.id],
+    isNew: false
+  };
+  
+  // Remove old tiles, add new one
+  const newGrid = grid.filter(t => t.id !== t1.id && t.id !== t2.id);
+  newGrid.push(newTile);
+  
+  return { grid: newGrid, xp, gold, mergedId: newTile.id };
+};
+
+/**
+ * Execute full cascade sequence after player move
+ * Returns cascade count and total rewards
+ */
+export const executeAutoCascade = (
+  grid: Tile[],
+  maxCascades: number = 8
+): { cascadeCount: number; totalRewards: { xp: number; gold: number }; grid: Tile[]; mergedIds: string[] } => {
+  let currentGrid = [...grid];
+  let cascadeCount = 0;
+  let totalXP = 0;
+  let totalGold = 0;
+  const allMergedIds: string[] = [];
+  
+  // Continue cascading while pairs exist and under limit
+  while (cascadeCount < maxCascades) {
+    const adjacentPairs = findAdjacentPairs(currentGrid);
+    
+    // No more pairs - cascade complete
+    if (adjacentPairs.length === 0) {
+      break;
+    }
+    
+    // Merge first pair only (sequential, not simultaneous)
+    const pair = adjacentPairs[0];
+    const result = executeSingleCascade(currentGrid, pair, cascadeCount);
+    
+    currentGrid = result.grid;
+    totalXP += result.xp;
+    totalGold += result.gold;
+    allMergedIds.push(result.mergedId);
+    cascadeCount++;
+  }
+  
+  return {
+    cascadeCount,
+    totalRewards: { xp: totalXP, gold: totalGold },
+    grid: currentGrid,
+    mergedIds: allMergedIds
+  };
+};
+
 export const moveGrid = (grid: Tile[], direction: Direction, size: number): MoveResult & { powerUpTriggered?: TileType } => {
   let moved = false;
   let score = 0;
