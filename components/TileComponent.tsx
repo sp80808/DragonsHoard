@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
+import { motion } from 'framer-motion';
 import { Tile, TileType, Cosmetic } from '../types';
 import { TILE_STYLES, BOSS_STYLE, FALLBACK_STYLE } from '../constants';
 
@@ -57,8 +58,10 @@ export const TileComponent: React.FC<TileProps> = ({ tile, gridSize, equippedCos
       onMouseDown={handleInteraction}
       onTouchStart={handleInteraction}
     >
-      <div
+      <motion.div
         className={`w-full h-full rounded-lg relative overflow-hidden shadow-2xl ${isNewClass} ${isMergedClass} ${isSlash} ${isTierJump} ${isHighValue} group module-sample`}
+        whileHover={{ rotate: 1 }}
+        transition={{ type: "spring", stiffness: 300, damping: 30 }}
       >
         {/* Glow Container */}
         <div className={`absolute inset-0 transition-opacity duration-300 ${style.glow} opacity-0 group-hover:opacity-100`}></div>
@@ -114,7 +117,7 @@ export const TileComponent: React.FC<TileProps> = ({ tile, gridSize, equippedCos
         
         {/* Inner Border/Frame */}
         <div className={`absolute inset-0 border-2 border-white/10 rounded-lg pointer-events-none box-border`}></div>
-      </div>
+      </motion.div>
     </div>
   );
 };

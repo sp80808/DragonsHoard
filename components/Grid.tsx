@@ -1,5 +1,6 @@
 
 import React from 'react';
+import { motion } from 'framer-motion';
 import { Tile, Cosmetic } from '../types';
 import { TileComponent } from '../components/TileComponent';
 
@@ -14,10 +15,15 @@ export const Grid: React.FC<GridProps> = ({ grid, size, equippedCosmetics = [] }
   const cells = Array.from({ length: size * size });
 
   return (
-    <div className="relative w-full">
+    <motion.div
+      className="relative w-full"
+      initial={{ x: 5 }}
+      animate={{ x: 0 }}
+      transition={{ type: "spring", stiffness: 100, damping: 20 }}
+    >
         {/* Ambient Glow behind Grid */}
         <div className="absolute -inset-1 bg-gradient-to-r from-purple-600/20 to-blue-600/20 rounded-2xl blur-xl"></div>
-        
+
         <div className="relative w-full aspect-square bg-black/60 rounded-xl p-2 module-sample shadow-2xl overflow-hidden backdrop-blur-md">
         {/* Background Grid */}
         <div 
@@ -44,6 +50,6 @@ export const Grid: React.FC<GridProps> = ({ grid, size, equippedCosmetics = [] }
             </div>
         </div>
         </div>
-    </div>
+    </motion.div>
   );
 };
