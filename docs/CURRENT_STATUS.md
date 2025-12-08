@@ -2,7 +2,7 @@
 
 **Date:** December 8, 2025  
 **Branch:** main  
-**Last Updated:** Session with visual improvements planning
+**Last Updated:** Development planning complete, cascade system Phase 1 done
 
 ---
 
@@ -12,18 +12,26 @@
 
 **Completion Status:**
 - ✅ **Phase 1 Complete:** Core Juice & Micro-animations (100%)
-- 🔄 **Phase 2 In Progress:** Particle Systems & Advanced Feedback (0%)
-- ⬜ **Phase 3 Planned:** Daily Challenges & Account Progression
+- ✅ **Cascade System Phase 1 Complete:** Auto-merge detection & visual feedback (100%)
+- 🔄 **Phase 2.1 Ready to Start:** Particle Systems & Advanced Feedback (0%)
+- ⬜ **Phase 3 Planned:** Account Progression & Mastery Tiers
 
 ---
 
 ## ✅ What's Working (Just Completed)
 
 ### Animation System
-- **18 CSS animations** ready to use
-- **5 components enhanced** with visual feedback
+- **22 CSS animations** ready to use (18 core + 4 cascade)
+- **6 components enhanced** with visual feedback (added CascadeRing)
 - **Zero TypeScript errors** across codebase
 - **60fps performance** maintained
+
+### Cascade Chain Reaction System (NEW!)
+- **Auto-merge detection** after player moves
+- **Sequential cascade execution** (8 max default, 12 at Level 18+)
+- **Multiplier scaling** (+10% per cascade)
+- **Visual feedback** (CascadeRing component with color progression)
+- **Reward integration** (XP, gold, stats tracking)
 
 ### Components with Visual Enhancements
 1. **TileComponent.tsx**
@@ -58,41 +66,54 @@
 
 ## 🎯 Next Up (Prioritized)
 
-### Session 1: Particle Systems (HIGH PRIORITY)
-**Time:** 1.5-2 hours  
+**📋 FULL DEVELOPMENT PLAN:** See [DEVELOPMENT_PLAN_2025.md](DEVELOPMENT_PLAN_2025.md)
+
+### IMMEDIATE: Cascade Testing & Validation
+**Time:** 30-60 minutes  
+**Impact:** ⭐⭐⭐ Critical (validate before moving forward)
+
+**To Do:**
+1. Play 5-10 full games with cascade system
+2. Verify cascade frequency (target: 3-5 per game)
+3. Check CascadeRing visibility and timing
+4. Test edge cases (no pairs, boss tiles, max cascades)
+5. Document balance tweaks if needed
+
+### Phase 2.1 Week 1: Base Particle System (HIGH PRIORITY)
+**Time:** 8-12 hours  
 **Impact:** ⭐⭐⭐ Very High
 
 **To Implement:**
-1. Create `components/Particle.tsx` base component
-2. XP soul particles (blue wisps → XP bar)
-3. Gold coin burst (physics-based arcs)
-4. Merge spark shower (quick radial bursts)
+1. Create `components/Particle.tsx` base component with pooling
+2. XP soul particles (blue wisps → XP bar, 400ms)
+3. Gold coin burst (physics-based arcs, 800ms)
+4. Performance testing (100+ particles at 60fps)
 
 **Why This Matters:**
 - Makes resource gains explicitly visible
 - Huge dopamine payoff
 - Industry-standard visual feedback
-- Already have CSS animations ready
+- Foundation for all future particle effects
 
-### Session 2: Enhanced Floating Text (MEDIUM PRIORITY)
-**Time:** 1-1.5 hours  
+### Phase 2.1 Week 2: Merge & Combo Particles (HIGH PRIORITY)
+**Time:** 6-8 hours  
+**Impact:** ⭐⭐⭐ High
+
+**To Implement:**
+1. Merge spark shower (radial bursts, color-matched to tier)
+2. Combo active aura (floating embers around grid)
+3. Tier ascension effect (special burst for 8→16, 64→128, 256→512)
+4. Integration with existing cascade system
+
+### Phase 2.2 Week 3-4: Advanced Visual Feedback (MEDIUM PRIORITY)
+**Time:** 8-11 hours  
 **Impact:** ⭐⭐ Medium-High
 
 **To Implement:**
-1. Critical hit styling (red + shake + larger)
-2. Gold pop numbers with coin icon
-3. Level up banner component
-4. Text outlines for readability
-
-### Session 3: Grid Visual Feedback (MEDIUM PRIORITY)
-**Time:** 1 hour  
-**Impact:** ⭐⭐ Medium
-
-**To Implement:**
-1. Combo border glow (already have CSS)
-2. Near-death danger vignette
-3. Stage background transitions
-4. Boss entrance effects
+1. Enhanced floating text (critical hits, gold pops, level up banner)
+2. Grid feedback (combo border glow, danger vignette, boss entrance)
+3. Text outlines for readability
+4. Color-coded damage numbers
 
 ---
 
