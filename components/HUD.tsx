@@ -94,7 +94,7 @@ export const HUD: React.FC<HUDProps> = ({ score, bestScore, level, xp, gold, inv
   const shimmerDuration = Math.max(0.8, 3.0 - (level * 0.05)) + 's';
 
   return (
-    <div className="w-full mb-4 space-y-3">
+    <div className="w-full mb-4 space-y-3 module-workflow">
       {/* Top Row: Title & Scores */}
       <div className="flex justify-between items-center bg-slate-900/90 p-3 rounded-xl border border-slate-700 shadow-xl backdrop-blur-md">
         <div className="flex items-center gap-3">
