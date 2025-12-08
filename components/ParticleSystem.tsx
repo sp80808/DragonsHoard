@@ -1,5 +1,5 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { Particle, ParticleConfig, ParticleType } from '../types';
+import React, { useEffect, useRef } from 'react';
+import { Particle, ParticleConfig } from '../types';
 import { Particle as ParticleComponent } from './Particle';
 
 const PARTICLE_POOL_SIZE = 200;
@@ -18,6 +18,18 @@ interface ParticleSystemProps {
 export const ParticleSystem: React.FC<ParticleSystemProps> = ({ particles, onUpdate }) => {
   const animationFrameRef = useRef<number | null>(null);
   const lastFrameTimeRef = useRef<number>(0);
+  const accumulatorRef = useRef<number>(0);
+  const particlesRef = useRef<Particle[]>(particles);
+  const onUpdateRef = useRef(onUpdate);
+
+  // Keep refs in sync without recreating the animation loop
+  useEffect(() => {
+    particlesRef.current = particles;
+  }, [particles]);
+
+  useEffect(() => {
+    onUpdateRef.current = onUpdate;
+  }, [onUpdate]);
 
   // Update particles physics every frame
   useEffect(() => {
@@ -26,23 +38,25 @@ export const ParticleSystem: React.FC<ParticleSystemProps> = ({ particles, onUpd
         lastFrameTimeRef.current = currentTime;
       }
 
-      const elapsed = currentTime - lastFrameTimeRef.current;
+      const delta = currentTime - lastFrameTimeRef.current;
+      accumulatorRef.current += delta;
+      lastFrameTimeRef.current = currentTime;
 
-      // Only update at target FPS
-      if (elapsed >= FRAME_TIME) {
-        const updatedParticles = particles.map((p) => {
+      // Fixed timestep to reduce physics jitter on slower frames
+      while (accumulatorRef.current >= FRAME_TIME) {
+        const currentParticles = particlesRef.current;
+        const updatedParticles = currentParticles.map((p) => {
           if (!p.active) return p;
 
-          const newAge = p.age + elapsed;
+          const newAge = p.age + FRAME_TIME;
           const progress = newAge / p.lifetime;
-          const alpha = Math.max(0, 1 - progress); // Fade out
+          const alpha = Math.max(0, 1 - progress);
 
-          // Apply physics
           let vx = p.vx;
           let vy = p.vy;
 
           if (p.gravity) {
-            vy += 0.3; // Gravity acceleration
+            vy += 0.3;
           }
 
           const newX = p.x + vx;
@@ -60,8 +74,9 @@ export const ParticleSystem: React.FC<ParticleSystemProps> = ({ particles, onUpd
           };
         });
 
-        onUpdate(updatedParticles);
-        lastFrameTimeRef.current = currentTime;
+        particlesRef.current = updatedParticles;
+        onUpdateRef.current(updatedParticles);
+        accumulatorRef.current -= FRAME_TIME;
       }
 
       animationFrameRef.current = requestAnimationFrame(animate);
@@ -74,7 +89,7 @@ export const ParticleSystem: React.FC<ParticleSystemProps> = ({ particles, onUpd
         cancelAnimationFrame(animationFrameRef.current);
       }
     };
-  }, [particles, onUpdate]);
+  }, []);
 
   return (
     <div className="fixed inset-0 pointer-events-none">
@@ -132,7 +147,6 @@ export class ParticlePool {
     let vy = 0;
 
     if (config.endPos) {
-      const duration = config.lifetime / 1000; // Convert to seconds
       vx = (config.endPos.x - config.startPos.x) / (config.lifetime / FRAME_TIME);
       vy = (config.endPos.y - config.startPos.y) / (config.lifetime / FRAME_TIME);
     } else if (config.velocity) {
@@ -185,11 +199,6 @@ export class ParticlePool {
   update(): Particle[] {
     // Return list of active particles
     const activeParticles = this.particles.slice(0, this.activeCount).filter((p) => p.active);
-
-    // Debug: Log performance stats occasionally
-    if (Math.random() < 0.01) { // ~1% chance per frame
-      console.log('[ParticleSystem]', this.getStats());
-    }
 
     return activeParticles;
   }
