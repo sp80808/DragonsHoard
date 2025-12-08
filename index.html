@@ -437,29 +437,74 @@
           z-index: 0;
         }
 
+       /* Theme Variables */
+       :root {
+         --accent-r: 6;
+         --accent-g: 182;
+         --accent-b: 212; /* Default cyan */
+       }
+
+       .theme-bass-lab {
+         --accent-r: 0;
+         --accent-g: 255;
+         --accent-b: 255; /* Cyan */
+       }
+
+       .theme-jungle-studio {
+         --accent-r: 34;
+         --accent-g: 197;
+         --accent-b: 94; /* Green */
+       }
+
+       .theme-dubstep-mode {
+         --accent-r: 139;
+         --accent-g: 92;
+         --accent-b: 246; /* Purple */
+       }
+
+       .theme-house-techno {
+         --accent-r: 249;
+         --accent-g: 115;
+         --accent-b: 22; /* Orange */
+       }
+
+       .theme-cinematic {
+         --accent-r: 220;
+         --accent-g: 38;
+         --accent-b: 38; /* Red */
+       }
+
        /* Module Glow Borders */
-       .module-sample {
-         border: 1px solid rgba(6, 182, 212, 0.2);
-         transition: box-shadow 0.3s ease;
-       }
-       .module-sample:hover {
-         box-shadow: 0 0 10px rgba(6, 182, 212, 0.5);
-       }
-
-       .module-creative {
-         border: 1px solid rgba(147, 51, 234, 0.2);
-         transition: box-shadow 0.3s ease;
-       }
-       .module-creative:hover {
-         box-shadow: 0 0 10px rgba(147, 51, 234, 0.5);
-       }
-
+       .module-sample,
+       .module-creative,
        .module-workflow {
-         border: 1px solid rgba(245, 158, 11, 0.2);
+         border: 1px solid rgba(var(--accent-r), var(--accent-g), var(--accent-b), 0.2);
          transition: box-shadow 0.3s ease;
        }
+
+       .module-sample:hover,
+       .module-creative:hover,
        .module-workflow:hover {
-         box-shadow: 0 0 10px rgba(245, 158, 11, 0.5);
+         box-shadow: 0 0 10px rgba(var(--accent-r), var(--accent-g), var(--accent-b), 0.5);
+       }
+
+       /* Input accent color */
+       input[type="range"] {
+         accent-color: rgb(var(--accent-r), var(--accent-g), var(--accent-b));
+       }
+
+       /* Jungle Studio checker texture */
+       .theme-jungle-studio .noise::before {
+         background-image: url("data:image/svg+xml,%3Csvg width='20' height='20' viewBox='0 0 20 20' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='%2322c55e' fill-opacity='0.1'%3E%3Cpath d='M0 0h10v10H0V0zm10 10h10v10H10V10z'/%3E%3C/g%3E%3C/svg%3E");
+         background-size: 20px 20px;
+         opacity: 0.05;
+       }
+
+       /* Dubstep spectral streaks */
+       .theme-dubstep-mode .noise::before {
+         background-image: linear-gradient(45deg, rgba(139, 92, 246, 0.1) 25%, transparent 25%, transparent 50%, rgba(139, 92, 246, 0.1) 50%, rgba(139, 92, 246, 0.1) 75%, transparent 75%);
+         background-size: 20px 20px;
+         opacity: 0.1;
        }
 
        /* Module Pulse Animation for Active/Processing States */

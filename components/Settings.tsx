@@ -1,5 +1,6 @@
 
 import React, { useState } from 'react';
+import { motion } from 'framer-motion';
 import { ArrowLeft, Volume2, VolumeX, Trash2, AlertCircle, Music } from 'lucide-react';
 import { audioService } from '../services/audioService';
 import { clearSaveData } from '../services/gameLogic';
@@ -7,9 +8,11 @@ import { clearSaveData } from '../services/gameLogic';
 interface SettingsProps {
   onBack: () => void;
   onClearData: () => void;
+  setTheme: (theme: string) => void;
+  currentTheme: string;
 }
 
-export const Settings: React.FC<SettingsProps> = ({ onBack, onClearData }) => {
+export const Settings: React.FC<SettingsProps> = ({ onBack, onClearData, setTheme, currentTheme }) => {
   const [sfxVolume, setSfxVolume] = useState(audioService.getVolume() * 100);
   const [musicVolume, setMusicVolume] = useState(audioService.getMusicVolume() * 100);
   const [confirmClear, setConfirmClear] = useState(false);
@@ -35,9 +38,9 @@ export const Settings: React.FC<SettingsProps> = ({ onBack, onClearData }) => {
     <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-sm p-4">
       <div className="w-full max-w-md bg-slate-900 module-creative rounded-xl p-6 shadow-2xl">
         <div className="flex items-center gap-4 mb-8">
-           <button onClick={onBack} className="p-2 hover:bg-slate-800 rounded-full transition-all text-slate-400 btn-press item-hover">
-             <ArrowLeft size={24} />
-           </button>
+           <motion.button onClick={onBack} className="p-2 hover:bg-slate-800 rounded-full transition-all text-slate-400 btn-press item-hover" whileTap={{ scale: 0.98 }}>
+              <ArrowLeft size={24} />
+            </motion.button>
            <h2 className="text-2xl font-bold text-white fantasy-font">Settings</h2>
         </div>
 
@@ -48,9 +51,9 @@ export const Settings: React.FC<SettingsProps> = ({ onBack, onClearData }) => {
                 
                 {/* SFX Volume */}
                 <div className="flex items-center gap-4 mb-4">
-                    <button onClick={() => { setSfxVolume(0); audioService.setVolume(0); }} className="text-slate-400 hover:text-white w-6 btn-press">
+                    <motion.button onClick={() => { setSfxVolume(0); audioService.setVolume(0); }} className="text-slate-400 hover:text-white w-6 btn-press" whileTap={{ scale: 0.98 }}>
                         {sfxVolume === 0 ? <VolumeX size={20}/> : <Volume2 size={20}/>}
-                    </button>
+                    </motion.button>
                     <div className="flex-1">
                         <label className="text-xs text-slate-500 block mb-1">Sound Effects</label>
                         <input 
@@ -67,9 +70,9 @@ export const Settings: React.FC<SettingsProps> = ({ onBack, onClearData }) => {
 
                 {/* Music Volume */}
                 <div className="flex items-center gap-4">
-                    <button onClick={() => { setMusicVolume(0); audioService.setMusicVolume(0); }} className="text-slate-400 hover:text-white w-6 btn-press">
+                    <motion.button onClick={() => { setMusicVolume(0); audioService.setMusicVolume(0); }} className="text-slate-400 hover:text-white w-6 btn-press" whileTap={{ scale: 0.98 }}>
                         <Music size={20}/>
-                    </button>
+                    </motion.button>
                     <div className="flex-1">
                         <label className="text-xs text-slate-500 block mb-1">Dark Ambient</label>
                         <input 
@@ -85,6 +88,30 @@ export const Settings: React.FC<SettingsProps> = ({ onBack, onClearData }) => {
                 </div>
             </div>
 
+            {/* Theme Section */}
+            <div>
+                <h3 className="text-slate-400 text-xs uppercase tracking-widest font-bold mb-4">Theme</h3>
+                <div className="space-y-2">
+                    {[
+                        { key: 'default', name: 'High-Tech Ghost (Default)' },
+                        { key: 'bass-lab', name: 'Bass Lab' },
+                        { key: 'jungle-studio', name: 'Jungle Studio' },
+                        { key: 'dubstep-mode', name: 'Dubstep Mode' },
+                        { key: 'house-techno', name: 'House/Techno' },
+                        { key: 'cinematic', name: 'Cinematic' }
+                    ].map(({ key, name }) => (
+                        <motion.button
+                            key={key}
+                            onClick={() => setTheme(key)}
+                            className={`w-full py-2 px-3 text-left rounded-lg transition-all btn-press ${currentTheme === key ? 'bg-slate-600 text-white' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'}`}
+                            whileTap={{ scale: 0.98 }}
+                        >
+                            {name}
+                        </motion.button>
+                    ))}
+                </div>
+            </div>
+
             {/* Data Section */}
             <div className="pt-8 border-t border-slate-800">
                 <h3 className="text-red-400/80 text-xs uppercase tracking-widest font-bold mb-4 flex items-center gap-2">
@@ -92,26 +119,29 @@ export const Settings: React.FC<SettingsProps> = ({ onBack, onClearData }) => {
                 </h3>
                 
                 {!confirmClear ? (
-                    <button 
+                    <motion.button
                         onClick={() => setConfirmClear(true)}
                         className="w-full py-3 border border-red-900/50 bg-red-900/10 text-red-400 hover:bg-red-900/30 rounded-lg transition-all flex items-center justify-center gap-2 btn-press"
+                        whileTap={{ scale: 0.98 }}
                     >
                         <Trash2 size={16} /> Delete Save Data
-                    </button>
+                    </motion.button>
                 ) : (
                     <div className="flex gap-2 animate-in fade-in slide-in-from-right-4">
-                        <button 
+                        <motion.button
                             onClick={() => setConfirmClear(false)}
                             className="flex-1 py-3 border border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700 rounded-lg btn-press"
+                            whileTap={{ scale: 0.98 }}
                         >
                             Cancel
-                        </button>
-                        <button 
+                        </motion.button>
+                        <motion.button
                             onClick={handleClearData}
                             className="flex-1 py-3 bg-red-600 text-white hover:bg-red-500 rounded-lg font-bold btn-press"
+                            whileTap={{ scale: 0.98 }}
                         >
                             CONFIRM DELETE
-                        </button>
+                        </motion.button>
                     </div>
                 )}
                 <p className="text-xs text-slate-600 mt-2 text-center">

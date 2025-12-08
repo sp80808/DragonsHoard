@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { motion } from 'framer-motion';
 import { getXpThreshold } from '../constants';
 import { Trophy, Store as StoreIcon, Coins, RefreshCw, Menu } from 'lucide-react';
 import { InventoryItem } from '../types';
@@ -98,9 +99,13 @@ export const HUD: React.FC<HUDProps> = ({ score, bestScore, level, xp, gold, inv
       {/* Top Row: Title & Scores */}
       <div className="flex justify-between items-center bg-slate-900/90 p-3 rounded-xl border border-slate-700 shadow-xl backdrop-blur-md">
         <div className="flex items-center gap-3">
-            <button onClick={onMenu} className="p-2 -ml-2 hover:bg-white/10 rounded-lg transition-colors text-slate-400 hover:text-white">
+            <motion.button
+                onClick={onMenu}
+                className="p-2 -ml-2 hover:bg-white/10 rounded-lg transition-colors text-slate-400 hover:text-white"
+                whileTap={{ scale: 0.98 }}
+            >
                 <Menu size={20} />
-            </button>
+            </motion.button>
             <div>
             <h1 className="text-xl sm:text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-yellow-200 via-orange-400 to-red-500 fantasy-font drop-shadow-sm">
                 Dragon's Hoard
@@ -158,14 +163,15 @@ export const HUD: React.FC<HUDProps> = ({ score, bestScore, level, xp, gold, inv
         </div>
 
         {/* Store Button */}
-        <button 
+        <motion.button
           onClick={onOpenStore}
           className="w-14 bg-yellow-900/20 hover:bg-yellow-900/40 border border-yellow-700/50 rounded-lg flex flex-col items-center justify-center text-yellow-500 transition-all group relative overflow-hidden btn-press item-hover"
+          whileTap={{ scale: 0.98 }}
         >
           <div className="absolute inset-0 bg-yellow-500/10 translate-y-full group-hover:translate-y-0 transition-transform duration-300"></div>
           <StoreIcon size={18} className="relative z-10" />
           <span className="text-[9px] font-bold mt-1 relative z-10">SHOP</span>
-        </button>
+        </motion.button>
       </div>
 
       {/* Inventory & Reroll Row */}
@@ -177,13 +183,14 @@ export const HUD: React.FC<HUDProps> = ({ score, bestScore, level, xp, gold, inv
                 return (
                     <div key={slotIndex} className="flex-1 h-12 bg-slate-900/50 border border-slate-800 rounded-lg relative flex items-center justify-center group overflow-hidden">
                         {item ? (
-                            <button 
+                            <motion.button
                                 onClick={() => onUseItem(item)}
                                 className="w-full h-full flex items-center justify-center hover:bg-white/5 transition-all relative btn-press item-hover"
+                                whileTap={{ scale: 0.98 }}
                             >
                                 <span className="text-2xl drop-shadow-md">{item.icon}</span>
                                 <span className="absolute bottom-0 right-1 text-[8px] text-slate-400 font-bold tracking-tighter opacity-70">{item.name.split(' ')[0]}</span>
-                            </button>
+                            </motion.button>
                         ) : (
                             <div className="w-full h-full flex items-center justify-center opacity-20">
                                 <div className="w-2 h-2 rounded-full bg-slate-700"></div>
@@ -195,19 +202,20 @@ export const HUD: React.FC<HUDProps> = ({ score, bestScore, level, xp, gold, inv
         </div>
 
         {/* Reroll Button (Lvl 15+) */}
-        <button 
+        <motion.button
             onClick={canReroll ? onReroll : undefined}
             disabled={!canReroll}
             className={`w-14 h-12 rounded-lg flex flex-col items-center justify-center border transition-all relative
-                ${canReroll 
-                    ? 'bg-purple-900/30 hover:bg-purple-800/50 border-purple-500/50 text-purple-300 shadow-[0_0_10px_rgba(168,85,247,0.2)]' 
+                ${canReroll
+                    ? 'bg-purple-900/30 hover:bg-purple-800/50 border-purple-500/50 text-purple-300 shadow-[0_0_10px_rgba(168,85,247,0.2)]'
                     : 'bg-slate-900/30 border-slate-800 text-slate-700 opacity-50 cursor-not-allowed'}`}
+            whileTap={canReroll ? { scale: 0.98 } : undefined}
         >
             <RefreshCw size={16} className={canReroll ? "" : "opacity-50"} />
             <div className="text-[8px] font-bold mt-1">
                 {level < 15 ? 'Lvl 15' : (rerolls > 0 ? `Free: ${rerolls}` : '50G')}
             </div>
-        </button>
+        </motion.button>
       </div>
     </div>
   );

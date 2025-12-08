@@ -1,5 +1,6 @@
 
 import React, { useEffect, useReducer, useRef, useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Grid } from './components/Grid';
 import { HUD } from './components/HUD';
 import { Store } from './components/Store';
@@ -11,6 +12,7 @@ import { CascadeRing } from './components/CascadeRing';
 import { DailyChallengesPanel } from './components/DailyChallengesPanel';
 import { StatsModal } from './components/StatsModal';
 import CosmeticsShop from './components/CosmeticsShop';
+import FloatingParticles from './components/FloatingParticles';
 import { Direction, GameState, TileType, InventoryItem, FloatingText, CraftingRecipe, View, Achievement } from './types';
 import { initializeGame, moveGrid, spawnTile, isGameOver, checkLoot, useInventoryItem, applyMidasTouch, applyChronosShift, applyVoidSingularity, tryAutoMerge, saveHighscore, checkAchievements, savePersistentAchievements, purchaseCosmetic, equipCosmetic, checkCosmeticUnlocks, executeAutoCascade, findAdjacentPairs } from './services/gameLogic';
 import { SHOP_ITEMS, getXpThreshold, getStage, getStageBackground, getItemDefinition } from './constants';
@@ -397,6 +399,7 @@ const App: React.FC = () => {
   const [achievementToast, setAchievementToast] = useState<Achievement | null>(null);
   const [cascadeActive, setCascadeActive] = useState(false);
   const [currentCascadeCount, setCurrentCascadeCount] = useState(0);
+  const [theme, setTheme] = useState<string>('default');
   
   const prevXp = useRef(state.xp);
   const prevGold = useRef(state.gold);
@@ -504,6 +507,15 @@ const App: React.FC = () => {
   }, [state.xp, state.gold, state.currentStage.name, state.level]);
 
   useEffect(() => {
+    const savedTheme = localStorage.getItem('theme') || 'default';
+    setTheme(savedTheme);
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem('theme', theme);
+  }, [theme]);
+
+  useEffect(() => {
     const handleInteract = () => {
       audioService.resume();
       window.removeEventListener('keydown', handleInteract);
@@ -569,8 +581,8 @@ const App: React.FC = () => {
   const handleRestart = () => { dispatch({ type: 'RESTART' }); setView('GAME'); };
 
   return (
-    <div 
-      className="noise min-h-screen bg-[#050505] text-slate-200 flex flex-col items-center justify-center p-4 relative overflow-hidden font-sans select-none"
+    <div
+      className={`noise min-h-screen bg-[#050505] text-slate-200 flex flex-col items-center justify-center p-4 relative overflow-hidden font-sans select-none ${theme !== 'default' ? `theme-${theme}` : ''}`}
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
     >
@@ -585,30 +597,70 @@ const App: React.FC = () => {
       />
       <div className="scanlines"></div>
       <div className="vignette"></div>
-      
-      {view === 'SPLASH' && (
-          <SplashScreen
-            onStart={handleGameStart}
-            onContinue={handleContinue}
-            onOpenLeaderboard={() => setView('LEADERBOARD')}
-            onOpenSettings={() => setView('SETTINGS')}
-            onOpenCosmetics={() => setView('COSMETICS')}
-            hasSave={!!localStorage.getItem('2048_rpg_state_v3')}
-          />
-      )}
 
-      {view === 'LEADERBOARD' && <Leaderboard onBack={() => setView('SPLASH')} />}
-      {view === 'SETTINGS' && <Settings onBack={() => setView(state.score > 0 ? 'GAME' : 'SPLASH')} onClearData={() => { dispatch({ type: 'RESTART' }); setView('SPLASH'); }} />}
-      {view === 'COSMETICS' && (
-        <CosmeticsShop
-          cosmetics={state.cosmetics}
-          onEquip={(id) => dispatch({ type: 'EQUIP_COSMETIC', cosmeticId: id })}
-          onPurchase={(id) => dispatch({ type: 'PURCHASE_COSMETIC', cosmeticId: id })}
-          onBack={() => setView('SPLASH')}
-          gold={state.gold}
-          gems={state.gems}
-        />
-      )}
+      <FloatingParticles />
+
+      <AnimatePresence mode="wait">
+        {view === 'SPLASH' && (
+          <motion.div
+            key="SPLASH"
+            initial={{ opacity: 0, x: 50 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -50 }}
+            transition={{ type: "spring", stiffness: 100, damping: 20 }}
+          >
+            <SplashScreen
+              onStart={handleGameStart}
+              onContinue={handleContinue}
+              onOpenLeaderboard={() => setView('LEADERBOARD')}
+              onOpenSettings={() => setView('SETTINGS')}
+              onOpenCosmetics={() => setView('COSMETICS')}
+              hasSave={!!localStorage.getItem('2048_rpg_state_v3')}
+            />
+          </motion.div>
+        )}
+
+        {view === 'LEADERBOARD' && (
+          <motion.div
+            key="LEADERBOARD"
+            initial={{ opacity: 0, x: 50 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -50 }}
+            transition={{ type: "spring", stiffness: 100, damping: 20 }}
+          >
+            <Leaderboard onBack={() => setView('SPLASH')} />
+          </motion.div>
+        )}
+        {view === 'SETTINGS' && (
+          <motion.div
+            key="SETTINGS"
+            initial={{ opacity: 0, x: 50 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -50 }}
+            transition={{ type: "spring", stiffness: 100, damping: 20 }}
+          >
+            <Settings onBack={() => setView(state.score > 0 ? 'GAME' : 'SPLASH')} onClearData={() => { dispatch({ type: 'RESTART' }); setView('SPLASH'); }} setTheme={setTheme} currentTheme={theme} />
+          </motion.div>
+        )}
+        {view === 'COSMETICS' && (
+          <motion.div
+            key="COSMETICS"
+            initial={{ opacity: 0, x: 50 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -50 }}
+            transition={{ type: "spring", stiffness: 100, damping: 20 }}
+          >
+            <CosmeticsShop
+              cosmetics={state.cosmetics}
+              onEquip={(id) => dispatch({ type: 'EQUIP_COSMETIC', cosmeticId: id })}
+              onPurchase={(id) => dispatch({ type: 'PURCHASE_COSMETIC', cosmeticId: id })}
+              onBack={() => setView('SPLASH')}
+              gold={state.gold}
+              gems={state.gems}
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {view === 'GAME' && (
           <>

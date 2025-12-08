@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { motion } from 'framer-motion';
 import { Cosmetic, CosmeticCategory, View } from '../types';
 import { COSMETICS } from '../constants';
 
@@ -55,20 +56,38 @@ const CosmeticsShop: React.FC<CosmeticsShopProps> = ({
 
         {/* Category Filter */}
         <div className="flex gap-2 mb-6 flex-wrap">
-          <button
+          <motion.button
             onClick={() => setSelectedCategory('ALL')}
             className={`px-4 py-2 rounded ${selectedCategory === 'ALL' ? 'bg-red-600' : 'bg-gray-700'}`}
+            whileTap={{ scale: 0.98 }}
           >
             All
-          </button>
+            {selectedCategory === 'ALL' && (
+              <motion.div
+                className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-yellow-400 to-orange-500"
+                initial={{ scaleX: 0 }}
+                animate={{ scaleX: 1 }}
+                transition={{ duration: 0.5, ease: "easeInOut" }}
+              />
+            )}
+          </motion.button>
           {Object.values(CosmeticCategory).map(category => (
-            <button
+            <motion.button
               key={category}
               onClick={() => setSelectedCategory(category)}
-              className={`px-4 py-2 rounded ${selectedCategory === category ? 'bg-red-600' : 'bg-gray-700'}`}
+              className={`px-4 py-2 rounded relative ${selectedCategory === category ? 'bg-red-600' : 'bg-gray-700'}`}
+              whileTap={{ scale: 0.98 }}
             >
               {category.replace('_', ' ')}
-            </button>
+              {selectedCategory === category && (
+                <motion.div
+                  className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-yellow-400 to-orange-500"
+                  initial={{ scaleX: 0 }}
+                  animate={{ scaleX: 1 }}
+                  transition={{ duration: 0.5, ease: "easeInOut" }}
+                />
+              )}
+            </motion.button>
           ))}
         </div>
 
@@ -96,7 +115,7 @@ const CosmeticsShop: React.FC<CosmeticsShopProps> = ({
                   cosmetic.unlockCondition ? (
                     <div className="text-xs text-yellow-400">Unlock via achievement</div>
                   ) : (
-                    <button
+                    <motion.button
                       onClick={() => onPurchase(cosmetic.id)}
                       disabled={!canAfford(cosmetic)}
                       className={`px-3 py-1 rounded text-sm ${
@@ -104,22 +123,24 @@ const CosmeticsShop: React.FC<CosmeticsShopProps> = ({
                           ? 'bg-green-600 hover:bg-green-700'
                           : 'bg-gray-600 cursor-not-allowed'
                       }`}
+                      whileTap={canAfford(cosmetic) ? { scale: 0.98 } : undefined}
                     >
                       {cosmetic.cost?.gold ? `💰 ${cosmetic.cost.gold}` : ''}
                       {cosmetic.cost?.gems ? `💎 ${cosmetic.cost.gems}` : ''}
-                    </button>
+                    </motion.button>
                   )
                 ) : (
-                  <button
+                  <motion.button
                     onClick={() => onEquip(cosmetic.id)}
                     className={`px-3 py-1 rounded text-sm ${
                       cosmetic.equipped
                         ? 'bg-gray-600'
                         : 'bg-blue-600 hover:bg-blue-700'
                     }`}
+                    whileTap={{ scale: 0.98 }}
                   >
                     {cosmetic.equipped ? 'Unequip' : 'Equip'}
-                  </button>
+                  </motion.button>
                 )}
               </div>
             </div>
@@ -127,12 +148,13 @@ const CosmeticsShop: React.FC<CosmeticsShopProps> = ({
         </div>
 
         <div className="mt-6 text-center">
-          <button
+          <motion.button
             onClick={onBack}
             className="px-6 py-3 bg-red-600 hover:bg-red-700 rounded-lg font-bold"
+            whileTap={{ scale: 0.98 }}
           >
             Back to Menu
-          </button>
+          </motion.button>
         </div>
       </div>
     </div>
