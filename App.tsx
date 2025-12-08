@@ -405,8 +405,6 @@ const App: React.FC = () => {
   const [theme, setTheme] = useState<string>('default');
   const [showLevelUpBanner, setShowLevelUpBanner] = useState(false);
   const [levelUpLevel, setLevelUpLevel] = useState(0);
-  const [showLevelUpBanner, setShowLevelUpBanner] = useState(false);
-  const [levelUpLevel, setLevelUpLevel] = useState(0);
   
   // Particle system
   const particlePoolRef = useRef(new ParticlePool(200));
@@ -416,6 +414,7 @@ const App: React.FC = () => {
   const prevGold = useRef(state.gold);
   const prevStage = useRef(state.currentStage.name);
   const prevLevel = useRef(state.level);
+  const prevCombo = useRef(state.combo);
 
   // Manage cascade display timing
   useEffect(() => {

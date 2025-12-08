@@ -10,6 +10,8 @@ interface SettingsProps {
   onClearData: () => void;
   setTheme: (theme: string) => void;
   currentTheme: string;
+  particleQuality: 'high' | 'medium' | 'low';
+  setParticleQuality: (quality: 'high' | 'medium' | 'low') => void;
 }
 
 export const Settings: React.FC<SettingsProps> = ({ onBack, onClearData, setTheme, currentTheme }) => {

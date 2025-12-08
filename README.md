@@ -58,6 +58,7 @@ The game features a comprehensive progression system, strategic item crafting, a
 - 🔊 **Dynamic Audio**: Sound effects for merges, level-ups, and boss defeats
 - 📱 **Responsive Design**: Playable on desktop and mobile
 - 🎨 **AI-Generated Artwork**: Beautiful fantasy creature sprites and environment backdrops
+- ✨ **Particle Effects**: Immersive visual feedback with XP souls, gold coins, merge sparks, combo auras, and tier ascension effects
 
 ---
 

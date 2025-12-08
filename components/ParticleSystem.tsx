@@ -113,6 +113,10 @@ export class ParticlePool {
       age: 0,
       active: false,
       gravity: false,
+      pathType: 'linear',
+      startPos: undefined,
+      endPos: undefined,
+      controlPoint: undefined,
     };
   }
 
@@ -180,7 +184,14 @@ export class ParticlePool {
 
   update(): Particle[] {
     // Return list of active particles
-    return this.particles.slice(0, this.activeCount).filter((p) => p.active);
+    const activeParticles = this.particles.slice(0, this.activeCount).filter((p) => p.active);
+
+    // Debug: Log performance stats occasionally
+    if (Math.random() < 0.01) { // ~1% chance per frame
+      console.log('[ParticleSystem]', this.getStats());
+    }
+
+    return activeParticles;
   }
 
   cleanup(): Particle[] {
