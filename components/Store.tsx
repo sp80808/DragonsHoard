@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { SHOP_ITEMS, RECIPES } from '../constants';
 import { ItemType, CraftingRecipe, InventoryItem } from '../types';
-import { Coins, X, Hammer, ShoppingBag, AlertCircle, Zap, Check } from 'lucide-react';
+import { Coins, X, Hammer, ShoppingBag, AlertCircle, Check } from 'lucide-react';
 
 interface StoreProps {
   gold: number;

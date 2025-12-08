@@ -1,6 +1,6 @@
 import React from 'react';
 import { getXpThreshold } from '../constants';
-import { Trophy, Star, Store as StoreIcon, Coins, RefreshCw, Menu } from 'lucide-react';
+import { Trophy, Store as StoreIcon, Coins, RefreshCw, Menu } from 'lucide-react';
 import { InventoryItem } from '../types';
 
 interface HUDProps {

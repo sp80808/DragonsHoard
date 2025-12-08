@@ -1,6 +1,6 @@
 
-import { Direction, GameState, Tile, TileType, MoveResult, LootResult, ItemType, InventoryItem, Stage, LeaderboardEntry, GameStats, Achievement } from '../types';
-import { GRID_SIZE_INITIAL, SHOP_ITEMS, getStage, getStageBackground, ACHIEVEMENTS } from '../constants';
+import { Direction, GameState, Tile, TileType, MoveResult, LootResult, ItemType, InventoryItem, Stage, LeaderboardEntry, GameStats, Achievement, DailyChallenge, SessionStats } from '../types';
+import { GRID_SIZE_INITIAL, SHOP_ITEMS, getStage, getStageBackground, ACHIEVEMENTS, generateDailyChallenges } from '../constants';
 
 const createId = () => Math.random().toString(36).substr(2, 9);
 const LEADERBOARD_KEY = 'dragon_hoard_leaderboard';
@@ -30,14 +30,12 @@ export const spawnTile = (grid: Tile[], size: number, level: number, options?: S
   // Normalize args
   let forcedValue: number | undefined;
   let type: TileType = TileType.NORMAL;
-  let bossLevel = 0;
 
   if (typeof options === 'number') {
     forcedValue = options;
   } else if (options) {
     forcedValue = options.forcedValue;
     type = options.type || TileType.NORMAL;
-    bossLevel = options.bossLevel || level;
   }
 
   // Helper to place one tile
@@ -53,7 +51,7 @@ export const spawnTile = (grid: Tile[], size: number, level: number, options?: S
 
       if (finalType === TileType.BOSS) {
           value = 0; // Boss has 0 value for merges
-          maxHealth = bossLevel * 100;
+          maxHealth = level * 100;
           health = maxHealth;
       } else {
           // Default Value Logic
@@ -151,7 +149,6 @@ export const moveGrid = (grid: Tile[], direction: Direction, size: number): Move
   let goldGained = 0;
   let powerUpTriggered: TileType | undefined;
   const mergedIds: string[] = [];
-  let bossDefeated = false;
   const logs: string[] = [];
 
   const sortedTiles = [...grid];
@@ -286,7 +283,6 @@ export const moveGrid = (grid: Tile[], direction: Direction, size: number): Move
 
           if (boss.health <= 0) {
               deadBossIds.push(boss.id);
-              bossDefeated = true;
               
               // Rewards
               const rewardXP = (boss.maxHealth || 100) * 5;
@@ -314,7 +310,7 @@ export const moveGrid = (grid: Tile[], direction: Direction, size: number): Move
   xpGained = Math.floor(xpGained * comboMultiplier);
   goldGained = Math.floor(goldGained * comboMultiplier);
 
-  return { grid: newGrid, score, xpGained, goldGained, moved, mergedIds, powerUpTriggered, combo: mergeCount, comboMultiplier, logs, bossDefeated };
+  return { grid: newGrid, score, xpGained, goldGained, moved, mergedIds, powerUpTriggered, combo: mergeCount, comboMultiplier, logs };
 };
 
 export const applyMidasTouch = (grid: Tile[]): { grid: Tile[]; score: number; mergedCount: number } => {
@@ -524,6 +520,8 @@ export const initializeGame = (reset = false): GameState => {
       colorTheme: startStageConfig.color
   };
 
+  const now = Date.now();
+
   return {
     grid,
     score: 0,
@@ -551,7 +549,19 @@ export const initializeGame = (reset = false): GameState => {
         highestTile: 2,
         totalMoves: 0
     },
-    achievements
+    achievements,
+    dailyChallenges: generateDailyChallenges(),
+    sessionStats: {
+        totalMerges: 0,
+        highestCombo: 0,
+        goldEarned: 0,
+        xpGained: 0,
+        bossesDefeated: 0,
+        itemsUsed: 0,
+        sessionDuration: 0,
+        highestLevel: 1,
+        startTime: now
+    }
   };
 };
 

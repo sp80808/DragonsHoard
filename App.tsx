@@ -1,5 +1,5 @@
 
-import React, { useEffect, useReducer, useRef, useState } from 'react';
+import { useEffect, useReducer, useRef, useState } from 'react';
 import { Grid } from './components/Grid';
 import { HUD } from './components/HUD';
 import { Store } from './components/Store';
@@ -10,7 +10,7 @@ import { Direction, GameState, TileType, InventoryItem, FloatingText, CraftingRe
 import { initializeGame, moveGrid, spawnTile, isGameOver, checkLoot, useInventoryItem, applyMidasTouch, applyChronosShift, applyVoidSingularity, tryAutoMerge, saveHighscore, checkAchievements, savePersistentAchievements } from './services/gameLogic';
 import { SHOP_ITEMS, getXpThreshold, getStage, getStageBackground, getItemDefinition } from './constants';
 import { audioService } from './services/audioService';
-import { AlertTriangle, Crown, RefreshCw, Trophy } from 'lucide-react';
+import { RefreshCw, AlertTriangle, Crown } from 'lucide-react';
 
 // Actions
 type Action = 
@@ -420,7 +420,7 @@ const App: React.FC = () => {
     const texts: FloatingText[] = [];
     const now = Date.now();
 
-    if (state.xp > prevXp.current && state.level === state.level) { 
+    if (state.xp > prevXp.current) { 
         const diff = state.xp - prevXp.current;
         if (diff > 20) texts.push({ id: Math.random().toString(), x: 50, y: 50, text: `+${diff} XP`, color: 'text-cyan-400', createdAt: now });
     }

@@ -117,6 +117,8 @@ export interface GameState {
   lastSpawnedTileId?: string;
   stats: GameStats;
   achievements: string[]; // IDs of unlocked achievements
+  dailyChallenges: DailyChallenge[];
+  sessionStats: SessionStats;
 }
 
 export interface MoveResult {
@@ -148,4 +150,29 @@ export interface LeaderboardEntry {
   gold: number;
 }
 
-export type View = 'SPLASH' | 'GAME' | 'LEADERBOARD' | 'SETTINGS';
+export interface DailyChallenge {
+  id: string;
+  name: string;
+  description: string;
+  type: 'progression' | 'combat' | 'economy' | 'gameplay' | 'speed' | 'endurance';
+  target: number;
+  current: number;
+  completed: boolean;
+  reward: { gold?: number; xp?: number };
+  resetTime: number;
+}
+
+export interface SessionStats {
+  totalMerges: number;
+  highestCombo: number;
+  goldEarned: number;
+  xpGained: number;
+  bossesDefeated: number;
+  itemsUsed: number;
+  sessionDuration: number;
+  highestLevel: number;
+  startTime: number;
+  endTime?: number;
+}
+
+export type View = 'SPLASH' | 'GAME' | 'LEADERBOARD' | 'SETTINGS' | 'STATS';

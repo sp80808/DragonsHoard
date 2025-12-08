@@ -2,7 +2,7 @@
 import React, { useEffect, useState } from 'react';
 import { LeaderboardEntry } from '../types';
 import { getHighscores } from '../services/gameLogic';
-import { Trophy, ArrowLeft, Calendar, Star, Coins } from 'lucide-react';
+ximport { Trophy, ArrowLeft, Star, Coins } from 'lucide-react';
 
 interface LeaderboardProps {
   onBack: () => void;

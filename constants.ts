@@ -1,5 +1,5 @@
 
-import { TileType, ItemType, InventoryItem, Stage, CraftingRecipe, Achievement } from './types';
+import { TileType, ItemType, InventoryItem, Stage, CraftingRecipe, Achievement, DailyChallenge } from './types';
 
 export const GRID_SIZE_INITIAL = 4;
 export const WINNING_VALUE = 2048;
@@ -119,6 +119,70 @@ export const getItemDefinition = (type: ItemType) => {
     if (recipe) return { name: recipe.name, desc: recipe.description, icon: recipe.icon };
     
     return { name: "Unknown", desc: "???", icon: "❓" };
+};
+
+export const generateDailyChallenges = (): DailyChallenge[] => {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const resetTime = today.getTime() + 24 * 60 * 60 * 1000;
+
+  return [
+    {
+      id: 'daily_level_10',
+      name: 'Reach Level 10',
+      description: 'Progress to level 10 in one session',
+      type: 'progression',
+      target: 10,
+      current: 0,
+      completed: false,
+      reward: { gold: 500, xp: 1000 },
+      resetTime
+    },
+    {
+      id: 'daily_bosses',
+      name: 'Boss Hunter',
+      description: 'Defeat 3 bosses',
+      type: 'combat',
+      target: 3,
+      current: 0,
+      completed: false,
+      reward: { gold: 300, xp: 500 },
+      resetTime
+    },
+    {
+      id: 'daily_gold',
+      name: 'Gold Rush',
+      description: 'Earn 50,000 gold',
+      type: 'economy',
+      target: 50000,
+      current: 0,
+      completed: false,
+      reward: { gold: 250 },
+      resetTime
+    },
+    {
+      id: 'daily_merges',
+      name: 'Merge Master',
+      description: 'Merge 100 tiles',
+      type: 'gameplay',
+      target: 100,
+      current: 0,
+      completed: false,
+      reward: { xp: 750 },
+      resetTime
+    },
+    {
+      id: 'daily_items',
+      name: 'Item Collector',
+      description: 'Use 5 items',
+      type: 'gameplay',
+      target: 5,
+      current: 0,
+      completed: false,
+      reward: { gold: 200, xp: 300 },
+      resetTime
+    }
+  ];
 };
 
 export const ACHIEVEMENTS: Achievement[] = [
