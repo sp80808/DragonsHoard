@@ -44,7 +44,7 @@ const CosmeticsShop: React.FC<CosmeticsShopProps> = ({
 
   return (
     <div className="min-h-screen bg-black text-white p-4">
-      <div className="max-w-4xl mx-auto">
+      <div className="max-w-4xl mx-auto module-creative">
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-3xl font-bold">🎨 Cosmetics Shop</h1>
           <div className="flex gap-4">

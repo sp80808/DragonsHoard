@@ -33,7 +33,7 @@ export const Settings: React.FC<SettingsProps> = ({ onBack, onClearData }) => {
 
   return (
     <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-sm p-4">
-      <div className="w-full max-w-md bg-slate-900 border border-slate-700 rounded-xl p-6 shadow-2xl">
+      <div className="w-full max-w-md bg-slate-900 module-creative rounded-xl p-6 shadow-2xl">
         <div className="flex items-center gap-4 mb-8">
            <button onClick={onBack} className="p-2 hover:bg-slate-800 rounded-full transition-all text-slate-400 btn-press item-hover">
              <ArrowLeft size={24} />

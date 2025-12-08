@@ -58,7 +58,7 @@ export const TileComponent: React.FC<TileProps> = ({ tile, gridSize, equippedCos
       onTouchStart={handleInteraction}
     >
       <div
-        className={`w-full h-full rounded-lg relative overflow-hidden shadow-2xl ${isNewClass} ${isMergedClass} ${isSlash} ${isTierJump} ${isHighValue} group`}
+        className={`w-full h-full rounded-lg relative overflow-hidden shadow-2xl ${isNewClass} ${isMergedClass} ${isSlash} ${isTierJump} ${isHighValue} group module-sample`}
       >
         {/* Glow Container */}
         <div className={`absolute inset-0 transition-opacity duration-300 ${style.glow} opacity-0 group-hover:opacity-100`}></div>

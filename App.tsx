@@ -7,11 +7,12 @@ import { SplashScreen } from './components/SplashScreen';
 import { Leaderboard } from './components/Leaderboard';
 import { Settings } from './components/Settings';
 import { ComboCounter } from './components/ComboCounter';
+import { CascadeRing } from './components/CascadeRing';
 import { DailyChallengesPanel } from './components/DailyChallengesPanel';
 import { StatsModal } from './components/StatsModal';
 import CosmeticsShop from './components/CosmeticsShop';
 import { Direction, GameState, TileType, InventoryItem, FloatingText, CraftingRecipe, View, Achievement } from './types';
-import { initializeGame, moveGrid, spawnTile, isGameOver, checkLoot, useInventoryItem, applyMidasTouch, applyChronosShift, applyVoidSingularity, tryAutoMerge, saveHighscore, checkAchievements, savePersistentAchievements, purchaseCosmetic, equipCosmetic, checkCosmeticUnlocks } from './services/gameLogic';
+import { initializeGame, moveGrid, spawnTile, isGameOver, checkLoot, useInventoryItem, applyMidasTouch, applyChronosShift, applyVoidSingularity, tryAutoMerge, saveHighscore, checkAchievements, savePersistentAchievements, purchaseCosmetic, equipCosmetic, checkCosmeticUnlocks, executeAutoCascade, findAdjacentPairs } from './services/gameLogic';
 import { SHOP_ITEMS, getXpThreshold, getStage, getStageBackground, getItemDefinition } from './constants';
 import { audioService } from './services/audioService';
 import { RefreshCw, AlertTriangle, Crown } from 'lucide-react';
@@ -312,6 +313,24 @@ const reducer = (state: GameState, action: Action): GameState => {
       const spawnedTile = newGrid.find(t => !gridBeforeSpawn.includes(t));
       const lastSpawnedTileId = spawnedTile?.id;
 
+      // CASCADE SYSTEM - Execute after spawn
+      const cascadeResult = executeAutoCascade(newGrid, state.level >= 18 ? 12 : 8);
+      
+      if (cascadeResult.cascadeCount > 0) {
+        newGrid = cascadeResult.grid;
+        newXp += cascadeResult.totalRewards.xp * (newLevel >= 7 ? 1.5 : 1);
+        newGold += cascadeResult.totalRewards.gold;
+        newScore += cascadeResult.totalRewards.xp; // Add to score
+        newLogs.push(`⚡ ${cascadeResult.cascadeCount}× CASCADE! +${cascadeResult.totalRewards.xp}XP +${cascadeResult.totalRewards.gold}G`);
+        audioService.playMerge(cascadeResult.totalRewards.xp);
+        
+        // Update stats
+        newStats.totalMerges += cascadeResult.cascadeCount;
+        if (cascadeResult.cascadeCount > newStats.highestCombo) {
+          newStats.highestCombo = cascadeResult.cascadeCount;
+        }
+      }
+
       if (newLevel >= 20) {
           const auto = tryAutoMerge(newGrid);
           if (auto.success) {
@@ -356,7 +375,9 @@ const reducer = (state: GameState, action: Action): GameState => {
         lastSpawnedTileId,
         stats: newStats,
         combo: comboMultiplier > 1 ? combo : 0,
-        achievements: state.achievements // Persisted in memory, but updated in logic
+        achievements: state.achievements, // Persisted in memory, but updated in logic
+        cascadeActive: cascadeResult.cascadeCount > 0,
+        cascadeCount: cascadeResult.cascadeCount
       };
       
       localStorage.setItem('2048_rpg_state_v3', JSON.stringify(newState));
@@ -374,10 +395,28 @@ const App: React.FC = () => {
   const [floatingTexts, setFloatingTexts] = useState<FloatingText[]>([]);
   const [stageAnnouncement, setStageAnnouncement] = useState<string | null>(null);
   const [achievementToast, setAchievementToast] = useState<Achievement | null>(null);
+  const [cascadeActive, setCascadeActive] = useState(false);
+  const [currentCascadeCount, setCurrentCascadeCount] = useState(0);
   
   const prevXp = useRef(state.xp);
   const prevGold = useRef(state.gold);
   const prevStage = useRef(state.currentStage.name);
+
+  // Manage cascade display timing
+  useEffect(() => {
+    if (state.cascadeCount && state.cascadeCount > 0) {
+      setCascadeActive(true);
+      setCurrentCascadeCount(state.cascadeCount);
+      
+      // Keep visible for 3 seconds
+      const timer = setTimeout(() => {
+        setCascadeActive(false);
+        setCurrentCascadeCount(0);
+      }, 3000);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [state.cascadeCount]);
 
   // Check Achievements on state change
   useEffect(() => {
@@ -635,6 +674,13 @@ const App: React.FC = () => {
                         </div>
                     </div>
                 )}
+
+                {/* Cascade Ring */}
+                <CascadeRing 
+                    cascadeCount={currentCascadeCount}
+                    isActive={cascadeActive}
+                    maxCascades={state.level >= 18 ? 12 : 8}
+                />
 
                 <div className="w-full h-8 mb-2 flex items-center justify-center text-xs sm:text-sm text-yellow-400/80 font-mono tracking-wide shadow-black drop-shadow-md">
                     {state.logs.length > 0 ? state.logs[state.logs.length - 1] : "The dungeon awaits..."}
