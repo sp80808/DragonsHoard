@@ -94,7 +94,7 @@ const CosmeticsShop: React.FC<CosmeticsShopProps> = ({
         {/* Cosmetics Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {filteredCosmetics.map(cosmetic => (
-            <div key={cosmetic.id} className="bg-gray-800 p-4 rounded-lg border border-gray-600">
+            <div key={cosmetic.id} className="bg-gray-800 p-4 rounded-lg border border-gray-600 acrylic-panel layered-depth depth-focused">
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2">
                   <span className="text-2xl">{cosmetic.icon}</span>

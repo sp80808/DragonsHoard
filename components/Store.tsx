@@ -63,7 +63,7 @@ export const Store: React.FC<StoreProps> = ({ gold, inventory, onClose, onBuy, o
 
   return (
     <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/95 backdrop-blur-md p-4 animate-in fade-in zoom-in duration-200">
-      <div className="bg-slate-900 w-full max-w-md rounded-xl border border-yellow-700/50 shadow-2xl flex flex-col max-h-[85vh] relative">
+      <div className="bg-slate-900 w-full max-w-md rounded-xl border border-yellow-700/50 shadow-2xl flex flex-col max-h-[85vh] relative acrylic-panel layered-depth depth-focused">
         
         {/* Header */}
         <div className="p-4 border-b border-slate-700 flex justify-between items-center bg-slate-900/50">
