@@ -13,10 +13,13 @@ import { DailyChallengesPanel } from './components/DailyChallengesPanel';
 import { StatsModal } from './components/StatsModal';
 import CosmeticsShop from './components/CosmeticsShop';
 import FloatingParticles from './components/FloatingParticles';
-import { Direction, GameState, TileType, InventoryItem, FloatingText, CraftingRecipe, View, Achievement } from './types';
+import { ParticleSystem, ParticlePool } from './components/ParticleSystem';
+import { LevelUpBanner } from './components/LevelUpBanner';
+import { Direction, GameState, TileType, InventoryItem, FloatingText, CraftingRecipe, View, Achievement, Particle } from './types';
 import { initializeGame, moveGrid, spawnTile, isGameOver, checkLoot, useInventoryItem, applyMidasTouch, applyChronosShift, applyVoidSingularity, tryAutoMerge, saveHighscore, checkAchievements, savePersistentAchievements, purchaseCosmetic, equipCosmetic, checkCosmeticUnlocks, executeAutoCascade, findAdjacentPairs } from './services/gameLogic';
 import { SHOP_ITEMS, getXpThreshold, getStage, getStageBackground, getItemDefinition } from './constants';
 import { audioService } from './services/audioService';
+import { spawnXPParticles, spawnGoldParticles, spawnMergeSparks, getUIElementPos, spawnTierAscensionEffect, isTierAscension, getTierColor, spawnComboEmbers } from './services/particleUtils';
 import { RefreshCw, AlertTriangle, Crown } from 'lucide-react';
 
 // Actions
@@ -400,10 +403,19 @@ const App: React.FC = () => {
   const [cascadeActive, setCascadeActive] = useState(false);
   const [currentCascadeCount, setCurrentCascadeCount] = useState(0);
   const [theme, setTheme] = useState<string>('default');
+  const [showLevelUpBanner, setShowLevelUpBanner] = useState(false);
+  const [levelUpLevel, setLevelUpLevel] = useState(0);
+  const [showLevelUpBanner, setShowLevelUpBanner] = useState(false);
+  const [levelUpLevel, setLevelUpLevel] = useState(0);
+  
+  // Particle system
+  const particlePoolRef = useRef(new ParticlePool(200));
+  const [particles, setParticles] = useState<Particle[]>([]);
   
   const prevXp = useRef(state.xp);
   const prevGold = useRef(state.gold);
   const prevStage = useRef(state.currentStage.name);
+  const prevLevel = useRef(state.level);
 
   // Manage cascade display timing
   useEffect(() => {
@@ -476,19 +488,116 @@ const App: React.FC = () => {
     }
   }, [state.logs]);
 
+  // Particle generation on resource gains
+  useEffect(() => {
+    const xpGain = state.xp - prevXp.current;
+    const goldGain = state.gold - prevGold.current;
+
+    if (xpGain > 0 || goldGain > 0) {
+      const mergedTiles = state.grid.filter(t => t.isNew);
+      
+      // Spawn particles from center of merged tiles
+      mergedTiles.forEach(tile => {
+        const tileIndex = state.grid.indexOf(tile);
+        const row = Math.floor(tileIndex / state.gridSize);
+        const col = tileIndex % state.gridSize;
+        
+        const tileSize = 60;
+        const padding = 4;
+        const offset = 16;
+        
+        const startX = offset + col * (tileSize + padding) + tileSize / 2;
+        const startY = offset + row * (tileSize + padding) + tileSize / 2;
+
+        // Check for tier ascension effect
+        if (isTierAscension(tile.value)) {
+          spawnTierAscensionEffect(
+            particlePoolRef.current,
+            startX,
+            startY,
+            tile.value
+          );
+        } else {
+          // Standard merge sparks with tier-based color
+          const sparkColor = getTierColor(tile.value);
+          spawnMergeSparks(particlePoolRef.current, startX, startY, sparkColor, 15);
+        }
+
+        // XP particles
+        if (xpGain > 0) {
+          const xpBarPos = getUIElementPos('xp-bar');
+          if (xpBarPos) {
+            spawnXPParticles(
+              particlePoolRef.current,
+              startX,
+              startY,
+              xpBarPos.x,
+              xpBarPos.y,
+              5
+            );
+          }
+        }
+
+        // Gold particles
+        if (goldGain > 0) {
+          const goldCounterPos = getUIElementPos('gold-counter');
+          if (goldCounterPos) {
+            spawnGoldParticles(
+              particlePoolRef.current,
+              startX,
+              startY,
+              goldCounterPos.x,
+              goldCounterPos.y,
+              goldGain
+            );
+          }
+        }
+      });
+
+      // Cleanup and update pool
+      const updatedParticles = particlePoolRef.current.cleanup();
+      setParticles(updatedParticles);
+    }
+
+    prevXp.current = state.xp;
+    prevGold.current = state.gold;
+  }, [state.xp, state.gold, state.grid, state.gridSize]);
+
+  // Particle update loop
+  const handleParticleUpdate = (updatedParticles: Particle[]) => {
+    setParticles(updatedParticles);
+  };
+
   useEffect(() => {
     const texts: FloatingText[] = [];
     const now = Date.now();
 
-    if (state.xp > prevXp.current) { 
+    if (state.xp > prevXp.current) {
         const diff = state.xp - prevXp.current;
-        if (diff > 20) texts.push({ id: Math.random().toString(), x: 50, y: 50, text: `+${diff} XP`, color: 'text-cyan-400', createdAt: now });
+        if (diff > 20) {
+            const isCritical = diff >= 100;
+            texts.push({
+                id: Math.random().toString(),
+                x: 50,
+                y: 50,
+                text: `+${diff} XP`,
+                color: isCritical ? 'text-red-500 text-4xl font-black critical-flash shake' : 'text-cyan-400 text-2xl font-bold shimmer-highlight',
+                createdAt: now
+            });
+        }
     }
     prevXp.current = state.xp;
 
     if (state.gold > prevGold.current) {
         const diff = state.gold - prevGold.current;
-        texts.push({ id: Math.random().toString(), x: 80, y: 40, text: `+${diff} G`, color: 'text-yellow-400', createdAt: now });
+        texts.push({
+            id: Math.random().toString(),
+            x: 80,
+            y: 40,
+            text: `+${diff} 💰`,
+            color: 'text-yellow-400 text-2xl font-bold coin-blink',
+            createdAt: now
+        });
     }
     prevGold.current = state.gold;
 
@@ -498,13 +607,20 @@ const App: React.FC = () => {
         prevStage.current = state.currentStage.name;
     }
 
+    // Level up banner
+    if (state.level > prevLevel.current) {
+        setLevelUpLevel(state.level);
+        setShowLevelUpBanner(true);
+        setTimeout(() => setShowLevelUpBanner(false), 3000);
+    }
+    prevLevel.current = state.level;
+
     if (texts.length > 0) {
         setFloatingTexts(prev => [...prev, ...texts]);
         setTimeout(() => {
             setFloatingTexts(prev => prev.filter(t => t.createdAt > now));
         }, 1000);
     }
-  }, [state.xp, state.gold, state.currentStage.name, state.level]);
 
   useEffect(() => {
     const savedTheme = localStorage.getItem('theme') || 'default';
@@ -599,6 +715,7 @@ const App: React.FC = () => {
       <div className="vignette"></div>
 
       <FloatingParticles />
+      <ParticleSystem particles={particles} onUpdate={handleParticleUpdate} />
 
       <AnimatePresence mode="wait">
         {view === 'SPLASH' && (
@@ -664,9 +781,12 @@ const App: React.FC = () => {
 
       {view === 'GAME' && (
           <>
+            {/* Level Up Banner */}
+            <LevelUpBanner level={levelUpLevel} isVisible={showLevelUpBanner} />
+
             <div className="absolute inset-0 pointer-events-none z-50 overflow-hidden">
                 {floatingTexts.map(ft => (
-                    <div 
+                    <div
                         key={ft.id}
                         className={`absolute font-bold text-2xl floating-text ${ft.color}`}
                         style={{ left: `${ft.x}%`, top: `${ft.y}%` }}

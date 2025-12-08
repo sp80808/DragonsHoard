@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Particle, ParticleConfig, ParticleType } from '../types';
+import { Particle as ParticleComponent } from './Particle';
 
 const PARTICLE_POOL_SIZE = 200;
 const PHYSICS_FPS = 60;
@@ -77,67 +78,9 @@ export const ParticleSystem: React.FC<ParticleSystemProps> = ({ particles, onUpd
 
   return (
     <div className="fixed inset-0 pointer-events-none">
-      {particles.map((p) => {
-        if (!p.active) return null;
-
-        const style = {
-          position: 'fixed' as const,
-          left: `${p.x}px`,
-          top: `${p.y}px`,
-          opacity: p.alpha,
-          transition: 'none',
-          pointerEvents: 'none' as const,
-          zIndex: 1000,
-        };
-
-        // Render different particle types
-        switch (p.type) {
-          case 'xp':
-            return (
-              <div
-                key={p.id}
-                style={style}
-                className="w-2 h-2 rounded-full bg-cyan-400 shadow-lg"
-              />
-            );
-
-          case 'gold':
-            return (
-              <div
-                key={p.id}
-                style={style}
-                className="w-2 h-2 rounded-full bg-yellow-400 shadow-lg font-bold text-xs"
-              >
-                $
-              </div>
-            );
-
-          case 'spark':
-            return (
-              <div
-                key={p.id}
-                style={style}
-                className="w-1.5 h-1.5 rounded-full shadow-lg"
-                style={{
-                  ...style,
-                  backgroundColor: p.color,
-                }}
-              />
-            );
-
-          case 'ember':
-            return (
-              <div
-                key={p.id}
-                style={style}
-                className="w-2 h-2 rounded-full bg-orange-500 shadow-lg"
-              />
-            );
-
-          default:
-            return null;
-        }
-      })}
+      {particles.map((p) => (
+        <ParticleComponent key={p.id} particle={p} />
+      ))}
     </div>
   );
 };

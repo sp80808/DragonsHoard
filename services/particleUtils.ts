@@ -205,3 +205,76 @@ export function getUIElementPos(elementId: string): { x: number; y: number } | n
     y: rect.top + rect.height / 2,
   };
 }
+
+/**
+ * Spawn tier ascension effect for major upgrades (8→16, 64→128, 256→512)
+ */
+export function spawnTierAscensionEffect(
+  pool: ParticlePool,
+  tileX: number,
+  tileY: number,
+  tierValue: number
+): Particle[] {
+  const particles: Particle[] = [];
+
+  // Determine color based on tier
+  let color = '#FFD700'; // Gold default
+  if (tierValue >= 256) {
+    color = '#9333EA'; // Purple for ultra-high tiers
+  } else if (tierValue >= 64) {
+    color = '#3B82F6'; // Blue for high tiers
+  }
+
+  // Inner burst - tight, bright sparks
+  const innerConfig: ParticleConfig = {
+    type: 'spark',
+    startPos: { x: tileX, y: tileY },
+    color,
+    lifetime: 400,
+  };
+  const innerSparks = pool.spawnBurst(innerConfig, 20);
+  particles.push(...innerSparks);
+
+  // Outer halo - larger, slower particles
+  for (let i = 0; i < 12; i++) {
+    const angle = (Math.PI * 2 * i) / 12;
+    const speed = 1.5;
+
+    const config: ParticleConfig = {
+      type: 'spark',
+      startPos: { x: tileX, y: tileY },
+      color,
+      lifetime: 600,
+      velocity: {
+        x: Math.cos(angle) * speed,
+        y: Math.sin(angle) * speed,
+      },
+      gravity: false,
+    };
+
+    const particle = pool.spawn(config);
+    if (particle) {
+      particles.push(particle);
+    }
+  }
+
+  return particles;
+}
+
+/**
+ * Check if a merge qualifies as a "tier ascension" (special milestone)
+ */
+export function isTierAscension(value: number): boolean {
+  return value === 16 || value === 128 || value === 512 || value === 2048;
+}
+
+/**
+ * Get tier color for particle effects
+ */
+export function getTierColor(value: number): string {
+  if (value >= 512) return '#9333EA'; // Purple
+  if (value >= 128) return '#3B82F6'; // Blue
+  if (value >= 32) return '#10B981'; // Green
+  if (value >= 8) return '#F59E0B'; // Amber
+  return '#FFD700'; // Gold
+}

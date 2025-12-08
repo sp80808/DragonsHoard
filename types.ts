@@ -222,6 +222,8 @@ export interface ParticleConfig {
   velocity?: { x: number; y: number };
   gravity?: boolean;
   count?: number; // For bursts
+  pathType?: 'linear' | 'bezier';
+  controlPoint?: { x: number; y: number }; // For Bezier curves
 }
 
 export interface Particle {
@@ -237,5 +239,9 @@ export interface Particle {
   age: number;
   active: boolean;
   gravity: boolean;
+  pathType?: 'linear' | 'bezier';
+  startPos?: { x: number; y: number };
+  endPos?: { x: number; y: number };
+  controlPoint?: { x: number; y: number };
 }
 

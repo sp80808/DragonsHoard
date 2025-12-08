@@ -112,7 +112,7 @@ export const HUD: React.FC<HUDProps> = ({ score, bestScore, level, xp, gold, inv
             </h1>
             <div className="flex items-center gap-3 text-xs text-slate-400 mt-1">
                 <span className="flex items-center gap-1"><Trophy size={10} /> {bestScore}</span>
-                <span className={`flex items-center gap-1 text-yellow-400 font-bold ${goldBlink ? 'coin-blink' : ''}`}>
+                <span className={`flex items-center gap-1 text-yellow-400 font-bold ${goldBlink ? 'coin-blink' : ''}`} id="gold-counter">
                   <Coins size={10} /> {gold} G
                 </span>
             </div>
@@ -127,7 +127,7 @@ export const HUD: React.FC<HUDProps> = ({ score, bestScore, level, xp, gold, inv
       {/* RPG Stats & Inventory Row */}
       <div className="flex gap-2 h-14">
         {/* XP Bar Container */}
-        <div className={`flex-1 bg-slate-950/80 p-1.5 rounded-lg border ${theme.borderColor} relative flex flex-col justify-center shadow-lg transition-colors duration-500 ${xpTick ? 'xp-tick' : ''} ${levelUp ? 'level-up-pulse' : ''}`}>
+        <div className={`flex-1 bg-slate-950/80 p-1.5 rounded-lg border ${theme.borderColor} relative flex flex-col justify-center shadow-lg transition-colors duration-500 ${xpTick ? 'xp-tick' : ''} ${levelUp ? 'level-up-pulse' : ''}`} id="xp-bar">
           
           {/* Level Badge & Label */}
           <div className="flex justify-between items-end mb-1 px-1 z-10 relative">
