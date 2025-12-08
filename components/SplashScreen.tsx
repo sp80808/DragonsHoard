@@ -1,6 +1,6 @@
 
 import React, { useEffect, useState } from 'react';
-import { Play, Trophy, Settings, User, Scroll, CheckCircle2, Circle, ChevronLeft, ChevronRight, Lock, Swords, Grid } from 'lucide-react';
+import { Play, Trophy, Settings, User, Scroll, CheckCircle2, Circle, ChevronLeft, ChevronRight, Lock, Swords, Grid, BookOpen } from 'lucide-react';
 import { getPlayerProfile, getNextLevelXp } from '../services/storageService';
 import { PlayerProfile, HeroClass, GameMode } from '../types';
 
@@ -9,6 +9,7 @@ interface SplashScreenProps {
   onContinue: () => void;
   onOpenLeaderboard: () => void;
   onOpenSettings: () => void;
+  onOpenHelp: () => void;
   hasSave: boolean;
 }
 
@@ -20,7 +21,7 @@ const CLASS_DESCRIPTIONS: Record<HeroClass, { title: string, desc: string, icon:
     [HeroClass.PALADIN]: { title: 'Paladin', desc: 'Starts with a Golden Rune. Divine favor.', icon: '✨', color: 'text-yellow-400', bg: 'from-yellow-900/40 to-slate-900' },
 };
 
-export const SplashScreen: React.FC<SplashScreenProps> = ({ onStart, onContinue, onOpenLeaderboard, onOpenSettings, hasSave }) => {
+export const SplashScreen: React.FC<SplashScreenProps> = ({ onStart, onContinue, onOpenLeaderboard, onOpenSettings, onOpenHelp, hasSave }) => {
   const [profile, setProfile] = useState<PlayerProfile | null>(null);
   const [selectedClassIndex, setSelectedClassIndex] = useState(0);
   const [shakeError, setShakeError] = useState(false);
@@ -113,12 +114,15 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({ onStart, onContinue,
                       <Grid size={18} /> Classic Mode <span className="text-[10px] uppercase bg-slate-800 px-1 rounded text-slate-500 ml-1">No RPG</span>
                   </button>
 
-                  <div className="flex gap-4 pt-2">
-                      <button onClick={onOpenLeaderboard} className="flex-1 py-3 bg-slate-900/40 backdrop-blur-sm border border-slate-700/50 hover:bg-slate-800/60 text-slate-400 hover:text-white rounded-xl flex items-center justify-center gap-2 transition-all hover:scale-105 active:scale-95">
-                          <Trophy size={18} /> Scores
+                  <div className="grid grid-cols-3 gap-2 pt-2">
+                      <button onClick={onOpenLeaderboard} className="py-3 bg-slate-900/40 backdrop-blur-sm border border-slate-700/50 hover:bg-slate-800/60 text-slate-400 hover:text-white rounded-xl flex flex-col md:flex-row items-center justify-center gap-1 md:gap-2 transition-all hover:scale-105 active:scale-95">
+                          <Trophy size={18} /> <span className="text-[10px] md:text-sm font-bold">Scores</span>
                       </button>
-                      <button onClick={onOpenSettings} className="flex-1 py-3 bg-slate-900/40 backdrop-blur-sm border border-slate-700/50 hover:bg-slate-800/60 text-slate-400 hover:text-white rounded-xl flex items-center justify-center gap-2 transition-all hover:scale-105 active:scale-95">
-                          <Settings size={18} /> Settings
+                      <button onClick={onOpenSettings} className="py-3 bg-slate-900/40 backdrop-blur-sm border border-slate-700/50 hover:bg-slate-800/60 text-slate-400 hover:text-white rounded-xl flex flex-col md:flex-row items-center justify-center gap-1 md:gap-2 transition-all hover:scale-105 active:scale-95">
+                          <Settings size={18} /> <span className="text-[10px] md:text-sm font-bold">Config</span>
+                      </button>
+                      <button onClick={onOpenHelp} className="py-3 bg-slate-900/40 backdrop-blur-sm border border-slate-700/50 hover:bg-slate-800/60 text-slate-400 hover:text-white rounded-xl flex flex-col md:flex-row items-center justify-center gap-1 md:gap-2 transition-all hover:scale-105 active:scale-95">
+                          <BookOpen size={18} /> <span className="text-[10px] md:text-sm font-bold">Guide</span>
                       </button>
                   </div>
               </div>

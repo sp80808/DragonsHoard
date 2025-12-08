@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { Tile, TileType } from '../types';
-import { TILE_STYLES, BOSS_STYLE, FALLBACK_STYLE } from '../constants';
+import { TILE_STYLES, BOSS_STYLE, FALLBACK_STYLE, RUNE_STYLES } from '../constants';
 
 interface TileProps {
   tile: Tile;
@@ -12,7 +12,10 @@ export const TileComponent: React.FC<TileProps> = ({ tile, gridSize }) => {
   let style = TILE_STYLES[tile.value] || FALLBACK_STYLE;
   if (tile.type === TileType.BOSS) {
       style = BOSS_STYLE;
+  } else if (tile.type.startsWith('RUNE_')) {
+      style = RUNE_STYLES[tile.type] || FALLBACK_STYLE;
   }
+
   const [imgError, setImgError] = useState(false);
   
   const xPos = (tile.x / gridSize) * 100;
@@ -84,8 +87,13 @@ export const TileComponent: React.FC<TileProps> = ({ tile, gridSize }) => {
                 ${gridSize > 5 ? 'text-lg' : 'text-3xl'}
                 ${tile.value > 1000 ? 'text-yellow-200' : ''}
             `}>
-                {tile.type !== TileType.BOSS ? tile.value : ''}
+                {tile.type !== TileType.BOSS && !tile.type.startsWith('RUNE_') ? tile.value : ''}
             </span>
+            
+            {/* Icon for Special Tiles */}
+            {tile.type.startsWith('RUNE_') && (
+                <div className="text-2xl md:text-3xl animate-pulse">{style.icon}</div>
+            )}
             
             {/* Label */}
             <span className={`text-[8px] sm:text-[10px] uppercase tracking-widest text-slate-200 font-bold mt-0.5 drop-shadow-md opacity-80`}>

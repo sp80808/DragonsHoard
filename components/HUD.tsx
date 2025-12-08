@@ -1,8 +1,8 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import { getXpThreshold } from '../constants';
-import { Trophy, Star, Store as StoreIcon, Coins, RefreshCw, Menu, Clover, Skull } from 'lucide-react';
-import { InventoryItem, Stage, GameMode } from '../types';
+import { Trophy, Star, Store as StoreIcon, Coins, RefreshCw, Menu, Clover, Skull, Zap, Info, HelpCircle, Flame, Hammer } from 'lucide-react';
+import { InventoryItem, Stage, GameMode, InputSettings } from '../types';
 
 interface HUDProps {
   score: number;
@@ -15,6 +15,8 @@ interface HUDProps {
   effectCounters: Record<string, number>;
   currentStage: Stage;
   gameMode: GameMode;
+  accountLevel: number;
+  settings: InputSettings;
   onOpenStore: () => void;
   onUseItem: (item: InventoryItem) => void;
   onReroll: () => void;
@@ -32,23 +34,79 @@ export const HUD: React.FC<HUDProps> = ({
     effectCounters, 
     currentStage, 
     gameMode,
+    accountLevel,
+    settings,
     onOpenStore, 
     onUseItem, 
     onReroll, 
     onMenu 
 }) => {
+  // Generic Tooltip State
+  const [activeTooltip, setActiveTooltip] = useState<string | null>(null);
+
+  const toggleTooltip = (id: string, e?: React.MouseEvent) => {
+      e?.stopPropagation();
+      setActiveTooltip(prev => prev === id ? null : id);
+  }
+  
   const isClassic = gameMode === 'CLASSIC';
   const xpThreshold = getXpThreshold(level);
   const xpPercent = Math.min(100, (xp / xpThreshold) * 100);
   const canReroll = (level >= 15 && (rerolls > 0 || gold >= 50)) && !isClassic;
 
+  // Use stage-specific gradient or fallback
   const barGradient = currentStage.barColor || "from-cyan-600 via-blue-500 to-indigo-500";
+  // Use stage-specific text color theme or fallback
+  const accentColor = currentStage.colorTheme || "text-slate-200";
+
   const shimmerDuration = Math.max(1.0, 3.5 - (level * 0.05)) + 's';
+
+  const isCascadeUnlocked = accountLevel >= 10;
+  const isCascadeActive = isCascadeUnlocked && !isClassic;
 
   const buffs = [];
   if ((effectCounters['LUCKY_LOOT'] || 0) > 0) buffs.push({ id: 'luck', icon: <Clover size={12} className="text-green-400" />, label: 'LUCK', count: effectCounters['LUCKY_LOOT'], color: 'bg-green-900/40 border-green-500/30' });
   if ((effectCounters['ASCENDANT_SPAWN'] || 0) > 0) buffs.push({ id: 'asc', icon: <Star size={12} className="text-yellow-400" />, label: 'RUNE', count: effectCounters['ASCENDANT_SPAWN'], color: 'bg-yellow-900/40 border-yellow-500/30' });
   if ((effectCounters['DEMON_CURSE'] || 0) > 0) buffs.push({ id: 'curse', icon: <Skull size={12} className="text-red-400" />, label: 'CURSE', count: effectCounters['DEMON_CURSE'], color: 'bg-red-900/40 border-red-500/30' });
+  
+  // New Buffs
+  if ((effectCounters['LUCKY_DICE'] || 0) > 0) buffs.push({ id: 'dice', icon: <Coins size={12} className="text-blue-400" />, label: 'FATE', count: effectCounters['LUCKY_DICE'], color: 'bg-blue-900/40 border-blue-500/30' });
+  if ((effectCounters['CHAIN_CATALYST'] || 0) > 0) buffs.push({ id: 'chain', icon: <Flame size={12} className="text-orange-400" />, label: 'CHAIN', count: effectCounters['CHAIN_CATALYST'], color: 'bg-orange-900/40 border-orange-500/30' });
+  if ((effectCounters['MIDAS_POTION'] || 0) > 0) buffs.push({ id: 'midas', icon: <Coins size={12} className="text-yellow-400" />, label: 'MIDAS', count: effectCounters['MIDAS_POTION'], color: 'bg-yellow-900/40 border-yellow-500/30' });
+  if ((effectCounters['SIEGE_BREAKER'] || 0) > 0) buffs.push({ id: 'siege', icon: <Hammer size={12} className="text-red-400" />, label: 'MIGHT', count: effectCounters['SIEGE_BREAKER'], color: 'bg-red-900/40 border-red-500/30' });
+
+  // Tooltip Helper Component
+  const MicroTooltip = ({ id, icon, title, content, side = 'left' }: { id: string, icon: React.ReactNode, title: string, content: React.ReactNode, side?: 'left' | 'right' }) => {
+      if (!settings.enableTooltips) return null;
+      
+      const isOpen = activeTooltip === id;
+      return (
+          <div className="relative inline-flex items-center ml-1">
+              <button 
+                  onClick={(e) => toggleTooltip(id, e)}
+                  className={`p-0.5 rounded-full hover:bg-white/10 transition-colors ${isOpen ? 'text-white bg-white/10' : 'text-slate-500 hover:text-slate-300'}`}
+              >
+                  {icon}
+              </button>
+              
+              {isOpen && (
+                  <>
+                    <div className="fixed inset-0 z-40" onClick={() => setActiveTooltip(null)}></div>
+                    <div className={`absolute top-full ${side === 'left' ? 'left-0' : 'right-0'} mt-2 w-56 bg-slate-900/95 border border-slate-700 rounded-lg p-3 shadow-2xl z-50 backdrop-blur-md text-left animate-in fade-in zoom-in-95 duration-200`}>
+                        <h4 className="text-xs font-bold text-white mb-2 pb-2 border-b border-slate-800 flex items-center gap-2">
+                           {title}
+                        </h4>
+                        <div className="text-[10px] text-slate-300 leading-relaxed font-sans">
+                            {content}
+                        </div>
+                        {/* Arrow */}
+                        <div className={`absolute -top-1 ${side === 'left' ? 'left-2' : 'right-2'} w-2 h-2 bg-slate-900 border-t border-l border-slate-700 transform rotate-45`}></div>
+                    </div>
+                  </>
+              )}
+          </div>
+      );
+  };
 
   return (
     <div className="w-full mb-2 md:mb-4 space-y-1.5 md:space-y-2">
@@ -59,12 +117,57 @@ export const HUD: React.FC<HUDProps> = ({
                 <Menu size={20} />
             </button>
             <div>
-                <h1 className="text-base sm:text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-yellow-200 via-orange-400 to-red-500 fantasy-font drop-shadow-sm whitespace-nowrap">
-                    {isClassic ? "Classic Mode" : "Dragon's Hoard"}
-                </h1>
+                <div className="flex items-center">
+                    <h1 className="text-base sm:text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-yellow-200 via-orange-400 to-red-500 fantasy-font drop-shadow-sm whitespace-nowrap">
+                        {isClassic ? "Classic Mode" : "Dragon's Hoard"}
+                    </h1>
+                    {/* Monster Evolution Tooltip */}
+                    {!isClassic && (
+                        <MicroTooltip 
+                            id="evolution-help"
+                            icon={<Info size={12} />}
+                            title="Monster Evolution"
+                            content={
+                                <span>
+                                    Merge two identical monsters to <strong>Evolve</strong> them into a stronger form. 
+                                    <br/><br/>
+                                    Higher ranks = More Gold, XP, and Score. 
+                                    <br/>
+                                    Target: Create the <strong>Dragon God (2048)</strong>.
+                                </span>
+                            }
+                        />
+                    )}
+                </div>
+                
                 <div className="flex items-center gap-3 text-[10px] md:text-xs text-slate-400 mt-0.5 md:mt-1">
                     <span className="flex items-center gap-1"><Trophy size={10} /> {bestScore}</span>
                     {!isClassic && <span className="flex items-center gap-1 text-yellow-400 font-bold"><Coins size={10} /> {gold} G</span>}
+                    
+                    {/* Cascade Indicator */}
+                    <div className="relative flex items-center">
+                        <div className={`flex items-center gap-1 ${isCascadeActive ? 'text-cyan-400' : 'text-slate-600'} transition-colors ml-1`}>
+                            <Zap size={10} className={isCascadeActive ? "fill-cyan-400/20" : ""} />
+                            <span className="hidden xs:inline font-bold">Chain</span>
+                        </div>
+                        
+                        <MicroTooltip 
+                            id="cascade-help"
+                            icon={<HelpCircle size={10} />}
+                            title="Auto-Cascade System"
+                            content={
+                                <div className="space-y-2">
+                                    <p>Automatic chain reactions triggered after your move.</p>
+                                    <div className="flex justify-between border-t border-slate-800 pt-1">
+                                        <span>Reward:</span> <span className="text-yellow-400 font-bold">+10% XP/Gold</span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                        <span>Unlock:</span> <span className={isCascadeUnlocked ? "text-green-400" : "text-red-400"}>Level 10</span>
+                                    </div>
+                                </div>
+                            }
+                        />
+                    </div>
                 </div>
             </div>
         </div>
@@ -76,9 +179,9 @@ export const HUD: React.FC<HUDProps> = ({
 
       {/* Buffs Row */}
       {!isClassic && buffs.length > 0 && (
-          <div className="flex gap-2 justify-center animate-in fade-in slide-in-from-top-1">
+          <div className="flex gap-2 justify-center animate-in fade-in slide-in-from-top-1 overflow-x-auto p-1 no-scrollbar">
               {buffs.map(b => (
-                  <div key={b.id} className={`px-2 py-1 rounded border flex items-center gap-2 ${b.color} shadow-sm backdrop-blur-sm`}>
+                  <div key={b.id} className={`px-2 py-1 rounded border flex items-center gap-2 ${b.color} shadow-sm backdrop-blur-sm whitespace-nowrap`}>
                       {b.icon}
                       <span className="text-[9px] font-bold text-slate-200 tracking-wide">{b.label}</span>
                       <span className="text-[10px] font-mono text-white bg-black/40 px-1 rounded">{b.count}</span>
@@ -98,9 +201,27 @@ export const HUD: React.FC<HUDProps> = ({
                         <div className={`w-4 h-4 md:w-5 md:h-5 flex items-center justify-center rounded bg-gradient-to-br ${barGradient} text-[9px] md:text-[10px] font-bold text-white shadow-sm`}>
                             {level}
                         </div>
-                        <span className={`text-[9px] md:text-[10px] font-bold uppercase tracking-wider text-slate-200 hidden xs:inline`}>Level</span>
+                        <span className={`text-[9px] md:text-[10px] font-bold uppercase tracking-wider ${accentColor} hidden xs:inline`}>Level</span>
+                        
+                        {/* Progression Tooltip */}
+                        <MicroTooltip 
+                            id="progression-help"
+                            icon={<Info size={10} />}
+                            title="Progression & Grid"
+                            content={
+                                <div className="space-y-2">
+                                    <p>Gain XP to Level Up. Leveling heals you and unlocks perks.</p>
+                                    <p className="text-indigo-300 font-bold border-t border-slate-800 pt-1">
+                                        Grid Expands every 5 Levels!
+                                    </p>
+                                    <p className="text-purple-300 font-bold">
+                                        New Stages unlock as you level deeper.
+                                    </p>
+                                </div>
+                            }
+                        />
                     </div>
-                    <span className="text-[8px] md:text-[9px] font-mono text-slate-400">
+                    <span className={`text-[8px] md:text-[9px] font-mono ${accentColor} opacity-80`}>
                         {Math.floor(xp)} / {xpThreshold}
                     </span>
                 </div>

@@ -24,6 +24,7 @@ interface SpawnOptions {
   type?: TileType;
   bossLevel?: number;
   isClassic?: boolean;
+  powerUpChanceBonus?: number; // Added for Lucky Dice
 }
 
 export const spawnTile = (grid: Tile[], size: number, level: number, options?: SpawnOptions | number): Tile[] => {
@@ -34,6 +35,7 @@ export const spawnTile = (grid: Tile[], size: number, level: number, options?: S
   let type: TileType = TileType.NORMAL;
   let bossLevel = 0;
   let isClassic = false;
+  let powerUpChanceBonus = 0;
 
   if (typeof options === 'number') {
     forcedValue = options;
@@ -42,6 +44,7 @@ export const spawnTile = (grid: Tile[], size: number, level: number, options?: S
     type = options.type || TileType.NORMAL;
     bossLevel = options.bossLevel || level;
     isClassic = !!options.isClassic;
+    powerUpChanceBonus = options.powerUpChanceBonus || 0;
   }
 
   // Helper to place one tile
@@ -88,8 +91,9 @@ export const spawnTile = (grid: Tile[], size: number, level: number, options?: S
       return placeOne(activeGrid, 0, TileType.BOSS);
   }
 
-  // Power Up Check (2%) - Only if not forced and not Classic
-  if (!forcedValue && !isClassic && type === TileType.NORMAL && Math.random() < 0.02) {
+  // Power Up Check (2% Base + Bonus) - Only if not forced and not Classic
+  const powerUpChance = 0.02 + powerUpChanceBonus;
+  if (!forcedValue && !isClassic && type === TileType.NORMAL && Math.random() < powerUpChance) {
     const powerUps = [TileType.RUNE_MIDAS, TileType.RUNE_CHRONOS, TileType.RUNE_VOID];
     const powerUpType = powerUps[Math.floor(Math.random() * powerUps.length)];
     const empty = getEmptyCells(activeGrid, size);
@@ -103,8 +107,6 @@ export const spawnTile = (grid: Tile[], size: number, level: number, options?: S
   activeGrid = placeOne(activeGrid, forcedValue, type);
 
   // Slime Ability: 20% chance to spawn an extra slime if the spawned tile was a Slime (2)
-  // Disable in classic to keep it pure 2048? Or keep as "flavor"? 
-  // Standard 2048 doesn't have double spawns.
   const lastTile = activeGrid[activeGrid.length - 1];
   if (!isClassic && lastTile && lastTile.type === TileType.NORMAL && lastTile.value === 2 && lastTile.isNew && Math.random() < 0.2) {
       activeGrid = placeOne(activeGrid, 2);
@@ -115,7 +117,6 @@ export const spawnTile = (grid: Tile[], size: number, level: number, options?: S
 
 export const tryAutoMerge = (grid: Tile[]): { success: boolean; grid: Tile[]; value: number; mergedId?: string } => {
   // Legacy perk-based auto merge (random)
-  // 5% chance to activate if called
   if (Math.random() > 0.05) return { success: false, grid, value: 0 };
 
   const pairs: { t1: Tile, t2: Tile }[] = [];
@@ -123,7 +124,6 @@ export const tryAutoMerge = (grid: Tile[]): { success: boolean; grid: Tile[]; va
     for (let j = i + 1; j < grid.length; j++) {
       const t1 = grid[i];
       const t2 = grid[j];
-      // Auto merge only works on normal tiles
       if (t1.type === TileType.BOSS || t2.type === TileType.BOSS) continue;
       
       const dist = Math.abs(t1.x - t2.x) + Math.abs(t1.y - t2.y);
@@ -149,7 +149,6 @@ export const tryAutoMerge = (grid: Tile[]): { success: boolean; grid: Tile[]; va
     isNew: false 
   };
 
-  // Remove old tiles, add new one
   const newGrid = grid.filter(t => t.id !== t1.id && t.id !== t2.id);
   newGrid.push(newTile);
 
@@ -158,27 +157,23 @@ export const tryAutoMerge = (grid: Tile[]): { success: boolean; grid: Tile[]; va
 
 // --- CASCADE SYSTEM ---
 export const executeAutoCascade = (grid: Tile[], size: number, cascadeStep: number): { grid: Tile[], rewards: { xp: number, gold: number }, occurred: boolean, mergedId?: string } => {
-    // Deep copy grid and reset visual flags
     let newGrid: Tile[] = grid.map(t => ({ ...t, isNew: false, mergedFrom: null, isCascade: false })); 
 
     const getTile = (x: number, y: number) => newGrid.find(t => t.x === x && t.y === y);
 
     let pair: { t1: Tile, t2: Tile } | null = null;
 
-    // Scan logic: Top-Left to Bottom-Right to find the first available merge
     for(let y = 0; y < size; y++) {
         for(let x = 0; x < size; x++) {
             const t1 = getTile(x, y);
             if (!t1 || t1.type === TileType.BOSS) continue;
 
-            // Check Right
             const right = getTile(x + 1, y);
             if (right && right.type !== TileType.BOSS && right.value === t1.value) {
                 pair = { t1, t2: right };
                 break;
             }
 
-            // Check Down
             const down = getTile(x, y + 1);
             if (down && down.type !== TileType.BOSS && down.value === t1.value) {
                 pair = { t1, t2: down };
@@ -195,12 +190,11 @@ export const executeAutoCascade = (grid: Tile[], size: number, cascadeStep: numb
     const { t1, t2 } = pair;
     const newValue = t1.value * 2;
     
-    // Multiplier logic: 1.1^cascadeStep
     const multiplier = Math.pow(1.1, Math.max(0, cascadeStep));
 
     const mergedTile: Tile = {
         id: createId(),
-        x: t1.x, // Anchor to top-left tile of the pair
+        x: t1.x, 
         y: t1.y,
         value: newValue,
         type: TileType.NORMAL,
@@ -209,7 +203,6 @@ export const executeAutoCascade = (grid: Tile[], size: number, cascadeStep: numb
         isCascade: true
     };
 
-    // Remove old tiles, add new one
     newGrid = newGrid.filter(t => t.id !== t1.id && t.id !== t2.id);
     newGrid.push(mergedTile);
 
@@ -224,7 +217,13 @@ export const executeAutoCascade = (grid: Tile[], size: number, cascadeStep: numb
     };
 };
 
-export const moveGrid = (grid: Tile[], direction: Direction, size: number, mode: GameMode): MoveResult & { powerUpTriggered?: TileType } => {
+export const moveGrid = (
+    grid: Tile[], 
+    direction: Direction, 
+    size: number, 
+    mode: GameMode, 
+    activeEffects: Record<string, number> = {}
+): MoveResult & { powerUpTriggered?: TileType } => {
   let moved = false;
   let score = 0;
   let xpGained = 0;
@@ -250,14 +249,12 @@ export const moveGrid = (grid: Tile[], direction: Direction, size: number, mode:
   let newGrid: Tile[] = [];
   const mergedIndices = new Set<string>();
 
-  // Movement Phase
   sortedTiles.forEach((tile) => {
     let { x, y } = tile;
     let nextX = x + vector.x;
     let nextY = y + vector.y;
     let merged = false;
     
-    // Simulate slide
     while (
       nextX >= 0 && nextX < size &&
       nextY >= 0 && nextY < size
@@ -270,7 +267,6 @@ export const moveGrid = (grid: Tile[], direction: Direction, size: number, mode:
         }
 
         if (!mergedIndices.has(collision.id) && collision.value === tile.value) {
-          // MERGE HAPPENS
           moved = true;
           merged = true;
           const mergedValue = tile.value * 2;
@@ -291,10 +287,14 @@ export const moveGrid = (grid: Tile[], direction: Direction, size: number, mode:
           
           if (!isClassic) {
               xpGained += collision.value * 2;
-              goldGained += Math.ceil(collision.value * 0.5);
-              if (collision.value === 8) {
-                  goldGained += 5; 
+              let gold = Math.ceil(collision.value * 0.5);
+              if (collision.value === 8) gold += 5; 
+              
+              // Midas Potion Effect
+              if ((activeEffects['MIDAS_POTION'] || 0) > 0) {
+                  gold *= 2;
               }
+              goldGained += gold;
           }
           
           return;
@@ -323,9 +323,8 @@ export const moveGrid = (grid: Tile[], direction: Direction, size: number, mode:
     }
   });
 
-  // RPG Logic Checks (Disabled in Classic)
   if (!isClassic) {
-      // Post-Process Abilities: Drake (32)
+      // Drake Ability
       const drakeMerges = newGrid.filter(t => t.value === 32 && t.mergedFrom);
       drakeMerges.forEach(drake => {
           const neighbors = newGrid.filter(n => 
@@ -337,7 +336,7 @@ export const moveGrid = (grid: Tile[], direction: Direction, size: number, mode:
           
           if (neighbors.length > 0) {
               const victim = neighbors[Math.floor(Math.random() * neighbors.length)];
-              victim.value *= 2; // Upgrade!
+              victim.value *= 2; 
               victim.mergedFrom = [victim.id];
               xpGained += victim.value;
           }
@@ -359,6 +358,13 @@ export const moveGrid = (grid: Tile[], direction: Direction, size: number, mode:
               let totalDamage = 0;
               adjacentMerges.forEach(m => totalDamage += m.value);
               
+              // Siege Breaker Item Effect
+              if ((activeEffects['SIEGE_BREAKER'] || 0) > 0) {
+                  totalDamage *= 3;
+                  logs.push("Siege Breaker! 3x Damage!");
+                  // We consume the effect in the main loop, here we assume it applied for this turn
+              }
+
               boss.health -= totalDamage;
               boss.mergedFrom = ['damage'];
 
@@ -384,7 +390,6 @@ export const moveGrid = (grid: Tile[], direction: Direction, size: number, mode:
       }
   }
 
-  // Combo Calculation
   const mergeCount = mergedIds.length;
   let comboMultiplier = 1;
   if (mergeCount > 1) {
@@ -536,7 +541,11 @@ export const useInventoryItem = (state: GameState, item: InventoryItem): Partial
     inventory: state.inventory.filter(i => i.id !== item.id),
     logs: [...state.logs, `Used ${item.name}!`]
   };
+
+  const counters = { ...state.effectCounters };
+
   if (item.type === ItemType.XP_POTION) { newState.xp = state.xp + (500 * state.level); return newState; }
+  
   if (item.type === ItemType.BOMB_SCROLL) {
     let grid = [...state.grid];
     const candidates = grid.filter(t => t.type !== TileType.BOSS);
@@ -545,16 +554,47 @@ export const useInventoryItem = (state: GameState, item: InventoryItem): Partial
     newState.grid = state.grid.filter(t => !toRemoveIds.includes(t.id));
     return newState;
   }
+  
   if (item.type === ItemType.GOLDEN_RUNE) { newState.activeEffects = [...(state.activeEffects || []), 'GOLDEN_SPAWN']; return newState; }
+  
   if (item.type === ItemType.REROLL_TOKEN) { newState.rerolls = (state.rerolls || 0) + 1; return newState; }
+  
   if (item.type === ItemType.LUCKY_CHARM) { 
-      const counters = { ...state.effectCounters };
       counters['LUCKY_LOOT'] = (counters['LUCKY_LOOT'] || 0) + 3;
       newState.effectCounters = counters;
       return newState;
   }
   
-  // Crafted items logic
+  // NEW ITEMS LOGIC
+  if (item.type === ItemType.CHAIN_CATALYST) {
+      counters['CHAIN_CATALYST'] = 10;
+      newState.effectCounters = counters;
+      newState.logs = [...state.logs, "Cascades Guaranteed (10 turns)!"];
+      return newState;
+  }
+
+  if (item.type === ItemType.LUCKY_DICE) {
+      counters['LUCKY_DICE'] = 20;
+      newState.effectCounters = counters;
+      newState.logs = [...state.logs, "Power Up Spawns Increased!"];
+      return newState;
+  }
+
+  if (item.type === ItemType.MIDAS_POTION) {
+      counters['MIDAS_POTION'] = 50;
+      newState.effectCounters = counters;
+      newState.logs = [...state.logs, "Double Gold Active (50 turns)!"];
+      return newState;
+  }
+
+  if (item.type === ItemType.SIEGE_BREAKER) {
+      counters['SIEGE_BREAKER'] = 1; // Single Use Next Hit
+      newState.effectCounters = counters;
+      newState.logs = [...state.logs, "Next Boss Hit Amplified!"];
+      return newState;
+  }
+  
+  // Crafted Items
   if (item.type === ItemType.GREATER_XP_POTION) { newState.xp = state.xp + 2500; return newState; }
   if (item.type === ItemType.CATACLYSM_SCROLL) {
       const nonBoss = state.grid.filter(t => t.type !== TileType.BOSS);
@@ -565,7 +605,6 @@ export const useInventoryItem = (state: GameState, item: InventoryItem): Partial
       return newState;
   }
   if (item.type === ItemType.ASCENDANT_RUNE) {
-      const counters = { ...state.effectCounters };
       counters['ASCENDANT_SPAWN'] = 5;
       newState.effectCounters = counters;
       return newState;
@@ -577,7 +616,6 @@ export const useInventoryItem = (state: GameState, item: InventoryItem): Partial
 export const initializeGame = (reset = false, selectedClass: HeroClass = HeroClass.ADVENTURER, mode: GameMode = 'RPG'): GameState => {
   const saved = localStorage.getItem('2048_rpg_state_v3');
   
-  // Try to load account level for cascade check
   let accountLevel = 1;
   try {
       const profileStr = localStorage.getItem(PROFILE_STORAGE_KEY);
@@ -595,7 +633,8 @@ export const initializeGame = (reset = false, selectedClass: HeroClass = HeroCla
     enableScroll: true,
     invertSwipe: false,
     invertScroll: false,
-    sensitivity: 5
+    sensitivity: 5,
+    enableTooltips: true
   };
 
   const startStageConfig = getStage(1);
@@ -638,7 +677,6 @@ export const initializeGame = (reset = false, selectedClass: HeroClass = HeroCla
         if (!parsed.selectedClass) parsed.selectedClass = HeroClass.ADVENTURER;
         if (!parsed.gameMode) parsed.gameMode = 'RPG';
         
-        // Update account level on load in case it changed
         parsed.accountLevel = accountLevel;
 
         return parsed;
@@ -656,7 +694,6 @@ export const initializeGame = (reset = false, selectedClass: HeroClass = HeroCla
   const achievements = savedAchievements ? JSON.parse(savedAchievements) : [];
   const savedHighscore = localStorage.getItem('2048_rpg_highscore');
 
-  // Class Starting Bonuses (Skip in Classic)
   const inventory: InventoryItem[] = [];
   if (mode !== 'CLASSIC') {
       if (selectedClass === HeroClass.WARRIOR) {
@@ -750,8 +787,6 @@ export const getHighscores = (): LeaderboardEntry[] => {
 };
 
 export const checkAchievements = (state: GameState): Achievement[] => {
-    // Achievements disabled in Classic? Maybe keep them for score hunting.
-    // Keeping enabled.
     const unlocked: Achievement[] = [];
     ACHIEVEMENTS.forEach(ach => {
         if (!state.achievements.includes(ach.id)) {

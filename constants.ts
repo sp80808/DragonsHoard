@@ -74,12 +74,30 @@ export const PERKS = [
   { level: 20, desc: "Expansion: Grid size increased to 8x8!" },
 ];
 
-export const SHOP_ITEMS: { id: ItemType, name: string, price: number, icon: string, desc: string }[] = [
-  { id: ItemType.XP_POTION, name: "XP Elixir", price: 50, icon: "🧪", desc: "+1000 XP instantly" },
-  { id: ItemType.BOMB_SCROLL, name: "Purge Scroll", price: 100, icon: "📜", desc: "Destroys 3 lowest value tiles" },
-  { id: ItemType.REROLL_TOKEN, name: "Reroll Token", price: 75, icon: "🔄", desc: "One free board reroll" },
-  { id: ItemType.GOLDEN_RUNE, name: "Golden Rune", price: 750, icon: "🌟", desc: "Next spawn is a high-tier tile" },
-  { id: ItemType.LUCKY_CHARM, name: "Lucky Charm", price: 150, icon: "🍀", desc: "Better loot chance (3 turns)" },
+export interface ShopItemDef {
+    id: ItemType;
+    name: string;
+    price: number;
+    icon: string;
+    desc: string;
+    category: 'CONSUMABLE' | 'MAGIC' | 'BATTLE';
+}
+
+export const SHOP_ITEMS: ShopItemDef[] = [
+  // Consumables (Essentials)
+  { id: ItemType.XP_POTION, name: "XP Elixir", price: 50, icon: "🧪", desc: "+1000 XP instantly. Level up faster.", category: 'CONSUMABLE' },
+  { id: ItemType.BOMB_SCROLL, name: "Purge Scroll", price: 100, icon: "📜", desc: "Destroys 3 lowest value tiles.", category: 'CONSUMABLE' },
+  { id: ItemType.REROLL_TOKEN, name: "Reroll Token", price: 75, icon: "🔄", desc: "One free board reset.", category: 'CONSUMABLE' },
+  
+  // Magic (Runes & Buffs)
+  { id: ItemType.GOLDEN_RUNE, name: "Golden Rune", price: 500, icon: "🌟", desc: "Next spawn is a high-tier tile.", category: 'MAGIC' },
+  { id: ItemType.LUCKY_CHARM, name: "Lucky Charm", price: 150, icon: "🍀", desc: "Better loot chance (3 turns).", category: 'MAGIC' },
+  { id: ItemType.LUCKY_DICE, name: "Lucky Dice", price: 300, icon: "🎲", desc: "More Power-Up tiles spawn for 20 turns.", category: 'MAGIC' },
+  { id: ItemType.CHAIN_CATALYST, name: "Chain Catalyst", price: 250, icon: "⛓️", desc: "Guarantees Cascades for 10 turns.", category: 'MAGIC' },
+  
+  // Battle (Bosses & Economy)
+  { id: ItemType.MIDAS_POTION, name: "Midas Brew", price: 400, icon: "🏺", desc: "2x Gold gain for 50 turns.", category: 'BATTLE' },
+  { id: ItemType.SIEGE_BREAKER, name: "Siege Breaker", price: 600, icon: "🔨", desc: "Next boss hit deals 3x Damage.", category: 'BATTLE' },
 ];
 
 export const RECIPES: CraftingRecipe[] = [

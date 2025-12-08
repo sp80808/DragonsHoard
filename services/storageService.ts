@@ -45,6 +45,7 @@ export const getPlayerProfile = (): PlayerProfile => {
         // Data Migration: Ensure new fields exist
         if (!profile.unlockedClasses) profile.unlockedClasses = [HeroClass.ADVENTURER];
         if (!profile.activeBounties) profile.activeBounties = [];
+        if (profile.tutorialCompleted === undefined) profile.tutorialCompleted = false;
         
         // Check Daily Reset
         const today = new Date().toISOString().split('T')[0];
@@ -71,10 +72,17 @@ export const getPlayerProfile = (): PlayerProfile => {
     unlockedClasses: [HeroClass.ADVENTURER],
     activeBounties: generateDailyBounties(),
     lastBountyDate: new Date().toISOString().split('T')[0],
-    lastPlayed: new Date().toISOString()
+    lastPlayed: new Date().toISOString(),
+    tutorialCompleted: false
   };
   saveProfile(newProfile);
   return newProfile;
+};
+
+export const completeTutorial = () => {
+    const profile = getPlayerProfile();
+    profile.tutorialCompleted = true;
+    saveProfile(profile);
 };
 
 export const finalizeRun = (finalState: GameState): { profile: PlayerProfile, leveledUp: boolean, xpGained: number, bountiesCompleted: number } => {

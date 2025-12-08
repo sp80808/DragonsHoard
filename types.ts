@@ -23,6 +23,12 @@ export enum ItemType {
   REROLL_TOKEN = 'REROLL_TOKEN',
   LUCKY_CHARM = 'LUCKY_CHARM',
   
+  // New Store Items
+  CHAIN_CATALYST = 'CHAIN_CATALYST', // 10 turns of guaranteed/boosted cascades
+  LUCKY_DICE = 'LUCKY_DICE', // Increases power-up spawn rate
+  MIDAS_POTION = 'MIDAS_POTION', // 2x Gold for 50 turns
+  SIEGE_BREAKER = 'SIEGE_BREAKER', // Next hit on boss does 3x damage
+  
   // Crafted Items
   GREATER_XP_POTION = 'GREATER_XP_POTION',
   CATACLYSM_SCROLL = 'CATACLYSM_SCROLL',
@@ -45,6 +51,7 @@ export interface InventoryItem {
   name: string;
   description: string;
   icon: string;
+  category?: 'CONSUMABLE' | 'MAGIC' | 'BATTLE';
 }
 
 export interface CraftingRecipe {
@@ -135,6 +142,7 @@ export interface PlayerProfile {
   activeBounties: DailyBounty[];
   lastBountyDate: string; // YYYY-MM-DD
   lastPlayed: string;
+  tutorialCompleted: boolean;
 }
 
 export interface Achievement {
@@ -154,6 +162,7 @@ export interface InputSettings {
   invertSwipe: boolean;
   invertScroll: boolean;
   sensitivity: number; // 1-10 (For scroll/swipe threshold)
+  enableTooltips: boolean;
 }
 
 export interface GameState {
@@ -185,6 +194,8 @@ export interface GameState {
   selectedClass: HeroClass; // Track current run class
   gameMode: GameMode; // RPG or CLASSIC
   accountLevel: number; // Used for gating cascades
+  justLeveledUp?: boolean;
+  unlockedPerk?: string;
 }
 
 export interface MoveResult {
@@ -216,4 +227,4 @@ export interface LeaderboardEntry {
   gold: number;
 }
 
-export type View = 'SPLASH' | 'GAME' | 'LEADERBOARD' | 'SETTINGS';
+export type View = 'SPLASH' | 'GAME' | 'LEADERBOARD' | 'SETTINGS' | 'HELP';

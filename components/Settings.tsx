@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { ArrowLeft, Volume2, VolumeX, Trash2, AlertCircle, Music, Keyboard, MousePointer, Monitor } from 'lucide-react';
+import { ArrowLeft, Volume2, VolumeX, Trash2, AlertCircle, Music, Keyboard, MousePointer, Monitor, MessageSquare, Info } from 'lucide-react';
 import { audioService } from '../services/audioService';
 import { clearSaveData } from '../services/gameLogic';
 import { InputSettings } from '../types';
@@ -93,6 +93,24 @@ export const Settings: React.FC<SettingsProps> = ({ settings, onUpdateSettings, 
                         />
                     </div>
                     <span className="w-8 text-right font-mono text-slate-300 text-sm">{musicVolume}%</span>
+                </div>
+            </div>
+
+            {/* Interface Section */}
+            <div className="pt-6 border-t border-slate-800">
+                <h3 className="text-slate-400 text-xs uppercase tracking-widest font-bold mb-4 flex items-center gap-2"><Monitor size={12}/> Interface</h3>
+                
+                <div className="space-y-3">
+                     <label className="flex items-center justify-between p-2 bg-slate-800/50 rounded-lg cursor-pointer hover:bg-slate-800 transition-colors">
+                         <div className="flex items-center gap-3">
+                             <MessageSquare size={18} className="text-slate-400" />
+                             <span className="text-sm font-bold text-slate-200">Gameplay Tooltips</span>
+                         </div>
+                         <div className="relative inline-block w-10 h-5">
+                            <input type="checkbox" checked={settings.enableTooltips} onChange={() => toggleSetting('enableTooltips')} className="peer sr-only"/>
+                            <div className="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-yellow-600"></div>
+                         </div>
+                     </label>
                 </div>
             </div>
 

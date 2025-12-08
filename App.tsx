@@ -7,10 +7,13 @@ import { SplashScreen } from './components/SplashScreen';
 import { Leaderboard } from './components/Leaderboard';
 import { Settings } from './components/Settings';
 import { RunSummary } from './components/RunSummary';
-import { Direction, GameState, TileType, InventoryItem, FloatingText, CraftingRecipe, View, Achievement, ItemType, InputSettings, HeroClass, GameMode } from './types';
+import { TutorialOverlay } from './components/TutorialOverlay';
+import { HelpScreen } from './components/HelpScreen';
+import { Direction, GameState, TileType, InventoryItem, FloatingText, CraftingRecipe, View, Achievement, ItemType, InputSettings, HeroClass, GameMode, PlayerProfile } from './types';
 import { initializeGame, moveGrid, spawnTile, isGameOver, checkLoot, useInventoryItem, applyMidasTouch, applyChronosShift, applyVoidSingularity, tryAutoMerge, checkAchievements, savePersistentAchievements, executeAutoCascade } from './services/gameLogic';
 import { SHOP_ITEMS, getXpThreshold, getStage, getStageBackground, getItemDefinition, TILE_STYLES } from './constants';
 import { audioService } from './services/audioService';
+import { getPlayerProfile, completeTutorial } from './services/storageService';
 import { Trophy, Star, Skull, Zap, Info } from 'lucide-react';
 
 // Actions
@@ -30,7 +33,9 @@ type Action =
   | { type: 'UNLOCK_ACHIEVEMENT'; achievement: Achievement }
   | { type: 'UPDATE_SETTINGS'; settings: InputSettings }
   | { type: 'CASCADE_STEP'; payload: { grid: any[], rewards: { xp: number, gold: number } } }
-  | { type: 'CASCADE_COMPLETE' };
+  | { type: 'CASCADE_COMPLETE' }
+  | { type: 'ADVANCE_TUTORIAL' }
+  | { type: 'ACK_LEVEL_UP' };
 
 const reducer = (state: GameState, action: Action): GameState => {
   switch (action.type) {
@@ -49,6 +54,9 @@ const reducer = (state: GameState, action: Action): GameState => {
 
     case 'CLEAR_LOGS':
         return { ...state, logs: [] };
+    
+    case 'ACK_LEVEL_UP':
+        return { ...state, justLeveledUp: false, unlockedPerk: undefined };
 
     case 'UPDATE_SETTINGS': {
         const newState = { ...state, settings: action.settings };
@@ -191,7 +199,7 @@ const reducer = (state: GameState, action: Action): GameState => {
     case 'MOVE': {
       if (state.gameOver || (state.victory && !state.gameWon) || state.powerUpEffect || state.isCascading) return state;
 
-      const { grid: movedGrid, score, xpGained, goldGained, moved, mergedIds, powerUpTriggered, combo, comboMultiplier, logs: moveLogs } = moveGrid(state.grid, action.direction, state.gridSize, state.gameMode);
+      const { grid: movedGrid, score, xpGained, goldGained, moved, mergedIds, powerUpTriggered, combo, comboMultiplier, logs: moveLogs } = moveGrid(state.grid, action.direction, state.gridSize, state.gameMode, state.effectCounters);
 
       if (!moved) return state;
 
@@ -242,10 +250,24 @@ const reducer = (state: GameState, action: Action): GameState => {
 
       if (score > 0) audioService.playMerge(score);
 
+      // Decrement Effect Counters
       if (newEffectCounters['LUCKY_LOOT'] > 0) {
           newEffectCounters['LUCKY_LOOT']--;
           if (newEffectCounters['LUCKY_LOOT'] === 0) newLogs.push("Lucky Charm expired.");
       }
+      if (newEffectCounters['CHAIN_CATALYST'] > 0) {
+          newEffectCounters['CHAIN_CATALYST']--;
+          if (newEffectCounters['CHAIN_CATALYST'] === 0) newLogs.push("Chain Catalyst expired.");
+      }
+      if (newEffectCounters['LUCKY_DICE'] > 0) {
+          newEffectCounters['LUCKY_DICE']--;
+          if (newEffectCounters['LUCKY_DICE'] === 0) newLogs.push("Lucky Dice expired.");
+      }
+      if (newEffectCounters['MIDAS_POTION'] > 0) {
+          newEffectCounters['MIDAS_POTION']--;
+          if (newEffectCounters['MIDAS_POTION'] === 0) newLogs.push("Midas Potion expired.");
+      }
+      // Siege Breaker doesn't decrement here, it is consumed on hit in gameLogic
 
       // Check for Loot
       const hasLuckyCharm = (newEffectCounters['LUCKY_LOOT'] || 0) > 0;
@@ -263,6 +285,9 @@ const reducer = (state: GameState, action: Action): GameState => {
       }
 
       // Handle XP & Level Up & Stage (Disabled in Classic)
+      let justLeveledUp = false;
+      let unlockedPerk = undefined;
+
       if (state.gameMode !== 'CLASSIC') {
         let threshold = getXpThreshold(newLevel);
         while (newXp >= threshold) {
@@ -270,12 +295,17 @@ const reducer = (state: GameState, action: Action): GameState => {
             newLevel++;
             newLogs.push(`LEVEL UP! You are now level ${newLevel}!`);
             audioService.playLevelUp();
+            justLeveledUp = true;
             
             if (newLevel % 5 === 0 && newGridSize < 8) {
-            newGridSize++;
-            newLogs.push(`Grid Expanded to ${newGridSize}x${newGridSize}!`);
+                newGridSize++;
+                newLogs.push(`Grid Expanded to ${newGridSize}x${newGridSize}!`);
+                unlockedPerk = "GRID EXPANDED!";
             }
-            if (newLevel === 15) newLogs.push("Reroll Unlocked!");
+            if (newLevel === 15) {
+                newLogs.push("Reroll Unlocked!");
+                unlockedPerk = "REROLL UNLOCKED!";
+            }
 
             const stageConfig = getStage(newLevel);
             if (stageConfig.name !== currentStage.name) {
@@ -319,11 +349,15 @@ const reducer = (state: GameState, action: Action): GameState => {
           newLogs.push("The curse manifests!");
       }
       
+      // Calculate Dice Bonus
+      const diceBonus = (newEffectCounters['LUCKY_DICE'] || 0) > 0 ? 0.05 : 0;
+
       let finalGrid = spawnTile(newGrid, newGridSize, newLevel, { 
           forcedValue, 
           type: forcedType, 
           bossLevel: Math.floor(newLevel / 5),
-          isClassic: state.gameMode === 'CLASSIC'
+          isClassic: state.gameMode === 'CLASSIC',
+          powerUpChanceBonus: diceBonus
       });
       const lastSpawned = finalGrid.find(t => !newGrid.includes(t));
 
@@ -357,8 +391,11 @@ const reducer = (state: GameState, action: Action): GameState => {
       const gameOver = isGameOver(finalGrid, newGridSize);
       const victory = !state.gameWon && finalGrid.some(t => t.value === 2048);
       
-      // Cascade Gating Logic: Only cascade if Account Level >= 10 AND not Classic Mode
-      const canCascade = state.accountLevel >= 10 && state.gameMode !== 'CLASSIC';
+      // Cascade Gating Logic: 
+      // 1. Account Level >= 10 OR Chain Catalyst Active
+      // 2. Not Classic Mode
+      const isChainActive = (newEffectCounters['CHAIN_CATALYST'] || 0) > 0;
+      const canCascade = (state.accountLevel >= 10 || isChainActive) && state.gameMode !== 'CLASSIC';
 
       const nextState: GameState = {
         ...state,
@@ -382,7 +419,9 @@ const reducer = (state: GameState, action: Action): GameState => {
         runStats: newRunStats,
         gameWon: state.gameWon || victory,
         isCascading: canCascade, // Will trigger effect if true
-        cascadeStep: 0
+        cascadeStep: 0,
+        justLeveledUp: state.justLeveledUp || justLeveledUp,
+        unlockedPerk: unlockedPerk || state.unlockedPerk
       };
 
       localStorage.setItem('2048_rpg_state_v3', JSON.stringify(nextState));
@@ -394,7 +433,7 @@ const reducer = (state: GameState, action: Action): GameState => {
         const newStep = (state.cascadeStep || 0) + 1;
         const multiplier = Math.pow(1.1, newStep).toFixed(1);
         
-        audioService.playMerge(100); 
+        audioService.playCascade(newStep);
 
         // Update Run Stats for cascade
         const updatedRunStats = {
@@ -432,7 +471,90 @@ const App: React.FC = () => {
   const [state, dispatch] = useReducer(reducer, null, () => initializeGame());
   const [view, setView] = useState<View>('SPLASH');
   const [showStore, setShowStore] = useState(false);
+  const [activeOverlay, setActiveOverlay] = useState<{type: 'BOSS' | 'LEVEL_UP' | 'STAGE', text: string} | null>(null);
+  const [showDebug, setShowDebug] = useState(false);
   
+  // Tutorial State
+  const [showTutorial, setShowTutorial] = useState(false);
+  const [tutorialStep, setTutorialStep] = useState(0); // 0: Move, 1: Merge, 2: XP, 3: Done
+
+  // Admin Shortcut
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+        if (e.shiftKey && e.key === '|') {
+            setShowDebug(prev => !prev);
+        }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
+  // Check Tutorial Status on Load
+  useEffect(() => {
+      const profile = getPlayerProfile();
+      if (!profile.tutorialCompleted && view === 'GAME') {
+          setShowTutorial(true);
+      }
+  }, [view]);
+
+  // Event Watcher (Boss, Level Up, Stage Change)
+  useEffect(() => {
+    // We only trigger overlays on state.justLeveledUp or log events
+    // Log based triggers are kept for Boss/Stage for now
+    if (state.logs.length === 0) return;
+    const lastLog = state.logs[state.logs.length - 1];
+
+    if (lastLog.includes("WARNING: A BOSS APPEARED!")) {
+        setActiveOverlay({ type: 'BOSS', text: 'BOSS APPROACHES' });
+        audioService.playBossSpawn();
+        setTimeout(() => setActiveOverlay(null), 2500);
+    } 
+    else if (lastLog.includes("ENTERING STAGE:")) {
+        const stageName = lastLog.replace("ENTERING STAGE: ", "");
+        setActiveOverlay({ type: 'STAGE', text: stageName });
+        audioService.playStageTransition();
+        setTimeout(() => setActiveOverlay(null), 3000);
+    }
+  }, [state.logs]);
+
+  // Level Up Overlay Hook
+  useEffect(() => {
+      if (state.justLeveledUp) {
+          setActiveOverlay({ type: 'LEVEL_UP', text: state.unlockedPerk || 'LEVEL UP!' });
+          audioService.playLevelUp();
+          setTimeout(() => {
+              setActiveOverlay(null);
+              dispatch({ type: 'ACK_LEVEL_UP' });
+          }, 2000);
+      }
+  }, [state.justLeveledUp, state.unlockedPerk]);
+
+  // Tutorial Progression Logic
+  useEffect(() => {
+      if (!showTutorial) return;
+      if (state.stats.totalMoves >= 4) {
+          completeTutorial();
+          setShowTutorial(false);
+          return;
+      }
+
+      // Step 0 -> 1: Player Moved
+      if (tutorialStep === 0 && state.stats.totalMoves > 0) {
+          setTutorialStep(1);
+      }
+      // Step 1 -> 2: Player Merged (Score increased)
+      else if (tutorialStep === 1 && state.score > 0) {
+          setTutorialStep(2);
+          setTimeout(() => {
+              setTutorialStep(3); // Auto advance to done after showing XP
+              setTimeout(() => {
+                  completeTutorial();
+                  setShowTutorial(false);
+              }, 3000);
+          }, 3000);
+      }
+  }, [state.stats.totalMoves, state.score, showTutorial, tutorialStep]);
+
   // PowerUp Effects Handling
   useEffect(() => {
       if (state.powerUpEffect) {
@@ -662,12 +784,17 @@ const App: React.FC = () => {
         onContinue={() => setView('GAME')}
         onOpenLeaderboard={() => setView('LEADERBOARD')}
         onOpenSettings={() => setView('SETTINGS')}
+        onOpenHelp={() => setView('HELP')}
         hasSave={state.score > 0} 
     />;
   }
 
   if (view === 'LEADERBOARD') {
       return <Leaderboard onBack={() => setView('SPLASH')} />;
+  }
+  
+  if (view === 'HELP') {
+      return <HelpScreen onBack={() => setView('SPLASH')} />;
   }
 
   if (view === 'SETTINGS') {
@@ -697,9 +824,50 @@ const App: React.FC = () => {
       <div className="scanlines"></div>
       <div className="vignette"></div>
 
+      {/* Cinematic Overlays */}
+      {activeOverlay && (
+          <div className={`fixed inset-0 z-[80] pointer-events-none flex items-center justify-center
+              ${activeOverlay.type === 'BOSS' ? 'animate-boss-pulse bg-red-950/20' : ''}
+              ${activeOverlay.type === 'LEVEL_UP' ? 'animate-level-flash' : ''}
+              ${activeOverlay.type === 'STAGE' ? 'animate-stage-overlay bg-black/80' : ''}
+          `}>
+              {activeOverlay.type === 'BOSS' && (
+                  <div className="text-center animate-shake">
+                      <Skull size={120} className="text-red-500 mx-auto animate-pulse mb-4 drop-shadow-[0_0_20px_rgba(220,38,38,0.8)]" />
+                      <h1 className="text-6xl md:text-8xl font-black text-transparent bg-clip-text bg-gradient-to-b from-red-500 to-red-900 fantasy-font drop-shadow-2xl">
+                          WARNING
+                      </h1>
+                      <p className="text-red-200 text-xl md:text-2xl font-bold tracking-[0.5em] mt-2">BOSS APPROACHING</p>
+                  </div>
+              )}
+              {activeOverlay.type === 'LEVEL_UP' && (
+                   <div className="text-center animate-in zoom-in-50 duration-500 flex flex-col items-center">
+                        <div className="text-6xl md:text-9xl font-black text-transparent bg-clip-text bg-gradient-to-b from-yellow-200 to-amber-500 fantasy-font drop-shadow-[0_0_40px_rgba(251,191,36,0.8)]">
+                            LEVEL UP!
+                        </div>
+                        {/* Display unlocked perk text if available */}
+                        {activeOverlay.text !== 'LEVEL UP!' && (
+                            <div className="mt-4 text-xl md:text-2xl font-bold text-white bg-black/60 px-6 py-2 rounded-full border border-yellow-500/50 animate-in slide-in-from-bottom-4">
+                                <span className="text-yellow-400">UNLOCKED:</span> {activeOverlay.text}
+                            </div>
+                        )}
+                   </div>
+              )}
+              {activeOverlay.type === 'STAGE' && (
+                  <div className="text-center space-y-4">
+                      <p className="text-slate-400 tracking-[0.4em] text-sm uppercase">Entering</p>
+                      <h1 className="text-5xl md:text-7xl font-black text-white fantasy-font drop-shadow-2xl">{activeOverlay.text}</h1>
+                  </div>
+              )}
+          </div>
+      )}
+
       {/* Main Game Container */}
       <div className="relative z-10 w-full max-w-md flex flex-col items-center">
         
+        {/* Tutorial Overlay */}
+        {showTutorial && <TutorialOverlay step={tutorialStep} gridSize={state.gridSize} />}
+
         {/* LOGS / NOTIFICATION SYSTEM */}
         <div className="absolute top-[80px] md:top-24 left-0 right-0 pointer-events-none flex flex-col items-center space-y-2 z-50 h-32">
              {state.logs.map((log, i) => {
@@ -742,6 +910,8 @@ const App: React.FC = () => {
           effectCounters={state.effectCounters}
           currentStage={state.currentStage}
           gameMode={state.gameMode}
+          accountLevel={state.accountLevel}
+          settings={state.settings}
           onOpenStore={() => setShowStore(true)}
           onUseItem={(item) => dispatch({ type: 'USE_ITEM', item })}
           onReroll={() => dispatch({ type: 'REROLL' })}
@@ -763,6 +933,83 @@ const App: React.FC = () => {
           onCraft={(recipe) => dispatch({ type: 'CRAFT_ITEM', recipe })}
           onUseItem={(item) => dispatch({ type: 'USE_ITEM', item })}
         />
+      )}
+
+      {/* Debug Menu Overlay */}
+      {showDebug && (
+        <div className="fixed inset-0 z-[100] bg-black/80 flex items-center justify-center p-4">
+            <div className="bg-slate-900 border-2 border-red-500 p-6 rounded-xl w-full max-w-md shadow-2xl">
+                <h2 className="text-2xl font-bold text-red-500 mb-4 flex items-center gap-2">
+                    <Skull size={24}/> ADMIN CONSOLE
+                </h2>
+                <div className="grid grid-cols-2 gap-3">
+                    <button 
+                        onClick={() => {
+                            // Instant Level Up 5 times
+                            const newState = { ...state, xp: state.xp + 10000 };
+                            dispatch({ type: 'LOAD_GAME', state: newState });
+                        }}
+                        className="p-3 bg-indigo-900 hover:bg-indigo-800 rounded font-mono text-xs"
+                    >
+                        +10,000 XP
+                    </button>
+                    <button 
+                        onClick={() => {
+                            const newState = { ...state, gold: state.gold + 5000 };
+                            dispatch({ type: 'LOAD_GAME', state: newState });
+                        }}
+                        className="p-3 bg-yellow-900 hover:bg-yellow-800 rounded font-mono text-xs"
+                    >
+                        +5,000 GOLD
+                    </button>
+                    <button 
+                        onClick={() => {
+                            // Force Boss Spawn
+                            let grid = [...state.grid];
+                            // Replace random non-boss
+                            const targets = grid.filter(t => t.type === TileType.NORMAL);
+                            if (targets.length > 0) {
+                                const t = targets[0];
+                                t.type = TileType.BOSS;
+                                t.value = 0;
+                                t.health = 500;
+                                t.maxHealth = 500;
+                            }
+                            dispatch({ type: 'LOAD_GAME', state: { ...state, grid, logs: [...state.logs, "DEBUG: BOSS SPAWNED"] } });
+                        }}
+                        className="p-3 bg-red-900 hover:bg-red-800 rounded font-mono text-xs"
+                    >
+                        SPAWN BOSS
+                    </button>
+                    <button 
+                        onClick={() => {
+                            // Instant Game Over
+                            dispatch({ type: 'LOAD_GAME', state: { ...state, gameOver: true } });
+                            setShowDebug(false);
+                        }}
+                        className="p-3 bg-slate-700 hover:bg-slate-600 rounded font-mono text-xs"
+                    >
+                        TRIGGER DEFEAT
+                    </button>
+                    <button 
+                        onClick={() => {
+                             // Force Cascade Unlock
+                             const newState = { ...state, accountLevel: 15 };
+                             dispatch({ type: 'LOAD_GAME', state: newState });
+                        }}
+                        className="p-3 bg-cyan-900 hover:bg-cyan-800 rounded font-mono text-xs"
+                    >
+                        UNLOCK CASCADES
+                    </button>
+                    <button 
+                        onClick={() => setShowDebug(false)}
+                        className="p-3 bg-slate-800 hover:bg-slate-700 rounded font-mono text-xs col-span-2"
+                    >
+                        CLOSE CONSOLE
+                    </button>
+                </div>
+            </div>
+        </div>
       )}
 
       {state.gameOver && (
