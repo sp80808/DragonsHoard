@@ -209,3 +209,33 @@ export interface Cosmetic {
 }
 
 export type View = 'SPLASH' | 'GAME' | 'LEADERBOARD' | 'SETTINGS' | 'STATS' | 'COSMETICS';
+
+// Particle System Types
+export type ParticleType = 'xp' | 'gold' | 'spark' | 'ember';
+
+export interface ParticleConfig {
+  type: ParticleType;
+  startPos: { x: number; y: number };
+  endPos?: { x: number; y: number };
+  color: string;
+  lifetime: number; // milliseconds
+  velocity?: { x: number; y: number };
+  gravity?: boolean;
+  count?: number; // For bursts
+}
+
+export interface Particle {
+  id: string;
+  type: ParticleType;
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  color: string;
+  alpha: number;
+  lifetime: number;
+  age: number;
+  active: boolean;
+  gravity: boolean;
+}
+
