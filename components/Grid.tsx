@@ -1,14 +1,15 @@
 
 import React from 'react';
-import { Tile } from '../types';
-import { TileComponent } from './TileComponent';
+import { Tile, Cosmetic } from '../types';
+import { TileComponent } from '../components/TileComponent';
 
 interface GridProps {
   grid: Tile[];
   size: number;
+  equippedCosmetics?: Cosmetic[];
 }
 
-export const Grid: React.FC<GridProps> = ({ grid, size }) => {
+export const Grid: React.FC<GridProps> = ({ grid, size, equippedCosmetics = [] }) => {
   // Create background cells
   const cells = Array.from({ length: size * size });
 
@@ -38,7 +39,7 @@ export const Grid: React.FC<GridProps> = ({ grid, size }) => {
             <div className="relative w-full h-full">
                 {/* We map grid tiles here. The key is crucial for React to track movement animation */}
                 {grid.map((tile) => (
-                <TileComponent key={tile.id} tile={tile} gridSize={size} />
+                <TileComponent key={tile.id} tile={tile} gridSize={size} equippedCosmetics={equippedCosmetics} />
                 ))}
             </div>
         </div>

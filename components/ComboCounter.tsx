@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 
 interface ComboCounterProps {
   combo: number;
@@ -7,6 +7,25 @@ interface ComboCounterProps {
 }
 
 export const ComboCounter: React.FC<ComboCounterProps> = ({ combo, multiplier, isActive }) => {
+  const [prevCombo, setPrevCombo] = useState(combo);
+  const [showPopup, setShowPopup] = useState(false);
+  const [screenFlash, setScreenFlash] = useState(false);
+
+  // Trigger popup on combo increase
+  useEffect(() => {
+    if (combo > prevCombo && combo >= 2) {
+      setShowPopup(true);
+      setTimeout(() => setShowPopup(false), 600);
+      
+      // Screen flash on godlike combos
+      if (combo >= 10) {
+        setScreenFlash(true);
+        setTimeout(() => setScreenFlash(false), 300);
+      }
+    }
+    setPrevCombo(combo);
+  }, [combo]);
+
   if (!isActive || combo < 2) return null;
 
   const getComboText = () => {
@@ -31,39 +50,46 @@ export const ComboCounter: React.FC<ComboCounterProps> = ({ combo, multiplier, i
   };
 
   return (
-    <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-40 pointer-events-none">
-      {/* Combo Ring */}
-      <div className={`absolute inset-0 w-32 h-32 rounded-full border-2 border-transparent bg-gradient-to-r ${getComboColor()} bg-clip-border opacity-30 animate-pulse`} />
+    <>
+      {/* Screen Flash Overlay */}
+      {screenFlash && (
+        <div className="fixed inset-0 bg-yellow-300/20 pointer-events-none z-50 screen-flash" />
+      )}
+      
+      <div className={`fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-40 pointer-events-none ${showPopup ? 'combo-popup' : ''}`}>
+        {/* Combo Ring with Glow */}
+        <div className={`absolute inset-0 w-32 h-32 rounded-full border-2 border-transparent bg-gradient-to-r ${getComboColor()} bg-clip-border opacity-30 combo-glow`} />
 
-      {/* Combo Counter */}
-      <div className={`relative w-32 h-32 flex flex-col items-center justify-center`}>
-        <div className={`text-6xl font-black text-transparent bg-clip-text bg-gradient-to-r ${getComboColor()} drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] animate-bounce`}>
-          {combo}x
+        {/* Combo Counter */}
+        <div className={`relative w-32 h-32 flex flex-col items-center justify-center`}>
+          <div className={`text-6xl font-black text-transparent bg-clip-text bg-gradient-to-r ${getComboColor()} drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] ${combo >= 10 ? 'critical-flash' : combo >= 5 ? 'glow-pulse' : 'animate-bounce'}`}>
+            {combo}x
+          </div>
+          <div className={`text-sm font-bold uppercase tracking-widest text-transparent bg-clip-text bg-gradient-to-r ${getComboColor()} drop-shadow-md mt-1 ${showPopup ? 'shimmer-highlight' : ''}`}>
+            {getComboText()}
+          </div>
         </div>
-        <div className={`text-sm font-bold uppercase tracking-widest text-transparent bg-clip-text bg-gradient-to-r ${getComboColor()} drop-shadow-md mt-1`}>
-          {getComboText()}
+
+        {/* Multiplier Badge */}
+        <div className={`absolute -bottom-8 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full bg-gradient-to-r ${getComboColor()} text-white text-xs font-bold shadow-lg ${getGlowColor()}`}>
+          {multiplier.toFixed(1)}× Multiplier
+        </div>
+
+        {/* Particle Ring */}
+        <div className="absolute inset-0 w-32 h-32 rounded-full">
+          {Array.from({ length: combo }).map((_, i) => (
+            <div
+              key={i}
+              className="absolute w-1 h-1 rounded-full bg-gradient-to-r from-yellow-300 to-orange-400 animate-pulse"
+              style={{
+                left: `${16 + 14 * Math.cos((i / combo) * Math.PI * 2)}px`,
+                top: `${16 + 14 * Math.sin((i / combo) * Math.PI * 2)}px`,
+                animationDelay: `${i * 50}ms`
+              }}
+            />
+          ))}
         </div>
       </div>
-
-      {/* Multiplier Badge */}
-      <div className={`absolute -bottom-8 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full bg-gradient-to-r ${getComboColor()} text-white text-xs font-bold shadow-lg ${getGlowColor()}`}>
-        {multiplier.toFixed(1)}× Multiplier
-      </div>
-
-      {/* Particle Ring */}
-      <div className="absolute inset-0 w-32 h-32 rounded-full">
-        {Array.from({ length: combo }).map((_, i) => (
-          <div
-            key={i}
-            className="absolute w-1 h-1 rounded-full bg-gradient-to-r from-yellow-300 to-orange-400 animate-pulse"
-            style={{
-              left: `${16 + 14 * Math.cos((i / combo) * Math.PI * 2)}px`,
-              top: `${16 + 14 * Math.sin((i / combo) * Math.PI * 2)}px`,
-              animationDelay: `${i * 50}ms`
-            }}
-          />
-        ))}
-      </div>
-    </div>
+    </>
   );
 };

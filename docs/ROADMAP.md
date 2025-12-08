@@ -242,7 +242,7 @@ Community/Social
 
 ## Open Questions
 
-1. **Monetization**: Should cosmetics be paid or free?
+1. **Monetization**: Hybrid model - free-to-earn cosmetics via achievements, paid options with gold/gems ✅ (Resolved: Cosmetics free-to-earn with optional paid exclusives)
 2. **Difficulty Scaling**: Need player feedback on boss difficulty
 3. **Multiplayer Scope**: 1v1 PvP vs. Async vs. Full MMO?
 4. **Story Tone**: Humorous vs. Dark Fantasy?

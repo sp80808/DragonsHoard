@@ -1,16 +1,17 @@
 
 import React from 'react';
-import { Play, Trophy, Settings } from 'lucide-react';
+import { Play, Trophy, Settings, Palette } from 'lucide-react';
 
 interface SplashScreenProps {
   onStart: () => void;
   onContinue: () => void;
   onOpenLeaderboard: () => void;
   onOpenSettings: () => void;
+  onOpenCosmetics: () => void;
   hasSave: boolean;
 }
 
-export const SplashScreen: React.FC<SplashScreenProps> = ({ onStart, onContinue, onOpenLeaderboard, onOpenSettings, hasSave }) => {
+export const SplashScreen: React.FC<SplashScreenProps> = ({ onStart, onContinue, onOpenLeaderboard, onOpenSettings, onOpenCosmetics, hasSave }) => {
   return (
     <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-black overflow-hidden">
       {/* Background with slow zoom */}
@@ -56,19 +57,26 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({ onStart, onContinue,
           </button>
 
           <div className="flex gap-4">
-              <button 
+              <button
                 onClick={onOpenLeaderboard}
                 className="flex-1 py-3 bg-slate-900/80 border border-slate-700 text-slate-300 hover:text-yellow-400 hover:border-yellow-500 rounded-lg flex items-center justify-center gap-2 transition-colors"
               >
                 <Trophy size={18} /> Scores
               </button>
-              <button 
+              <button
                 onClick={onOpenSettings}
                 className="flex-1 py-3 bg-slate-900/80 border border-slate-700 text-slate-300 hover:text-white hover:border-white rounded-lg flex items-center justify-center gap-2 transition-colors"
               >
                 <Settings size={18} /> Settings
               </button>
-          </div>
+            </div>
+
+            <button
+              onClick={onOpenCosmetics}
+              className="w-full py-3 bg-purple-900/80 border border-purple-700 text-purple-300 hover:text-purple-100 hover:border-purple-500 rounded-lg flex items-center justify-center gap-2 transition-colors"
+            >
+              <Palette size={18} /> Cosmetics
+            </button>
         </div>
 
         <div className="mt-16 text-xs text-slate-600 font-mono">v1.3.0 // React 2048 RPG</div>

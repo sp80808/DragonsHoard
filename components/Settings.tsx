@@ -35,7 +35,7 @@ export const Settings: React.FC<SettingsProps> = ({ onBack, onClearData }) => {
     <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-sm p-4">
       <div className="w-full max-w-md bg-slate-900 border border-slate-700 rounded-xl p-6 shadow-2xl">
         <div className="flex items-center gap-4 mb-8">
-           <button onClick={onBack} className="p-2 hover:bg-slate-800 rounded-full transition-colors text-slate-400">
+           <button onClick={onBack} className="p-2 hover:bg-slate-800 rounded-full transition-all text-slate-400 btn-press item-hover">
              <ArrowLeft size={24} />
            </button>
            <h2 className="text-2xl font-bold text-white fantasy-font">Settings</h2>
@@ -48,7 +48,7 @@ export const Settings: React.FC<SettingsProps> = ({ onBack, onClearData }) => {
                 
                 {/* SFX Volume */}
                 <div className="flex items-center gap-4 mb-4">
-                    <button onClick={() => { setSfxVolume(0); audioService.setVolume(0); }} className="text-slate-400 hover:text-white w-6">
+                    <button onClick={() => { setSfxVolume(0); audioService.setVolume(0); }} className="text-slate-400 hover:text-white w-6 btn-press">
                         {sfxVolume === 0 ? <VolumeX size={20}/> : <Volume2 size={20}/>}
                     </button>
                     <div className="flex-1">
@@ -67,7 +67,7 @@ export const Settings: React.FC<SettingsProps> = ({ onBack, onClearData }) => {
 
                 {/* Music Volume */}
                 <div className="flex items-center gap-4">
-                    <button onClick={() => { setMusicVolume(0); audioService.setMusicVolume(0); }} className="text-slate-400 hover:text-white w-6">
+                    <button onClick={() => { setMusicVolume(0); audioService.setMusicVolume(0); }} className="text-slate-400 hover:text-white w-6 btn-press">
                         <Music size={20}/>
                     </button>
                     <div className="flex-1">
@@ -94,7 +94,7 @@ export const Settings: React.FC<SettingsProps> = ({ onBack, onClearData }) => {
                 {!confirmClear ? (
                     <button 
                         onClick={() => setConfirmClear(true)}
-                        className="w-full py-3 border border-red-900/50 bg-red-900/10 text-red-400 hover:bg-red-900/30 rounded-lg transition-colors flex items-center justify-center gap-2"
+                        className="w-full py-3 border border-red-900/50 bg-red-900/10 text-red-400 hover:bg-red-900/30 rounded-lg transition-all flex items-center justify-center gap-2 btn-press"
                     >
                         <Trash2 size={16} /> Delete Save Data
                     </button>
@@ -102,13 +102,13 @@ export const Settings: React.FC<SettingsProps> = ({ onBack, onClearData }) => {
                     <div className="flex gap-2 animate-in fade-in slide-in-from-right-4">
                         <button 
                             onClick={() => setConfirmClear(false)}
-                            className="flex-1 py-3 border border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700 rounded-lg"
+                            className="flex-1 py-3 border border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700 rounded-lg btn-press"
                         >
                             Cancel
                         </button>
                         <button 
                             onClick={handleClearData}
-                            className="flex-1 py-3 bg-red-600 text-white hover:bg-red-500 rounded-lg font-bold"
+                            className="flex-1 py-3 bg-red-600 text-white hover:bg-red-500 rounded-lg font-bold btn-press"
                         >
                             CONFIRM DELETE
                         </button>

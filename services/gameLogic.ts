@@ -1,6 +1,6 @@
 
-import { Direction, GameState, Tile, TileType, MoveResult, LootResult, ItemType, InventoryItem, Stage, LeaderboardEntry, GameStats, Achievement, DailyChallenge, SessionStats } from '../types';
-import { GRID_SIZE_INITIAL, SHOP_ITEMS, getStage, getStageBackground, ACHIEVEMENTS, generateDailyChallenges } from '../constants';
+import { Direction, GameState, Tile, TileType, MoveResult, LootResult, ItemType, InventoryItem, Stage, LeaderboardEntry, GameStats, Achievement, DailyChallenge, SessionStats, Cosmetic } from '../types';
+import { GRID_SIZE_INITIAL, SHOP_ITEMS, getStage, getStageBackground, ACHIEVEMENTS, generateDailyChallenges, COSMETICS } from '../constants';
 
 const createId = () => Math.random().toString(36).substr(2, 9);
 const LEADERBOARD_KEY = 'dragon_hoard_leaderboard';
@@ -529,7 +529,9 @@ export const initializeGame = (reset = false): GameState => {
     xp: 0,
     level: 1,
     gold: 0,
+    gems: 0, // Premium currency
     inventory: [],
+    cosmetics: COSMETICS.map(c => ({ ...c })), // Initialize cosmetics
     gridSize: initialSize,
     gameOver: false,
     victory: false,
@@ -623,4 +625,60 @@ export const clearSaveData = () => {
     localStorage.removeItem('2048_rpg_highscore');
     localStorage.removeItem(LEADERBOARD_KEY);
     localStorage.removeItem(ACHIEVEMENTS_STORAGE_KEY);
+};
+
+export const purchaseCosmetic = (state: GameState, cosmeticId: string): GameState | null => {
+  const cosmetic = state.cosmetics.find(c => c.id === cosmeticId);
+  if (!cosmetic || cosmetic.owned) return null;
+
+  let costGold = 0;
+  let costGems = 0;
+  if (cosmetic.cost) {
+    costGold = cosmetic.cost.gold || 0;
+    costGems = cosmetic.cost.gems || 0;
+  }
+
+  if (state.gold < costGold || state.gems < costGems) return null;
+
+  const updatedCosmetics = state.cosmetics.map(c =>
+    c.id === cosmeticId ? { ...c, owned: true } : c
+  );
+
+  return {
+    ...state,
+    gold: state.gold - costGold,
+    gems: state.gems - costGems,
+    cosmetics: updatedCosmetics,
+    logs: [...state.logs, `Purchased ${cosmetic.name}!`]
+  };
+};
+
+export const equipCosmetic = (state: GameState, cosmeticId: string): GameState => {
+  const cosmetic = state.cosmetics.find(c => c.id === cosmeticId);
+  if (!cosmetic || !cosmetic.owned) return state;
+
+  const updatedCosmetics = state.cosmetics.map(c => ({
+    ...c,
+    equipped: c.id === cosmeticId ? !c.equipped : false // Toggle equip, unequip others in same category
+  }));
+
+  return {
+    ...state,
+    cosmetics: updatedCosmetics,
+    logs: [...state.logs, `${cosmetic.equipped ? 'Unequipped' : 'Equipped'} ${cosmetic.name}!`]
+  };
+};
+
+export const checkCosmeticUnlocks = (state: GameState): GameState => {
+  const updatedCosmetics = state.cosmetics.map(c => {
+    if (c.unlockCondition?.achievement && state.achievements.includes(c.unlockCondition.achievement)) {
+      return { ...c, owned: true };
+    }
+    if (c.unlockCondition?.level && state.level >= c.unlockCondition.level) {
+      return { ...c, owned: true };
+    }
+    return c;
+  });
+
+  return { ...state, cosmetics: updatedCosmetics };
 };

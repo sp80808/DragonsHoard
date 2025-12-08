@@ -1,5 +1,5 @@
 
-import { TileType, ItemType, InventoryItem, Stage, CraftingRecipe, Achievement, DailyChallenge } from './types';
+import { TileType, ItemType, InventoryItem, Stage, CraftingRecipe, Achievement, DailyChallenge, Cosmetic, CosmeticCategory } from './types';
 
 export const GRID_SIZE_INITIAL = 4;
 export const WINNING_VALUE = 2048;
@@ -184,6 +184,54 @@ export const generateDailyChallenges = (): DailyChallenge[] => {
     }
   ];
 };
+
+export const COSMETICS: Cosmetic[] = [
+  // Free cosmetics unlocked via achievements
+  {
+    id: 'pumpkin_slime',
+    name: 'Pumpkin Slime',
+    description: 'Spooky Halloween skin for Slimes',
+    icon: '🎃',
+    category: CosmeticCategory.CREATURE_SKIN,
+    rarity: 'rare',
+    unlockCondition: { achievement: 'first_blood' },
+    owned: false,
+    equipped: false
+  },
+  {
+    id: 'boss_slayer_theme',
+    name: 'Boss Slayer Theme',
+    description: 'Dark theme with red accents',
+    icon: '☠️',
+    category: CosmeticCategory.UI_THEME,
+    rarity: 'epic',
+    unlockCondition: { achievement: 'boss_slayer' },
+    owned: false,
+    equipped: false
+  },
+  {
+    id: 'ocean_theme',
+    name: 'Ocean Depths',
+    description: 'Underwater theme with bubbles',
+    icon: '🌊',
+    category: CosmeticCategory.BOARD_THEME,
+    rarity: 'epic',
+    cost: { gold: 25000 },
+    owned: false,
+    equipped: false
+  },
+  {
+    id: 'legendary_glow',
+    name: 'Legendary Glow',
+    description: 'Golden aura for high-tier creatures',
+    icon: '✨',
+    category: CosmeticCategory.EFFECT,
+    rarity: 'legendary',
+    cost: { gems: 100 }, // Premium currency
+    owned: false,
+    equipped: false
+  }
+];
 
 export const ACHIEVEMENTS: Achievement[] = [
   {

@@ -1,19 +1,23 @@
 
-import { useEffect, useReducer, useRef, useState } from 'react';
+import React, { useEffect, useReducer, useRef, useState } from 'react';
 import { Grid } from './components/Grid';
 import { HUD } from './components/HUD';
 import { Store } from './components/Store';
 import { SplashScreen } from './components/SplashScreen';
 import { Leaderboard } from './components/Leaderboard';
 import { Settings } from './components/Settings';
+import { ComboCounter } from './components/ComboCounter';
+import { DailyChallengesPanel } from './components/DailyChallengesPanel';
+import { StatsModal } from './components/StatsModal';
+import CosmeticsShop from './components/CosmeticsShop';
 import { Direction, GameState, TileType, InventoryItem, FloatingText, CraftingRecipe, View, Achievement } from './types';
-import { initializeGame, moveGrid, spawnTile, isGameOver, checkLoot, useInventoryItem, applyMidasTouch, applyChronosShift, applyVoidSingularity, tryAutoMerge, saveHighscore, checkAchievements, savePersistentAchievements } from './services/gameLogic';
+import { initializeGame, moveGrid, spawnTile, isGameOver, checkLoot, useInventoryItem, applyMidasTouch, applyChronosShift, applyVoidSingularity, tryAutoMerge, saveHighscore, checkAchievements, savePersistentAchievements, purchaseCosmetic, equipCosmetic, checkCosmeticUnlocks } from './services/gameLogic';
 import { SHOP_ITEMS, getXpThreshold, getStage, getStageBackground, getItemDefinition } from './constants';
 import { audioService } from './services/audioService';
 import { RefreshCw, AlertTriangle, Crown } from 'lucide-react';
 
 // Actions
-type Action = 
+type Action =
   | { type: 'MOVE'; direction: Direction }
   | { type: 'RESTART' }
   | { type: 'CONTINUE' }
@@ -26,7 +30,9 @@ type Action =
   | { type: 'APPLY_POWERUP_RESULT'; resultState: Partial<GameState> }
   | { type: 'REROLL' }
   | { type: 'GAME_OVER_ACK' }
-  | { type: 'UNLOCK_ACHIEVEMENT'; achievement: Achievement };
+  | { type: 'UNLOCK_ACHIEVEMENT'; achievement: Achievement }
+  | { type: 'PURCHASE_COSMETIC'; cosmeticId: string }
+  | { type: 'EQUIP_COSMETIC'; cosmeticId: string };
 
 const reducer = (state: GameState, action: Action): GameState => {
   switch (action.type) {
@@ -49,13 +55,25 @@ const reducer = (state: GameState, action: Action): GameState => {
     case 'UNLOCK_ACHIEVEMENT':
         const newAchievements = [...state.achievements, action.achievement.id];
         savePersistentAchievements(newAchievements); // Save to persistent storage
-        return {
+        const updatedStateWithAchievement = {
             ...state,
             achievements: newAchievements,
             gold: state.gold + (action.achievement.reward?.gold || 0),
             xp: state.xp + (action.achievement.reward?.xp || 0),
             logs: [...state.logs, `Achievement: ${action.achievement.name}`]
         };
+        return checkCosmeticUnlocks(updatedStateWithAchievement);
+
+    case 'PURCHASE_COSMETIC':
+        const purchaseResult = purchaseCosmetic(state, action.cosmeticId);
+        if (!purchaseResult) return state;
+        localStorage.setItem('2048_rpg_state_v3', JSON.stringify(purchaseResult));
+        return purchaseResult;
+
+    case 'EQUIP_COSMETIC':
+        const equipResult = equipCosmetic(state, action.cosmeticId);
+        localStorage.setItem('2048_rpg_state_v3', JSON.stringify(equipResult));
+        return equipResult;
 
     case 'BUY_ITEM': {
       if (state.gold < action.item.price) return state;
@@ -530,17 +548,28 @@ const App: React.FC = () => {
       <div className="vignette"></div>
       
       {view === 'SPLASH' && (
-          <SplashScreen 
-            onStart={handleGameStart} 
+          <SplashScreen
+            onStart={handleGameStart}
             onContinue={handleContinue}
             onOpenLeaderboard={() => setView('LEADERBOARD')}
             onOpenSettings={() => setView('SETTINGS')}
+            onOpenCosmetics={() => setView('COSMETICS')}
             hasSave={!!localStorage.getItem('2048_rpg_state_v3')}
           />
       )}
 
       {view === 'LEADERBOARD' && <Leaderboard onBack={() => setView('SPLASH')} />}
       {view === 'SETTINGS' && <Settings onBack={() => setView(state.score > 0 ? 'GAME' : 'SPLASH')} onClearData={() => { dispatch({ type: 'RESTART' }); setView('SPLASH'); }} />}
+      {view === 'COSMETICS' && (
+        <CosmeticsShop
+          cosmetics={state.cosmetics}
+          onEquip={(id) => dispatch({ type: 'EQUIP_COSMETIC', cosmeticId: id })}
+          onPurchase={(id) => dispatch({ type: 'PURCHASE_COSMETIC', cosmeticId: id })}
+          onBack={() => setView('SPLASH')}
+          gold={state.gold}
+          gems={state.gems}
+        />
+      )}
 
       {view === 'GAME' && (
           <>
@@ -611,7 +640,7 @@ const App: React.FC = () => {
                     {state.logs.length > 0 ? state.logs[state.logs.length - 1] : "The dungeon awaits..."}
                 </div>
 
-                <Grid grid={state.grid} size={state.gridSize} />
+                <Grid grid={state.grid} size={state.gridSize} equippedCosmetics={state.cosmetics.filter(c => c.equipped)} />
 
                 <div className="w-full mt-6 flex justify-between items-center text-slate-400 text-sm font-medium">
                     <div className="flex gap-4">

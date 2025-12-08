@@ -1,39 +1,64 @@
 
-import React, { useState } from 'react';
-import { Tile, TileType } from '../types';
+import React, { useState, useEffect } from 'react';
+import { Tile, TileType, Cosmetic } from '../types';
 import { TILE_STYLES, BOSS_STYLE, FALLBACK_STYLE } from '../constants';
 
 interface TileProps {
   tile: Tile;
   gridSize: number;
+  equippedCosmetics?: Cosmetic[];
 }
 
-export const TileComponent: React.FC<TileProps> = ({ tile, gridSize }) => {
+export const TileComponent: React.FC<TileProps> = ({ tile, gridSize, equippedCosmetics = [] }) => {
   let style = TILE_STYLES[tile.value] || FALLBACK_STYLE;
   if (tile.type === TileType.BOSS) {
       style = BOSS_STYLE;
   }
+
+  // Apply equipped cosmetics
+  const equippedSkins = equippedCosmetics.filter(c => c.category === 'CREATURE_SKIN' && c.equipped);
+  if (equippedSkins.length > 0) {
+    for (const skin of equippedSkins) {
+      if (skin.id === 'pumpkin_slime' && tile.value === 2) {
+        style = { ...style, color: 'from-orange-900 to-orange-700', glow: 'shadow-orange-500/50' };
+      }
+      // Add more skins here
+    }
+  }
   const [imgError, setImgError] = useState(false);
+  const [tapped, setTapped] = useState(false);
   
   const xPos = (tile.x / gridSize) * 100;
   const yPos = (tile.y / gridSize) * 100;
   const size = 100 / gridSize;
 
+  // Enhanced animation classes
   const isNewClass = tile.isNew ? 'tile-animation-enter' : '';
-  const isMergedClass = tile.mergedFrom ? 'tile-animation-merge damage-flash' : '';
+  const isMergedClass = tile.mergedFrom ? 'merge-implosion damage-flash' : '';
   const isSlash = tile.mergedFrom && tile.value >= 32 ? 'slash-effect' : '';
+  const isTierJump = tile.mergedFrom && (tile.value === 8 || tile.value === 64 || tile.value === 256) ? 'tier-ascend' : '';
+  const isHighValue = tile.value >= 512 ? 'tile-glow-pulse' : '';
+  const tapClass = tapped ? 'tile-tap-pulse' : '';
+
+  // Handle tap/click for micro-animation
+  const handleInteraction = () => {
+    setTapped(true);
+    setTimeout(() => setTapped(false), 150);
+  };
   
   return (
     <div
-      className={`absolute transition-transform duration-200 ease-in-out z-10 p-1`}
+      className={`absolute transition-transform duration-200 ease-in-out z-10 p-1 ${tapClass}`}
       style={{
         width: `${size}%`,
         height: `${size}%`,
         transform: `translate(${tile.x * 100}%, ${tile.y * 100}%)`
       }}
+      onMouseDown={handleInteraction}
+      onTouchStart={handleInteraction}
     >
       <div
-        className={`w-full h-full rounded-lg relative overflow-hidden shadow-2xl ${isNewClass} ${isMergedClass} ${isSlash} group`}
+        className={`w-full h-full rounded-lg relative overflow-hidden shadow-2xl ${isNewClass} ${isMergedClass} ${isSlash} ${isTierJump} ${isHighValue} group`}
       >
         {/* Glow Container */}
         <div className={`absolute inset-0 transition-opacity duration-300 ${style.glow} opacity-0 group-hover:opacity-100`}></div>

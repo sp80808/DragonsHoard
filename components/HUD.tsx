@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { getXpThreshold } from '../constants';
 import { Trophy, Store as StoreIcon, Coins, RefreshCw, Menu } from 'lucide-react';
 import { InventoryItem } from '../types';
@@ -21,6 +21,43 @@ export const HUD: React.FC<HUDProps> = ({ score, bestScore, level, xp, gold, inv
   const xpThreshold = getXpThreshold(level);
   const xpPercent = Math.min(100, (xp / xpThreshold) * 100);
   const canReroll = (level >= 15 && (rerolls > 0 || gold >= 50));
+
+  // Visual feedback states
+  const [goldBlink, setGoldBlink] = useState(false);
+  const [xpTick, setXpTick] = useState(false);
+  const [levelUp, setLevelUp] = useState(false);
+
+  // Track previous values for change detection
+  const [prevGold, setPrevGold] = useState(gold);
+  const [prevXp, setPrevXp] = useState(xp);
+  const [prevLevel, setPrevLevel] = useState(level);
+
+  // Gold gain animation
+  useEffect(() => {
+    if (gold > prevGold) {
+      setGoldBlink(true);
+      setTimeout(() => setGoldBlink(false), 150);
+    }
+    setPrevGold(gold);
+  }, [gold]);
+
+  // XP gain animation
+  useEffect(() => {
+    if (xp > prevXp) {
+      setXpTick(true);
+      setTimeout(() => setXpTick(false), 200);
+    }
+    setPrevXp(xp);
+  }, [xp]);
+
+  // Level up animation
+  useEffect(() => {
+    if (level > prevLevel) {
+      setLevelUp(true);
+      setTimeout(() => setLevelUp(false), 800);
+    }
+    setPrevLevel(level);
+  }, [level]);
 
   // Determine visual theme based on level tier
   const getTheme = (lvl: number) => {
@@ -70,7 +107,9 @@ export const HUD: React.FC<HUDProps> = ({ score, bestScore, level, xp, gold, inv
             </h1>
             <div className="flex items-center gap-3 text-xs text-slate-400 mt-1">
                 <span className="flex items-center gap-1"><Trophy size={10} /> {bestScore}</span>
-                <span className="flex items-center gap-1 text-yellow-400 font-bold"><Coins size={10} /> {gold} G</span>
+                <span className={`flex items-center gap-1 text-yellow-400 font-bold ${goldBlink ? 'coin-blink' : ''}`}>
+                  <Coins size={10} /> {gold} G
+                </span>
             </div>
             </div>
         </div>
@@ -83,7 +122,7 @@ export const HUD: React.FC<HUDProps> = ({ score, bestScore, level, xp, gold, inv
       {/* RPG Stats & Inventory Row */}
       <div className="flex gap-2 h-14">
         {/* XP Bar Container */}
-        <div className={`flex-1 bg-slate-950/80 p-1.5 rounded-lg border ${theme.borderColor} relative flex flex-col justify-center shadow-lg transition-colors duration-500`}>
+        <div className={`flex-1 bg-slate-950/80 p-1.5 rounded-lg border ${theme.borderColor} relative flex flex-col justify-center shadow-lg transition-colors duration-500 ${xpTick ? 'xp-tick' : ''} ${levelUp ? 'level-up-pulse' : ''}`}>
           
           {/* Level Badge & Label */}
           <div className="flex justify-between items-end mb-1 px-1 z-10 relative">
@@ -121,7 +160,7 @@ export const HUD: React.FC<HUDProps> = ({ score, bestScore, level, xp, gold, inv
         {/* Store Button */}
         <button 
           onClick={onOpenStore}
-          className="w-14 bg-yellow-900/20 hover:bg-yellow-900/40 border border-yellow-700/50 rounded-lg flex flex-col items-center justify-center text-yellow-500 transition-colors group relative overflow-hidden"
+          className="w-14 bg-yellow-900/20 hover:bg-yellow-900/40 border border-yellow-700/50 rounded-lg flex flex-col items-center justify-center text-yellow-500 transition-all group relative overflow-hidden btn-press item-hover"
         >
           <div className="absolute inset-0 bg-yellow-500/10 translate-y-full group-hover:translate-y-0 transition-transform duration-300"></div>
           <StoreIcon size={18} className="relative z-10" />
@@ -140,7 +179,7 @@ export const HUD: React.FC<HUDProps> = ({ score, bestScore, level, xp, gold, inv
                         {item ? (
                             <button 
                                 onClick={() => onUseItem(item)}
-                                className="w-full h-full flex items-center justify-center hover:bg-white/5 transition-colors relative"
+                                className="w-full h-full flex items-center justify-center hover:bg-white/5 transition-all relative btn-press item-hover"
                             >
                                 <span className="text-2xl drop-shadow-md">{item.icon}</span>
                                 <span className="absolute bottom-0 right-1 text-[8px] text-slate-400 font-bold tracking-tighter opacity-70">{item.name.split(' ')[0]}</span>

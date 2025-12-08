@@ -102,7 +102,9 @@ export interface GameState {
   xp: number;
   level: number;
   gold: number;
+  gems: number; // Premium currency
   inventory: InventoryItem[];
+  cosmetics: Cosmetic[]; // Player's cosmetic collection
   gridSize: number;
   gameOver: boolean;
   victory: boolean;
@@ -110,7 +112,7 @@ export interface GameState {
   combo: number;
   logs: string[];
   activeEffects: string[];
-  effectCounters: Record<string, number>; 
+  effectCounters: Record<string, number>;
   currentStage: Stage;
   powerUpEffect?: string;
   rerolls: number;
@@ -175,4 +177,24 @@ export interface SessionStats {
   endTime?: number;
 }
 
-export type View = 'SPLASH' | 'GAME' | 'LEADERBOARD' | 'SETTINGS' | 'STATS';
+export enum CosmeticCategory {
+  CREATURE_SKIN = 'CREATURE_SKIN',
+  BOARD_THEME = 'BOARD_THEME',
+  UI_THEME = 'UI_THEME',
+  EFFECT = 'EFFECT',
+}
+
+export interface Cosmetic {
+  id: string;
+  name: string;
+  description: string;
+  icon: string;
+  category: CosmeticCategory;
+  rarity: 'common' | 'rare' | 'epic' | 'legendary';
+  cost?: { gold?: number; gems?: number };
+  unlockCondition?: { achievement?: string; level?: number };
+  owned: boolean;
+  equipped: boolean;
+}
+
+export type View = 'SPLASH' | 'GAME' | 'LEADERBOARD' | 'SETTINGS' | 'STATS' | 'COSMETICS';

@@ -229,15 +229,20 @@
 - **Estimated Effort**: 5-7 days (mostly writing + cutscene UX)
 
 #### 14. **Cosmetics & Skins**
-- **Description**: Visual customizations
-- **Options**:
-  - Creature skins (dark theme, neon, retro pixel)
-  - Board themes (dark dungeon, glowing neon, cosmic)
-  - UI themes
-  - Title animations
-  - Purchase with gold or unlock via achievements
-- **Impact**: Expresses player identity, monetization option
-- **Estimated Effort**: 4-6 days
+- **Description**: Visual customizations with free-to-earn and paid options
+- **Categories**:
+  - Creature Skins: Alternative tile appearances (e.g., Halloween pumpkin slimes, neon glow sets)
+  - Board Themes: Background alternatives (e.g., underwater, forest, castle styles)
+  - UI Themes: HUD color schemes (dark, light, high contrast)
+  - Effects: Merge animations and victory effects (e.g., fire explosions, confetti)
+  - Accessories: Hats, auras on creatures
+- **Monetization Strategy**:
+  - **Free-to-Earn**: Unlocked via achievements, milestones, daily challenges
+  - **Gold Purchase**: High-cost items (10,000-50,000 gold) for rare cosmetics
+  - **Premium Currency**: Dragon Gems (optional real-money purchase) for exclusive cosmetics
+  - **Rarity Tiers**: Common (free), Rare (achievement), Epic (milestone), Legendary (paid/premium)
+- **Impact**: Expresses player identity, provides goals, optional monetization without pay-to-win
+- **Estimated Effort**: 6-8 days (includes shop UI, integration)
 
 #### 15. **Prestige System**
 - **Description**: Reset progression for permanent bonuses
