@@ -33,7 +33,7 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({ onBack }) => {
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto bg-slate-900/50 rounded-xl module-workflow shadow-2xl p-4">
+        <div className="flex-1 overflow-y-auto bg-slate-900/50 rounded-xl module-workflow shadow-2xl p-4 brushed-metal layered-depth glass-panel depth-focused">
           {scores.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center text-slate-500">
               <Trophy size={48} className="mb-4 opacity-20" />
