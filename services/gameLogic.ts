@@ -1,10 +1,11 @@
 
-import { Direction, GameState, Tile, TileType, MoveResult, LootResult, ItemType, InventoryItem, Stage, LeaderboardEntry, GameStats, Achievement } from '../types';
-import { GRID_SIZE_INITIAL, SHOP_ITEMS, getStage, getStageBackground, ACHIEVEMENTS } from '../constants';
+import { Direction, GameState, Tile, TileType, MoveResult, LootResult, ItemType, InventoryItem, Stage, LeaderboardEntry, GameStats, Achievement, InputSettings, RunStats, HeroClass, GameMode, PlayerProfile } from '../types';
+import { GRID_SIZE_INITIAL, SHOP_ITEMS, getStage, getStageBackground, ACHIEVEMENTS, TILE_STYLES, FALLBACK_STYLE, getItemDefinition } from '../constants';
 
 const createId = () => Math.random().toString(36).substr(2, 9);
 const LEADERBOARD_KEY = 'dragon_hoard_leaderboard';
 const ACHIEVEMENTS_STORAGE_KEY = 'dragon_hoard_unlocked_achievements';
+const PROFILE_STORAGE_KEY = 'dragons_hoard_profile';
 
 export const getEmptyCells = (grid: Tile[], size: number) => {
   const cells: { x: number; y: number }[] = [];
@@ -22,6 +23,7 @@ interface SpawnOptions {
   forcedValue?: number;
   type?: TileType;
   bossLevel?: number;
+  isClassic?: boolean;
 }
 
 export const spawnTile = (grid: Tile[], size: number, level: number, options?: SpawnOptions | number): Tile[] => {
@@ -31,6 +33,7 @@ export const spawnTile = (grid: Tile[], size: number, level: number, options?: S
   let forcedValue: number | undefined;
   let type: TileType = TileType.NORMAL;
   let bossLevel = 0;
+  let isClassic = false;
 
   if (typeof options === 'number') {
     forcedValue = options;
@@ -38,6 +41,7 @@ export const spawnTile = (grid: Tile[], size: number, level: number, options?: S
     forcedValue = options.forcedValue;
     type = options.type || TileType.NORMAL;
     bossLevel = options.bossLevel || level;
+    isClassic = !!options.isClassic;
   }
 
   // Helper to place one tile
@@ -49,8 +53,13 @@ export const spawnTile = (grid: Tile[], size: number, level: number, options?: S
       
       let value = 2;
       let finalType = forceType || TileType.NORMAL;
-      let health, maxHealth;
+      
+      // In Classic Mode, never spawn bosses or special runes from spawnTile
+      if (isClassic) {
+          finalType = TileType.NORMAL;
+      }
 
+      let health, maxHealth;
       if (finalType === TileType.BOSS) {
           value = 0; // Boss has 0 value for merges
           maxHealth = bossLevel * 100;
@@ -75,12 +84,12 @@ export const spawnTile = (grid: Tile[], size: number, level: number, options?: S
   };
 
   // If spawning a boss, prioritize it
-  if (type === TileType.BOSS) {
+  if (type === TileType.BOSS && !isClassic) {
       return placeOne(activeGrid, 0, TileType.BOSS);
   }
 
-  // Power Up Check (2%) - Only if not forced
-  if (!forcedValue && type === TileType.NORMAL && Math.random() < 0.02) {
+  // Power Up Check (2%) - Only if not forced and not Classic
+  if (!forcedValue && !isClassic && type === TileType.NORMAL && Math.random() < 0.02) {
     const powerUps = [TileType.RUNE_MIDAS, TileType.RUNE_CHRONOS, TileType.RUNE_VOID];
     const powerUpType = powerUps[Math.floor(Math.random() * powerUps.length)];
     const empty = getEmptyCells(activeGrid, size);
@@ -94,8 +103,10 @@ export const spawnTile = (grid: Tile[], size: number, level: number, options?: S
   activeGrid = placeOne(activeGrid, forcedValue, type);
 
   // Slime Ability: 20% chance to spawn an extra slime if the spawned tile was a Slime (2)
+  // Disable in classic to keep it pure 2048? Or keep as "flavor"? 
+  // Standard 2048 doesn't have double spawns.
   const lastTile = activeGrid[activeGrid.length - 1];
-  if (lastTile && lastTile.type === TileType.NORMAL && lastTile.value === 2 && lastTile.isNew && Math.random() < 0.2) {
+  if (!isClassic && lastTile && lastTile.type === TileType.NORMAL && lastTile.value === 2 && lastTile.isNew && Math.random() < 0.2) {
       activeGrid = placeOne(activeGrid, 2);
   }
 
@@ -103,6 +114,7 @@ export const spawnTile = (grid: Tile[], size: number, level: number, options?: S
 };
 
 export const tryAutoMerge = (grid: Tile[]): { success: boolean; grid: Tile[]; value: number; mergedId?: string } => {
+  // Legacy perk-based auto merge (random)
   // 5% chance to activate if called
   if (Math.random() > 0.05) return { success: false, grid, value: 0 };
 
@@ -144,7 +156,75 @@ export const tryAutoMerge = (grid: Tile[]): { success: boolean; grid: Tile[]; va
   return { success: true, grid: newGrid, value: newValue, mergedId: newTile.id };
 };
 
-export const moveGrid = (grid: Tile[], direction: Direction, size: number): MoveResult & { powerUpTriggered?: TileType } => {
+// --- CASCADE SYSTEM ---
+export const executeAutoCascade = (grid: Tile[], size: number, cascadeStep: number): { grid: Tile[], rewards: { xp: number, gold: number }, occurred: boolean, mergedId?: string } => {
+    // Deep copy grid and reset visual flags
+    let newGrid: Tile[] = grid.map(t => ({ ...t, isNew: false, mergedFrom: null, isCascade: false })); 
+
+    const getTile = (x: number, y: number) => newGrid.find(t => t.x === x && t.y === y);
+
+    let pair: { t1: Tile, t2: Tile } | null = null;
+
+    // Scan logic: Top-Left to Bottom-Right to find the first available merge
+    for(let y = 0; y < size; y++) {
+        for(let x = 0; x < size; x++) {
+            const t1 = getTile(x, y);
+            if (!t1 || t1.type === TileType.BOSS) continue;
+
+            // Check Right
+            const right = getTile(x + 1, y);
+            if (right && right.type !== TileType.BOSS && right.value === t1.value) {
+                pair = { t1, t2: right };
+                break;
+            }
+
+            // Check Down
+            const down = getTile(x, y + 1);
+            if (down && down.type !== TileType.BOSS && down.value === t1.value) {
+                pair = { t1, t2: down };
+                break;
+            }
+        }
+        if (pair) break;
+    }
+
+    if (!pair) {
+        return { grid, rewards: { xp: 0, gold: 0 }, occurred: false };
+    }
+
+    const { t1, t2 } = pair;
+    const newValue = t1.value * 2;
+    
+    // Multiplier logic: 1.1^cascadeStep
+    const multiplier = Math.pow(1.1, Math.max(0, cascadeStep));
+
+    const mergedTile: Tile = {
+        id: createId(),
+        x: t1.x, // Anchor to top-left tile of the pair
+        y: t1.y,
+        value: newValue,
+        type: TileType.NORMAL,
+        mergedFrom: [t1.id, t2.id],
+        isNew: false,
+        isCascade: true
+    };
+
+    // Remove old tiles, add new one
+    newGrid = newGrid.filter(t => t.id !== t1.id && t.id !== t2.id);
+    newGrid.push(mergedTile);
+
+    return {
+        grid: newGrid,
+        rewards: {
+            xp: Math.floor(newValue * multiplier),
+            gold: Math.floor((newValue / 2) * multiplier)
+        },
+        occurred: true,
+        mergedId: mergedTile.id
+    };
+};
+
+export const moveGrid = (grid: Tile[], direction: Direction, size: number, mode: GameMode): MoveResult & { powerUpTriggered?: TileType } => {
   let moved = false;
   let score = 0;
   let xpGained = 0;
@@ -153,6 +233,7 @@ export const moveGrid = (grid: Tile[], direction: Direction, size: number): Move
   const mergedIds: string[] = [];
   let bossDefeated = false;
   const logs: string[] = [];
+  const isClassic = mode === 'CLASSIC';
 
   const sortedTiles = [...grid];
   const vector = { x: 0, y: 0 };
@@ -184,7 +265,6 @@ export const moveGrid = (grid: Tile[], direction: Direction, size: number): Move
       const collision = newGrid.find(t => t.x === nextX && t.y === nextY);
       
       if (collision) {
-        // Boss Logic: Bosses act as walls. They don't merge, and nothing merges into them.
         if (tile.type === TileType.BOSS || collision.type === TileType.BOSS) {
             break; 
         }
@@ -195,26 +275,26 @@ export const moveGrid = (grid: Tile[], direction: Direction, size: number): Move
           merged = true;
           const mergedValue = tile.value * 2;
           
-          // Check for PowerUp Merges
-          if (tile.type !== TileType.NORMAL) powerUpTriggered = tile.type;
-          if (collision.type !== TileType.NORMAL) powerUpTriggered = collision.type;
+          if (!isClassic) {
+            if (tile.type !== TileType.NORMAL) powerUpTriggered = tile.type;
+            if (collision.type !== TileType.NORMAL) powerUpTriggered = collision.type;
+          }
 
           collision.value = mergedValue;
-          collision.mergedFrom = [tile.id, collision.id]; // Animation source
+          collision.mergedFrom = [tile.id, collision.id];
           collision.type = TileType.NORMAL; 
 
           mergedIndices.add(collision.id);
           mergedIds.push(collision.id);
           
           score += collision.value;
-          xpGained += collision.value * 2;
           
-          // Base Gold
-          goldGained += Math.ceil(collision.value * 0.5);
-
-          // Goblin Ability: Bonus Gold (Value 4 merging into 8)
-          if (collision.value === 8) {
-              goldGained += 5; 
+          if (!isClassic) {
+              xpGained += collision.value * 2;
+              goldGained += Math.ceil(collision.value * 0.5);
+              if (collision.value === 8) {
+                  goldGained += 5; 
+              }
           }
           
           return;
@@ -243,65 +323,65 @@ export const moveGrid = (grid: Tile[], direction: Direction, size: number): Move
     }
   });
 
-  // Post-Process Abilities: Drake (32)
-  const drakeMerges = newGrid.filter(t => t.value === 32 && t.mergedFrom);
-  drakeMerges.forEach(drake => {
-      const neighbors = newGrid.filter(n => 
-          n.id !== drake.id && 
-          n.type !== TileType.BOSS &&
-          n.value < 32 &&
-          Math.abs(n.x - drake.x) + Math.abs(n.y - drake.y) === 1
-      );
-      
-      if (neighbors.length > 0) {
-          const victim = neighbors[Math.floor(Math.random() * neighbors.length)];
-          victim.value *= 2; // Upgrade!
-          victim.mergedFrom = [victim.id];
-          xpGained += victim.value;
-      }
-  });
-
-  // Boss Damage Logic
-  // Iterate through new grid to find bosses
-  const bossTiles = newGrid.filter(t => t.type === TileType.BOSS);
-  let deadBossIds: string[] = [];
-
-  bossTiles.forEach(boss => {
-      if (!boss.health) return;
-
-      // Find merges that happened adjacent to this boss
-      const adjacentMerges = newGrid.filter(t => 
-          mergedIds.includes(t.id) &&
-          Math.abs(t.x - boss.x) + Math.abs(t.y - boss.y) === 1
-      );
-
-      if (adjacentMerges.length > 0) {
-          let totalDamage = 0;
-          adjacentMerges.forEach(m => totalDamage += m.value);
+  // RPG Logic Checks (Disabled in Classic)
+  if (!isClassic) {
+      // Post-Process Abilities: Drake (32)
+      const drakeMerges = newGrid.filter(t => t.value === 32 && t.mergedFrom);
+      drakeMerges.forEach(drake => {
+          const neighbors = newGrid.filter(n => 
+              n.id !== drake.id && 
+              n.type !== TileType.BOSS &&
+              n.value < 32 &&
+              Math.abs(n.x - drake.x) + Math.abs(n.y - drake.y) === 1
+          );
           
-          boss.health -= totalDamage;
-          boss.mergedFrom = ['damage']; // Trigger shake/damage visual
-
-          logs.push(`Boss hit for ${totalDamage} damage!`);
-
-          if (boss.health <= 0) {
-              deadBossIds.push(boss.id);
-              bossDefeated = true;
-              
-              // Rewards
-              const rewardXP = (boss.maxHealth || 100) * 5;
-              const rewardGold = (boss.maxHealth || 100);
-              
-              xpGained += rewardXP;
-              goldGained += rewardGold;
-              logs.push(`Boss Defeated! +${rewardGold}G +${rewardXP}XP`);
+          if (neighbors.length > 0) {
+              const victim = neighbors[Math.floor(Math.random() * neighbors.length)];
+              victim.value *= 2; // Upgrade!
+              victim.mergedFrom = [victim.id];
+              xpGained += victim.value;
           }
-      }
-  });
+      });
 
-  if (deadBossIds.length > 0) {
-      newGrid = newGrid.filter(t => !deadBossIds.includes(t.id));
-      moved = true; 
+      // Boss Damage Logic
+      const bossTiles = newGrid.filter(t => t.type === TileType.BOSS);
+      let deadBossIds: string[] = [];
+
+      bossTiles.forEach(boss => {
+          if (!boss.health) return;
+
+          const adjacentMerges = newGrid.filter(t => 
+              mergedIds.includes(t.id) &&
+              Math.abs(t.x - boss.x) + Math.abs(t.y - boss.y) === 1
+          );
+
+          if (adjacentMerges.length > 0) {
+              let totalDamage = 0;
+              adjacentMerges.forEach(m => totalDamage += m.value);
+              
+              boss.health -= totalDamage;
+              boss.mergedFrom = ['damage'];
+
+              logs.push(`Boss hit for ${totalDamage} damage!`);
+
+              if (boss.health <= 0) {
+                  deadBossIds.push(boss.id);
+                  bossDefeated = true;
+                  
+                  const rewardXP = (boss.maxHealth || 100) * 5;
+                  const rewardGold = (boss.maxHealth || 100);
+                  
+                  xpGained += rewardXP;
+                  goldGained += rewardGold;
+                  logs.push(`Boss Defeated! +${rewardGold}G +${rewardXP}XP`);
+              }
+          }
+      });
+
+      if (deadBossIds.length > 0) {
+          newGrid = newGrid.filter(t => !deadBossIds.includes(t.id));
+          moved = true; 
+      }
   }
 
   // Combo Calculation
@@ -311,8 +391,10 @@ export const moveGrid = (grid: Tile[], direction: Direction, size: number): Move
       comboMultiplier = 1 + (mergeCount - 1) * 0.5;
   }
 
-  xpGained = Math.floor(xpGained * comboMultiplier);
-  goldGained = Math.floor(goldGained * comboMultiplier);
+  if (!isClassic) {
+      xpGained = Math.floor(xpGained * comboMultiplier);
+      goldGained = Math.floor(goldGained * comboMultiplier);
+  }
 
   return { grid: newGrid, score, xpGained, goldGained, moved, mergedIds, powerUpTriggered, combo: mergeCount, comboMultiplier, logs, bossDefeated };
 };
@@ -425,7 +507,8 @@ export const applyVoidSingularity = (grid: Tile[], size: number): { grid: Tile[]
     return { grid: newTiles, score };
 };
 
-export const checkLoot = (level: number, mergedIds: string[], hasLuckyCharm: boolean = false): LootResult | null => {
+export const checkLoot = (level: number, mergedIds: string[], hasLuckyCharm: boolean = false, isClassic: boolean = false): LootResult | null => {
+  if (isClassic) return null;
   if (mergedIds.length === 0) return null;
   const chance = (0.05 + (mergedIds.length * 0.01)) * (hasLuckyCharm ? 2 : 1);
   if (Math.random() < chance) {
@@ -447,6 +530,8 @@ export const checkLoot = (level: number, mergedIds: string[], hasLuckyCharm: boo
 };
 
 export const useInventoryItem = (state: GameState, item: InventoryItem): Partial<GameState> | null => {
+  if (state.gameMode === 'CLASSIC') return null;
+
   const newState: Partial<GameState> = {
     inventory: state.inventory.filter(i => i.id !== item.id),
     logs: [...state.logs, `Used ${item.name}!`]
@@ -455,7 +540,7 @@ export const useInventoryItem = (state: GameState, item: InventoryItem): Partial
   if (item.type === ItemType.BOMB_SCROLL) {
     let grid = [...state.grid];
     const candidates = grid.filter(t => t.type !== TileType.BOSS);
-    candidates.sort((a, b) => a.value - b.value);
+    candidates.sort((a, b) => a.value - a.value);
     const toRemoveIds = candidates.slice(0, 3).map(t => t.id);
     newState.grid = state.grid.filter(t => !toRemoveIds.includes(t.id));
     return newState;
@@ -489,18 +574,73 @@ export const useInventoryItem = (state: GameState, item: InventoryItem): Partial
   return null;
 };
 
-export const initializeGame = (reset = false): GameState => {
+export const initializeGame = (reset = false, selectedClass: HeroClass = HeroClass.ADVENTURER, mode: GameMode = 'RPG'): GameState => {
   const saved = localStorage.getItem('2048_rpg_state_v3');
+  
+  // Try to load account level for cascade check
+  let accountLevel = 1;
+  try {
+      const profileStr = localStorage.getItem(PROFILE_STORAGE_KEY);
+      if (profileStr) {
+          const profile: PlayerProfile = JSON.parse(profileStr);
+          accountLevel = profile.accountLevel || 1;
+      }
+  } catch (e) {
+      console.warn("Failed to load profile for init", e);
+  }
+
+  const defaultSettings: InputSettings = {
+    enableKeyboard: true,
+    enableSwipe: true,
+    enableScroll: true,
+    invertSwipe: false,
+    invertScroll: false,
+    sensitivity: 5
+  };
+
+  const startStageConfig = getStage(1);
+  const startStage: Stage = {
+      name: startStageConfig.name,
+      minLevel: startStageConfig.minLevel,
+      backgroundUrl: getStageBackground(startStageConfig.name),
+      colorTheme: startStageConfig.color,
+      barColor: startStageConfig.barColor
+  };
+
+  const initialRunStats: RunStats = {
+      highestTile: 2,
+      highestMonster: 'Slime',
+      stageReached: startStage.name,
+      turnCount: 0,
+      powerUpsUsed: 0,
+      goldEarned: 0,
+      cascadesTriggered: 0,
+      startTime: Date.now(),
+      bossesDefeated: 0,
+      mergesCount: 0,
+      itemsCrafted: 0
+  };
+
   if (saved && !reset) {
     try {
         const parsed = JSON.parse(saved);
+        
         const stageConfig = getStage(parsed.level || 1);
         parsed.currentStage = {
             name: stageConfig.name,
             minLevel: stageConfig.minLevel,
             backgroundUrl: getStageBackground(stageConfig.name),
-            colorTheme: stageConfig.color
+            colorTheme: stageConfig.color,
+            barColor: stageConfig.barColor || startStageConfig.barColor
         };
+        if (!parsed.settings) parsed.settings = defaultSettings;
+        if (!parsed.runStats) parsed.runStats = initialRunStats;
+        if (!parsed.selectedClass) parsed.selectedClass = HeroClass.ADVENTURER;
+        if (!parsed.gameMode) parsed.gameMode = 'RPG';
+        
+        // Update account level on load in case it changed
+        parsed.accountLevel = accountLevel;
+
         return parsed;
     } catch (e) {
         console.error("Failed to load save", e);
@@ -509,20 +649,30 @@ export const initializeGame = (reset = false): GameState => {
 
   const initialSize = GRID_SIZE_INITIAL;
   let grid: Tile[] = [];
-  grid = spawnTile(grid, initialSize, 1, 2);
-  grid = spawnTile(grid, initialSize, 1, 2);
+  grid = spawnTile(grid, initialSize, 1, { forcedValue: 2, isClassic: mode === 'CLASSIC' });
+  grid = spawnTile(grid, initialSize, 1, { forcedValue: 2, isClassic: mode === 'CLASSIC' });
 
   const savedAchievements = localStorage.getItem(ACHIEVEMENTS_STORAGE_KEY);
   const achievements = savedAchievements ? JSON.parse(savedAchievements) : [];
   const savedHighscore = localStorage.getItem('2048_rpg_highscore');
-  
-  const startStageConfig = getStage(1);
-  const startStage: Stage = {
-      name: startStageConfig.name,
-      minLevel: startStageConfig.minLevel,
-      backgroundUrl: getStageBackground(startStageConfig.name),
-      colorTheme: startStageConfig.color
-  };
+
+  // Class Starting Bonuses (Skip in Classic)
+  const inventory: InventoryItem[] = [];
+  if (mode !== 'CLASSIC') {
+      if (selectedClass === HeroClass.WARRIOR) {
+          const def = getItemDefinition(ItemType.BOMB_SCROLL);
+          inventory.push({ id: createId(), type: ItemType.BOMB_SCROLL, name: def.name, description: def.desc, icon: def.icon });
+      } else if (selectedClass === HeroClass.ROGUE) {
+           const def = getItemDefinition(ItemType.REROLL_TOKEN);
+          inventory.push({ id: createId(), type: ItemType.REROLL_TOKEN, name: def.name, description: def.desc, icon: def.icon });
+      } else if (selectedClass === HeroClass.MAGE) {
+           const def = getItemDefinition(ItemType.XP_POTION);
+          inventory.push({ id: createId(), type: ItemType.XP_POTION, name: def.name, description: def.desc, icon: def.icon });
+      } else if (selectedClass === HeroClass.PALADIN) {
+           const def = getItemDefinition(ItemType.GOLDEN_RUNE);
+          inventory.push({ id: createId(), type: ItemType.GOLDEN_RUNE, name: def.name, description: def.desc, icon: def.icon });
+      }
+  }
 
   return {
     grid,
@@ -531,13 +681,15 @@ export const initializeGame = (reset = false): GameState => {
     xp: 0,
     level: 1,
     gold: 0,
-    inventory: [],
+    inventory,
     gridSize: initialSize,
     gameOver: false,
     victory: false,
     gameWon: false,
     combo: 0,
-    logs: ["Welcome to the Dungeon."],
+    isCascading: false,
+    cascadeStep: 0,
+    logs: mode === 'CLASSIC' ? ["Classic Mode", "Survive."] : [`Class: ${selectedClass}`, "Welcome to the Dungeon."],
     activeEffects: [],
     effectCounters: {},
     currentStage: startStage,
@@ -551,7 +703,12 @@ export const initializeGame = (reset = false): GameState => {
         highestTile: 2,
         totalMoves: 0
     },
-    achievements
+    runStats: initialRunStats,
+    achievements,
+    settings: defaultSettings,
+    selectedClass,
+    gameMode: mode,
+    accountLevel
   };
 };
 
@@ -593,6 +750,8 @@ export const getHighscores = (): LeaderboardEntry[] => {
 };
 
 export const checkAchievements = (state: GameState): Achievement[] => {
+    // Achievements disabled in Classic? Maybe keep them for score hunting.
+    // Keeping enabled.
     const unlocked: Achievement[] = [];
     ACHIEVEMENTS.forEach(ach => {
         if (!state.achievements.includes(ach.id)) {
@@ -613,4 +772,5 @@ export const clearSaveData = () => {
     localStorage.removeItem('2048_rpg_highscore');
     localStorage.removeItem(LEADERBOARD_KEY);
     localStorage.removeItem(ACHIEVEMENTS_STORAGE_KEY);
+    localStorage.removeItem(PROFILE_STORAGE_KEY);
 };

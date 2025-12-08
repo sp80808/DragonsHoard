@@ -29,6 +29,16 @@ export enum ItemType {
   ASCENDANT_RUNE = 'ASCENDANT_RUNE' 
 }
 
+export enum HeroClass {
+  ADVENTURER = 'ADVENTURER', // Balanced, Standard Start
+  WARRIOR = 'WARRIOR',       // Starts with Bomb Scroll
+  ROGUE = 'ROGUE',           // Starts with Reroll Token
+  MAGE = 'MAGE',             // Starts with XP Potion
+  PALADIN = 'PALADIN'        // Starts with Golden Rune
+}
+
+export type GameMode = 'RPG' | 'CLASSIC';
+
 export interface InventoryItem {
   id: string;
   type: ItemType;
@@ -55,6 +65,7 @@ export interface Tile {
   type: TileType;
   mergedFrom?: string[] | null;
   isNew?: boolean;
+  isCascade?: boolean; // Visual cue for cascade merges
   health?: number;
   maxHealth?: number;
 }
@@ -64,6 +75,7 @@ export interface Stage {
   minLevel: number;
   backgroundUrl: string;
   colorTheme: string;
+  barColor: string; // CSS gradient class for XP bar
 }
 
 export interface FloatingText {
@@ -85,6 +97,46 @@ export interface GameStats {
   totalMoves: number;
 }
 
+export interface RunStats {
+  highestTile: number;
+  highestMonster: string;
+  stageReached: string;
+  turnCount: number;
+  powerUpsUsed: number;
+  goldEarned: number;
+  cascadesTriggered: number;
+  startTime: number;
+  endTime?: number;
+  
+  // Extended stats for Bounties
+  bossesDefeated: number;
+  mergesCount: number;
+  itemsCrafted: number;
+}
+
+export interface DailyBounty {
+  id: string;
+  description: string;
+  targetStat: keyof RunStats;
+  targetValue: number;
+  currentValue: number; // For tracking across multiple runs if we wanted (currently per-run for simplicity)
+  rewardXp: number;
+  isCompleted: boolean;
+}
+
+export interface PlayerProfile {
+  id: string;
+  totalAccountXp: number;
+  accountLevel: number;
+  gamesPlayed: number;
+  highScore: number;
+  unlockedFeatures: string[]; // ['NG+', 'HardMode', 'Reroll']
+  unlockedClasses: HeroClass[];
+  activeBounties: DailyBounty[];
+  lastBountyDate: string; // YYYY-MM-DD
+  lastPlayed: string;
+}
+
 export interface Achievement {
   id: string;
   name: string;
@@ -93,6 +145,15 @@ export interface Achievement {
   condition: (stats: GameStats, state: GameState) => boolean;
   reward?: { gold?: number; xp?: number; item?: ItemType };
   isSecret?: boolean;
+}
+
+export interface InputSettings {
+  enableKeyboard: boolean;
+  enableSwipe: boolean;
+  enableScroll: boolean;
+  invertSwipe: boolean;
+  invertScroll: boolean;
+  sensitivity: number; // 1-10 (For scroll/swipe threshold)
 }
 
 export interface GameState {
@@ -108,6 +169,8 @@ export interface GameState {
   victory: boolean;
   gameWon: boolean;
   combo: number;
+  isCascading?: boolean; // Blocks input during cascade sequence
+  cascadeStep?: number; // Tracks current cascade iteration for multiplier
   logs: string[];
   activeEffects: string[];
   effectCounters: Record<string, number>; 
@@ -116,7 +179,12 @@ export interface GameState {
   rerolls: number;
   lastSpawnedTileId?: string;
   stats: GameStats;
+  runStats: RunStats;
   achievements: string[]; // IDs of unlocked achievements
+  settings: InputSettings;
+  selectedClass: HeroClass; // Track current run class
+  gameMode: GameMode; // RPG or CLASSIC
+  accountLevel: number; // Used for gating cascades
 }
 
 export interface MoveResult {

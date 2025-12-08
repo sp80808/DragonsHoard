@@ -6,16 +6,17 @@ import { Store } from './components/Store';
 import { SplashScreen } from './components/SplashScreen';
 import { Leaderboard } from './components/Leaderboard';
 import { Settings } from './components/Settings';
-import { Direction, GameState, TileType, InventoryItem, FloatingText, CraftingRecipe, View, Achievement, ItemType } from './types';
-import { initializeGame, moveGrid, spawnTile, isGameOver, checkLoot, useInventoryItem, applyMidasTouch, applyChronosShift, applyVoidSingularity, tryAutoMerge, saveHighscore, checkAchievements, savePersistentAchievements } from './services/gameLogic';
-import { SHOP_ITEMS, getXpThreshold, getStage, getStageBackground, getItemDefinition } from './constants';
+import { RunSummary } from './components/RunSummary';
+import { Direction, GameState, TileType, InventoryItem, FloatingText, CraftingRecipe, View, Achievement, ItemType, InputSettings, HeroClass, GameMode } from './types';
+import { initializeGame, moveGrid, spawnTile, isGameOver, checkLoot, useInventoryItem, applyMidasTouch, applyChronosShift, applyVoidSingularity, tryAutoMerge, checkAchievements, savePersistentAchievements, executeAutoCascade } from './services/gameLogic';
+import { SHOP_ITEMS, getXpThreshold, getStage, getStageBackground, getItemDefinition, TILE_STYLES } from './constants';
 import { audioService } from './services/audioService';
-import { AlertTriangle, Crown, RefreshCw, Trophy } from 'lucide-react';
+import { Trophy, Star, Skull, Zap, Info } from 'lucide-react';
 
 // Actions
 type Action = 
   | { type: 'MOVE'; direction: Direction }
-  | { type: 'RESTART' }
+  | { type: 'RESTART'; selectedClass?: HeroClass; mode?: GameMode }
   | { type: 'CONTINUE' }
   | { type: 'LOAD_GAME'; state: GameState }
   | { type: 'BUY_ITEM'; item: typeof SHOP_ITEMS[0] }
@@ -26,12 +27,15 @@ type Action =
   | { type: 'APPLY_POWERUP_RESULT'; resultState: Partial<GameState> }
   | { type: 'REROLL' }
   | { type: 'GAME_OVER_ACK' }
-  | { type: 'UNLOCK_ACHIEVEMENT'; achievement: Achievement };
+  | { type: 'UNLOCK_ACHIEVEMENT'; achievement: Achievement }
+  | { type: 'UPDATE_SETTINGS'; settings: InputSettings }
+  | { type: 'CASCADE_STEP'; payload: { grid: any[], rewards: { xp: number, gold: number } } }
+  | { type: 'CASCADE_COMPLETE' };
 
 const reducer = (state: GameState, action: Action): GameState => {
   switch (action.type) {
     case 'RESTART':
-      return initializeGame(true); // Force reset true to ignore localStorage save
+      return initializeGame(true, action.selectedClass || HeroClass.ADVENTURER, action.mode || 'RPG'); 
       
     case 'LOAD_GAME':
       return action.state;
@@ -40,21 +44,27 @@ const reducer = (state: GameState, action: Action): GameState => {
       return { ...state, victory: false, gameWon: true };
     
     case 'GAME_OVER_ACK':
-        saveHighscore(state);
+        // Legacy ack, can be removed or kept for safety
         return state;
 
     case 'CLEAR_LOGS':
         return { ...state, logs: [] };
 
+    case 'UPDATE_SETTINGS': {
+        const newState = { ...state, settings: action.settings };
+        localStorage.setItem('2048_rpg_state_v3', JSON.stringify(newState));
+        return newState;
+    }
+
     case 'UNLOCK_ACHIEVEMENT':
         const newAchievements = [...state.achievements, action.achievement.id];
-        savePersistentAchievements(newAchievements); // Save to persistent storage
+        savePersistentAchievements(newAchievements); 
         return {
             ...state,
             achievements: newAchievements,
             gold: state.gold + (action.achievement.reward?.gold || 0),
             xp: state.xp + (action.achievement.reward?.xp || 0),
-            logs: [...state.logs, `Achievement: ${action.achievement.name}`]
+            logs: [...state.logs, `ACHIEVEMENT UNLOCKED: ${action.achievement.name}`]
         };
 
     case 'BUY_ITEM': {
@@ -124,12 +134,20 @@ const reducer = (state: GameState, action: Action): GameState => {
     case 'USE_ITEM': {
         const result = useInventoryItem(state, action.item);
         if (!result) return state;
-        const newState = { ...state, ...result };
+        
+        // Track usage in RunStats
+        const updatedRunStats = {
+            ...state.runStats,
+            powerUpsUsed: state.runStats.powerUpsUsed + 1
+        };
+
+        const newState = { ...state, ...result, runStats: updatedRunStats };
         localStorage.setItem('2048_rpg_state_v3', JSON.stringify(newState));
         return newState as GameState;
     }
 
     case 'TRIGGER_POWERUP_EFFECT':
+        // Track usage if triggered directly (mostly handled via USE_ITEM, but good to double check)
         return { ...state, powerUpEffect: action.effect };
 
     case 'APPLY_POWERUP_RESULT':
@@ -155,7 +173,7 @@ const reducer = (state: GameState, action: Action): GameState => {
         const gridWithoutLast = state.grid.filter(t => t.id !== state.lastSpawnedTileId);
         if (gridWithoutLast.length === state.grid.length) return state;
 
-        const rerolledGrid = spawnTile(gridWithoutLast, state.gridSize, state.level);
+        const rerolledGrid = spawnTile(gridWithoutLast, state.gridSize, state.level, { isClassic: state.gameMode === 'CLASSIC' });
         const newTile = rerolledGrid.find(t => !gridWithoutLast.includes(t));
 
         audioService.playMove();
@@ -171,9 +189,9 @@ const reducer = (state: GameState, action: Action): GameState => {
     }
 
     case 'MOVE': {
-      if (state.gameOver || (state.victory && !state.gameWon) || state.powerUpEffect) return state;
+      if (state.gameOver || (state.victory && !state.gameWon) || state.powerUpEffect || state.isCascading) return state;
 
-      const { grid: movedGrid, score, xpGained, goldGained, moved, mergedIds, powerUpTriggered, combo, comboMultiplier, logs: moveLogs } = moveGrid(state.grid, action.direction, state.gridSize);
+      const { grid: movedGrid, score, xpGained, goldGained, moved, mergedIds, powerUpTriggered, combo, comboMultiplier, logs: moveLogs } = moveGrid(state.grid, action.direction, state.gridSize, state.gameMode);
 
       if (!moved) return state;
 
@@ -202,6 +220,16 @@ const reducer = (state: GameState, action: Action): GameState => {
       const maxTile = Math.max(...newGrid.map(t => t.value));
       if (maxTile > newStats.highestTile) newStats.highestTile = maxTile;
 
+      // Update RunStats
+      let newRunStats = { 
+          ...state.runStats,
+          turnCount: newStats.totalMoves,
+          goldEarned: newStats.goldCollected,
+          highestTile: newStats.highestTile,
+          highestMonster: TILE_STYLES[newStats.highestTile]?.label || 'Monster',
+          mergesCount: state.runStats.mergesCount + mergedIds.length
+      };
+
       const mergedTiles = newGrid.filter(t => mergedIds.includes(t.id));
       mergedTiles.forEach(t => {
           if (t.value === 4) newStats.slimesMerged += 1;
@@ -221,7 +249,7 @@ const reducer = (state: GameState, action: Action): GameState => {
 
       // Check for Loot
       const hasLuckyCharm = (newEffectCounters['LUCKY_LOOT'] || 0) > 0;
-      const loot = checkLoot(state.level, mergedIds, hasLuckyCharm);
+      const loot = checkLoot(state.level, mergedIds, hasLuckyCharm, state.gameMode === 'CLASSIC');
       if (loot) {
         newLogs.push(loot.message);
         if (loot.gold) newGold += loot.gold;
@@ -234,499 +262,531 @@ const reducer = (state: GameState, action: Action): GameState => {
         }
       }
 
-      // Handle XP & Level Up & Stage
-      let threshold = getXpThreshold(newLevel);
-      while (newXp >= threshold) {
-        newXp -= threshold;
-        newLevel++;
-        newLogs.push(`LEVEL UP! You are now level ${newLevel}!`);
-        audioService.playLevelUp();
-        
-        if (newLevel % 5 === 0 && newGridSize < 8) {
-           newGridSize++;
-           newLogs.push(`Grid Expanded to ${newGridSize}x${newGridSize}!`);
-        }
-        if (newLevel === 15) newLogs.push("Reroll Unlocked!");
+      // Handle XP & Level Up & Stage (Disabled in Classic)
+      if (state.gameMode !== 'CLASSIC') {
+        let threshold = getXpThreshold(newLevel);
+        while (newXp >= threshold) {
+            newXp -= threshold;
+            newLevel++;
+            newLogs.push(`LEVEL UP! You are now level ${newLevel}!`);
+            audioService.playLevelUp();
+            
+            if (newLevel % 5 === 0 && newGridSize < 8) {
+            newGridSize++;
+            newLogs.push(`Grid Expanded to ${newGridSize}x${newGridSize}!`);
+            }
+            if (newLevel === 15) newLogs.push("Reroll Unlocked!");
 
-        const stageConfig = getStage(newLevel);
-        if (stageConfig.name !== currentStage.name) {
-            currentStage = {
-                name: stageConfig.name,
-                minLevel: stageConfig.minLevel,
-                backgroundUrl: getStageBackground(stageConfig.name),
-                colorTheme: stageConfig.color
-            };
-            newLogs.push(`Entering ${currentStage.name}...`);
-        }
+            const stageConfig = getStage(newLevel);
+            if (stageConfig.name !== currentStage.name) {
+                currentStage = {
+                    name: stageConfig.name,
+                    minLevel: stageConfig.minLevel,
+                    backgroundUrl: getStageBackground(stageConfig.name),
+                    colorTheme: stageConfig.color,
+                    barColor: stageConfig.barColor
+                };
+                newLogs.push(`ENTERING STAGE: ${currentStage.name}`);
+            }
+            
+            // Update stage reached
+            newRunStats.stageReached = currentStage.name;
 
-        threshold = getXpThreshold(newLevel);
+            threshold = getXpThreshold(newLevel);
+        }
       }
 
       // Spawn new tile logic
       let forcedValue;
       let forcedType;
       
-      // Boss Spawning
       const existingBoss = newGrid.find(t => t.type === TileType.BOSS);
-      if (newLevel > 0 && newLevel % 5 === 0 && !existingBoss && Math.random() < 0.1) {
+      if (newLevel > 0 && newLevel % 5 === 0 && !existingBoss && Math.random() < 0.1 && state.gameMode !== 'CLASSIC') {
           forcedType = TileType.BOSS;
-          newLogs.push("A BOSS APPEARED!");
+          newLogs.push("WARNING: A BOSS APPEARED!");
       } else if (activeEffects.includes('GOLDEN_SPAWN')) {
           forcedValue = 16;
           newLogs.push("Rune activated! High tier spawn!");
           activeEffects = activeEffects.filter(e => e !== 'GOLDEN_SPAWN');
       } else if ((newEffectCounters['ASCENDANT_SPAWN'] || 0) > 0) {
-          forcedValue = 16; 
+          forcedValue = 32;
           newEffectCounters['ASCENDANT_SPAWN']--;
+          if (newEffectCounters['ASCENDANT_SPAWN'] === 0) newLogs.push("Ascendant effect expired.");
       } else if ((newEffectCounters['DEMON_CURSE'] || 0) > 0) {
-          forcedValue = 8; // Cursed spawn (Orc)
-          newEffectCounters['DEMON_CURSE']--;
+          forcedValue = 2; 
+          forcedType = TileType.BOMB;
+          newEffectCounters['DEMON_CURSE'] = 0;
+          newLogs.push("The curse manifests!");
       }
+      
+      let finalGrid = spawnTile(newGrid, newGridSize, newLevel, { 
+          forcedValue, 
+          type: forcedType, 
+          bossLevel: Math.floor(newLevel / 5),
+          isClassic: state.gameMode === 'CLASSIC'
+      });
+      const lastSpawned = finalGrid.find(t => !newGrid.includes(t));
 
-      const gridBeforeSpawn = newGrid;
-      newGrid = spawnTile(newGrid, newGridSize, newLevel, { forcedValue, type: forcedType });
-      const spawnedTile = newGrid.find(t => !gridBeforeSpawn.includes(t));
-      const lastSpawnedTileId = spawnedTile?.id;
-
-      if (newLevel >= 20) {
-          const auto = tryAutoMerge(newGrid);
-          if (auto.success) {
-              newGrid = auto.grid;
-              const val = auto.value;
-              newScore += val;
-              newXp += val * 2 * (newLevel >= 7 ? 1.5 : 1);
-              newGold += Math.ceil(val * 0.5);
-              newLogs.push("⚡ Auto-Merge triggered!");
-              audioService.playMerge(val);
+      // Auto Merge Perk check (Legacy, kept for backup logic) - Disable in Classic
+      if (newLevel >= 20 && state.gameMode !== 'CLASSIC') {
+          const autoMerge = tryAutoMerge(finalGrid);
+          if (autoMerge.success) {
+              finalGrid = autoMerge.grid;
+              newScore += autoMerge.value;
+              newLogs.push("Auto-Merge Perk Activated!");
           }
       }
 
+      // PowerUps Triggering
       if (powerUpTriggered) {
-          nextPowerUpEffect = powerUpTriggered;
+          // Track Run Stats
+          newRunStats.powerUpsUsed += 1;
+
+          if (powerUpTriggered === TileType.RUNE_MIDAS) nextPowerUpEffect = 'MIDAS';
+          if (powerUpTriggered === TileType.RUNE_CHRONOS) nextPowerUpEffect = 'CHRONOS';
+          if (powerUpTriggered === TileType.RUNE_VOID) nextPowerUpEffect = 'VOID';
+          if (powerUpTriggered === TileType.BOMB) {
+              audioService.playBomb();
+              newLogs.push("BOMB DETONATED!");
+              const sorted = finalGrid.filter(t => t.type !== TileType.BOSS).sort((a, b) => a.value - b.value);
+              const toKill = sorted.slice(0, 3).map(t => t.id);
+              finalGrid = finalGrid.filter(t => !toKill.includes(t.id));
+          }
       }
 
-      const has2048 = newGrid.some(t => t.value === 2048);
-      const isVic = has2048 && !state.gameWon;
-      const isOver = isGameOver(newGrid, newGridSize);
+      const gameOver = isGameOver(finalGrid, newGridSize);
+      const victory = !state.gameWon && finalGrid.some(t => t.value === 2048);
+      
+      // Cascade Gating Logic: Only cascade if Account Level >= 10 AND not Classic Mode
+      const canCascade = state.accountLevel >= 10 && state.gameMode !== 'CLASSIC';
 
-      const newBest = Math.max(state.bestScore, newScore);
-      if (newBest > state.bestScore) localStorage.setItem('2048_rpg_highscore', newBest.toString());
-      
-      const newState = {
+      const nextState: GameState = {
         ...state,
-        grid: newGrid,
+        grid: finalGrid,
         score: newScore,
-        bestScore: newBest,
-        xp: Math.floor(newXp),
-        gold: newGold,
+        bestScore: Math.max(state.bestScore, newScore),
+        xp: newXp,
         level: newLevel,
-        gridSize: newGridSize,
+        gold: newGold,
         inventory: newInventory,
-        activeEffects: activeEffects,
+        gridSize: newGridSize,
+        gameOver,
+        victory,
+        logs: newLogs.slice(-4), // Limit logs for mobile space
+        activeEffects,
         effectCounters: newEffectCounters,
-        logs: newLogs.slice(-3),
-        victory: isVic,
-        gameOver: isOver,
-        currentStage: currentStage,
+        currentStage,
         powerUpEffect: nextPowerUpEffect,
-        lastSpawnedTileId,
+        lastSpawnedTileId: lastSpawned?.id,
         stats: newStats,
-        combo: comboMultiplier > 1 ? combo : 0,
-        achievements: state.achievements // Persisted in memory, but updated in logic
+        runStats: newRunStats,
+        gameWon: state.gameWon || victory,
+        isCascading: canCascade, // Will trigger effect if true
+        cascadeStep: 0
       };
-      
-      localStorage.setItem('2048_rpg_state_v3', JSON.stringify(newState));
-      return newState;
+
+      localStorage.setItem('2048_rpg_state_v3', JSON.stringify(nextState));
+      return nextState;
     }
+
+    case 'CASCADE_STEP': {
+        const { grid, rewards } = action.payload;
+        const newStep = (state.cascadeStep || 0) + 1;
+        const multiplier = Math.pow(1.1, newStep).toFixed(1);
+        
+        audioService.playMerge(100); 
+
+        // Update Run Stats for cascade
+        const updatedRunStats = {
+            ...state.runStats,
+            cascadesTriggered: state.runStats.cascadesTriggered + 1,
+            goldEarned: state.runStats.goldEarned + rewards.gold
+        };
+
+        return {
+            ...state,
+            grid,
+            xp: state.xp + rewards.xp,
+            gold: state.gold + rewards.gold,
+            cascadeStep: newStep,
+            runStats: updatedRunStats,
+            logs: [...state.logs, `Cascade x${newStep}! (${multiplier}x Rewards)`].slice(-4),
+            isCascading: true 
+        };
+    }
+
+    case 'CASCADE_COMPLETE': {
+        return {
+            ...state,
+            isCascading: false,
+            cascadeStep: 0
+        };
+    }
+
     default:
       return state;
   }
 };
 
 const App: React.FC = () => {
-  const [state, dispatch] = useReducer(reducer, null, () => initializeGame(true));
+  const [state, dispatch] = useReducer(reducer, null, () => initializeGame());
   const [view, setView] = useState<View>('SPLASH');
   const [showStore, setShowStore] = useState(false);
-  const [floatingTexts, setFloatingTexts] = useState<FloatingText[]>([]);
-  const [stageAnnouncement, setStageAnnouncement] = useState<string | null>(null);
-  const [achievementToast, setAchievementToast] = useState<Achievement | null>(null);
-  const [itemEffect, setItemEffect] = useState<ItemType | null>(null);
   
-  const prevXp = useRef(state.xp);
-  const prevGold = useRef(state.gold);
-  const prevStage = useRef(state.currentStage.name);
-
-  // Check if boss is present for visual effect
-  const bossPresent = state && state.grid ? state.grid.some(t => t.type === TileType.BOSS) : false;
-
-  // Clear item effect after animation
+  // PowerUp Effects Handling
   useEffect(() => {
-    if (itemEffect) {
-      const timer = setTimeout(() => setItemEffect(null), 1000);
-      return () => clearTimeout(timer);
-    }
-  }, [itemEffect]);
+      if (state.powerUpEffect) {
+          setTimeout(() => {
+            let resultState: Partial<GameState> = {};
+            if (state.powerUpEffect === 'MIDAS') {
+                const res = applyMidasTouch(state.grid);
+                resultState = { grid: res.grid, score: state.score + res.score, logs: [...state.logs, `Midas: +${res.score} pts!`] };
+            } else if (state.powerUpEffect === 'CHRONOS') {
+                const newGrid = applyChronosShift(state.grid, state.gridSize);
+                resultState = { grid: newGrid, logs: [...state.logs, "Time Shifted!"] };
+            } else if (state.powerUpEffect === 'VOID') {
+                const res = applyVoidSingularity(state.grid, state.gridSize);
+                resultState = { grid: res.grid, score: state.score + res.score, logs: [...state.logs, "Void consumed board!"] };
+            }
+            dispatch({ type: 'APPLY_POWERUP_RESULT', resultState });
+          }, 600); 
+      }
+  }, [state.powerUpEffect]);
 
-  // Check Achievements on state change
+  // Cascade Chain Reaction Loop
+  useEffect(() => {
+      if (state.isCascading) {
+          const timer = setTimeout(() => {
+              if ((state.cascadeStep || 0) >= 8) {
+                  dispatch({ type: 'CASCADE_COMPLETE' });
+                  return;
+              }
+
+              const result = executeAutoCascade(state.grid, state.gridSize, (state.cascadeStep || 0) + 1);
+              
+              if (result.occurred) {
+                  dispatch({ type: 'CASCADE_STEP', payload: result });
+              } else {
+                  dispatch({ type: 'CASCADE_COMPLETE' });
+              }
+          }, 300);
+
+          return () => clearTimeout(timer);
+      }
+  }, [state.isCascading, state.grid, state.cascadeStep, state.gridSize]);
+
+  // Achievements Check
   useEffect(() => {
       const unlocked = checkAchievements(state);
-      if (unlocked.length > 0) {
-          unlocked.forEach(ach => {
-             dispatch({ type: 'UNLOCK_ACHIEVEMENT', achievement: ach });
-             setAchievementToast(ach); // Show last one as toast for now
-             setTimeout(() => setAchievementToast(null), 4000);
-          });
-      }
-  }, [state.stats, state.gold, state.xp]); // Trigger on relevant changes
+      unlocked.forEach(ach => {
+          dispatch({ type: 'UNLOCK_ACHIEVEMENT', achievement: ach });
+      });
+  }, [state.stats]);
 
-  // Power Up Logic
+  // Keyboard
   useEffect(() => {
-    if (state.powerUpEffect) {
-        const timer = setTimeout(() => {
-            let result: Partial<GameState> = {};
-            let logs = [...state.logs];
-            
-            if (state.powerUpEffect === TileType.RUNE_MIDAS) {
-                 const { grid, score } = applyMidasTouch(state.grid);
-                 result.grid = grid;
-                 result.score = state.score + score;
-                 result.xp = state.xp + (score * 2);
-                 logs.push("Midas Touch! Massive Gold!");
-                 result.gold = state.gold + Math.floor(score / 4);
-                 audioService.playLevelUp();
-            } else if (state.powerUpEffect === TileType.RUNE_CHRONOS) {
-                 result.grid = applyChronosShift(state.grid, state.gridSize);
-                 logs.push("Time Shift! Grid Reordered.");
-                 audioService.playMove();
-            } else if (state.powerUpEffect === TileType.RUNE_VOID) {
-                 const { grid, score } = applyVoidSingularity(state.grid, state.gridSize);
-                 result.grid = grid;
-                 result.score = state.score + score;
-                 logs.push("Void Consumed the Board...");
-                 audioService.playBomb();
-            }
-            
-            result.logs = logs;
-            dispatch({ type: 'APPLY_POWERUP_RESULT', resultState: result });
-        }, 1000);
-        return () => clearTimeout(timer);
-    }
-  }, [state.powerUpEffect, state.grid, state.score, state.xp, state.gold, state.logs, state.gridSize]);
+    if (!state.settings.enableKeyboard) return;
 
-  useEffect(() => {
-    if (state.logs.length > 0) {
-        const timer = setTimeout(() => {
-            dispatch({ type: 'CLEAR_LOGS' });
-        }, 4000);
-        return () => clearTimeout(timer);
-    }
-  }, [state.logs]);
-
-  useEffect(() => {
-    const texts: FloatingText[] = [];
-    const now = Date.now();
-
-    if (state.xp > prevXp.current && state.level === state.level) { 
-        const diff = state.xp - prevXp.current;
-        if (diff > 20) texts.push({ id: Math.random().toString(), x: 50, y: 50, text: `+${diff} XP`, color: 'text-cyan-400', createdAt: now });
-    }
-    prevXp.current = state.xp;
-
-    if (state.gold > prevGold.current) {
-        const diff = state.gold - prevGold.current;
-        texts.push({ id: Math.random().toString(), x: 80, y: 40, text: `+${diff} G`, color: 'text-yellow-400', createdAt: now });
-    }
-    prevGold.current = state.gold;
-
-    if (state.currentStage.name !== prevStage.current) {
-        setStageAnnouncement(state.currentStage.name);
-        setTimeout(() => setStageAnnouncement(null), 3000);
-        prevStage.current = state.currentStage.name;
-    }
-
-    if (texts.length > 0) {
-        setFloatingTexts(prev => [...prev, ...texts]);
-        setTimeout(() => {
-            setFloatingTexts(prev => prev.filter(t => t.createdAt > now));
-        }, 1000);
-    }
-  }, [state.xp, state.gold, state.currentStage.name, state.level]);
-
-  useEffect(() => {
-    const handleInteract = () => {
-      audioService.resume();
-      window.removeEventListener('keydown', handleInteract);
-      window.removeEventListener('touchstart', handleInteract);
-      window.removeEventListener('click', handleInteract);
-    };
-    window.addEventListener('keydown', handleInteract);
-    window.addEventListener('touchstart', handleInteract);
-    window.addEventListener('click', handleInteract);
-    return () => {
-        window.removeEventListener('keydown', handleInteract);
-        window.removeEventListener('touchstart', handleInteract);
-        window.removeEventListener('click', handleInteract);
-    };
-  }, []);
-
-  useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (view !== 'GAME' || state.gameOver || state.victory || showStore) return;
+      if (view !== 'GAME' || showStore || state.gameOver || state.isCascading) return;
       
       switch (e.key) {
         case 'ArrowUp':
-        case 'w':
-        case 'W': e.preventDefault(); dispatch({ type: 'MOVE', direction: Direction.UP }); break;
+          e.preventDefault();
+          dispatch({ type: 'MOVE', direction: Direction.UP });
+          break;
         case 'ArrowDown':
-        case 's':
-        case 'S': e.preventDefault(); dispatch({ type: 'MOVE', direction: Direction.DOWN }); break;
+          e.preventDefault();
+          dispatch({ type: 'MOVE', direction: Direction.DOWN });
+          break;
         case 'ArrowLeft':
-        case 'a':
-        case 'A': e.preventDefault(); dispatch({ type: 'MOVE', direction: Direction.LEFT }); break;
+          e.preventDefault();
+          dispatch({ type: 'MOVE', direction: Direction.LEFT });
+          break;
         case 'ArrowRight':
-        case 'd':
-        case 'D': e.preventDefault(); dispatch({ type: 'MOVE', direction: Direction.RIGHT }); break;
-        case 'Escape': setView('SETTINGS'); break;
+          e.preventDefault();
+          dispatch({ type: 'MOVE', direction: Direction.RIGHT });
+          break;
       }
     };
+
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [state.gameOver, state.victory, showStore, view]);
+  }, [state.settings.enableKeyboard, view, showStore, state.gameOver, state.isCascading]);
 
+  // Swipe & Mouse Drag
   const touchStart = useRef<{x: number, y: number} | null>(null);
-  const handleTouchStart = (e: React.TouchEvent) => {
-    touchStart.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
-  };
-  const handleTouchEnd = (e: React.TouchEvent) => {
-    if (!touchStart.current || showStore || view !== 'GAME') return;
-    const dx = e.changedTouches[0].clientX - touchStart.current.x;
-    const dy = e.changedTouches[0].clientY - touchStart.current.y;
-    const absDx = Math.abs(dx);
-    const absDy = Math.abs(dy);
-    if (Math.max(absDx, absDy) > 30) {
-      if (absDx > absDy) {
-        dispatch({ type: 'MOVE', direction: dx > 0 ? Direction.RIGHT : Direction.LEFT });
-      } else {
-        dispatch({ type: 'MOVE', direction: dy > 0 ? Direction.DOWN : Direction.UP });
-      }
-    }
-    touchStart.current = null;
-  };
 
-  const handleGameStart = () => { dispatch({ type: 'RESTART' }); setView('GAME'); };
-  const handleContinue = () => { setView('GAME'); };
-  const handleRestart = () => { dispatch({ type: 'RESTART' }); setView('GAME'); };
+  useEffect(() => {
+      if (!state.settings.enableSwipe) return;
 
-  const handleUseItem = (item: InventoryItem) => {
-      setItemEffect(item.type);
-      dispatch({ type: 'USE_ITEM', item });
-  };
-  
-  const handleReroll = () => {
-      setItemEffect(ItemType.REROLL_TOKEN);
-      dispatch({ type: 'REROLL' });
+      const handleStart = (x: number, y: number) => {
+          if (view !== 'GAME' || showStore || state.gameOver || state.isCascading) return;
+          touchStart.current = { x, y };
+      };
+
+      const handleEnd = (x: number, y: number) => {
+          if (!touchStart.current || view !== 'GAME' || showStore || state.gameOver || state.isCascading) return;
+          
+          const deltaX = x - touchStart.current.x;
+          const deltaY = y - touchStart.current.y;
+          const absX = Math.abs(deltaX);
+          const absY = Math.abs(deltaY);
+          
+          const threshold = 90 - (state.settings.sensitivity * 7); 
+
+          if (Math.max(absX, absY) > threshold) {
+              let dir: Direction | null = null;
+              if (absX > absY) {
+                  dir = deltaX > 0 ? Direction.RIGHT : Direction.LEFT;
+              } else {
+                  dir = deltaY > 0 ? Direction.DOWN : Direction.UP;
+              }
+
+              if (dir) {
+                  if (state.settings.invertSwipe) {
+                      if (dir === Direction.UP) dir = Direction.DOWN;
+                      else if (dir === Direction.DOWN) dir = Direction.UP;
+                      else if (dir === Direction.LEFT) dir = Direction.RIGHT;
+                      else if (dir === Direction.RIGHT) dir = Direction.LEFT;
+                  }
+                  dispatch({ type: 'MOVE', direction: dir });
+              }
+          }
+          touchStart.current = null;
+      };
+      
+      const handleCancel = () => {
+          touchStart.current = null;
+      };
+
+      const onTouchStart = (e: TouchEvent) => handleStart(e.touches[0].clientX, e.touches[0].clientY);
+      const onTouchEnd = (e: TouchEvent) => handleEnd(e.changedTouches[0].clientX, e.changedTouches[0].clientY);
+      const onMouseDown = (e: MouseEvent) => handleStart(e.clientX, e.clientY);
+      const onMouseUp = (e: MouseEvent) => handleEnd(e.clientX, e.clientY);
+      const onMouseLeave = (e: MouseEvent) => handleCancel();
+
+      window.addEventListener('touchstart', onTouchStart);
+      window.addEventListener('touchend', onTouchEnd);
+      window.addEventListener('mousedown', onMouseDown);
+      window.addEventListener('mouseup', onMouseUp);
+      window.addEventListener('mouseleave', onMouseLeave);
+
+      return () => {
+          window.removeEventListener('touchstart', onTouchStart);
+          window.removeEventListener('touchend', onTouchEnd);
+          window.removeEventListener('mousedown', onMouseDown);
+          window.removeEventListener('mouseup', onMouseUp);
+          window.removeEventListener('mouseleave', onMouseLeave);
+      };
+  }, [state.settings.enableSwipe, state.settings.invertSwipe, state.settings.sensitivity, view, showStore, state.gameOver, state.isCascading]);
+
+  // Scroll / Wheel
+  const scrollAccumulator = useRef({ x: 0, y: 0 });
+  const lastScrollTime = useRef(0);
+
+  useEffect(() => {
+      if (!state.settings.enableScroll) return;
+
+      const handleWheel = (e: WheelEvent) => {
+          if (view === 'GAME' && !showStore) {
+              e.preventDefault(); 
+          } else {
+              return;
+          }
+
+          if (state.isCascading) return;
+
+          const now = Date.now();
+          if (now - lastScrollTime.current < 400) return; 
+
+          scrollAccumulator.current.x += e.deltaX;
+          scrollAccumulator.current.y += e.deltaY;
+
+          const THRESHOLD = 60 - (state.settings.sensitivity * 3); 
+
+          const absX = Math.abs(scrollAccumulator.current.x);
+          const absY = Math.abs(scrollAccumulator.current.y);
+
+          if (absX > THRESHOLD || absY > THRESHOLD) {
+              let dir: Direction | null = null;
+              if (absX > absY) {
+                  dir = scrollAccumulator.current.x > 0 ? Direction.RIGHT : Direction.LEFT;
+              } else {
+                  dir = scrollAccumulator.current.y > 0 ? Direction.DOWN : Direction.UP;
+              }
+
+              if (dir) {
+                   if (state.settings.invertScroll) {
+                      if (dir === Direction.UP) dir = Direction.DOWN;
+                      else if (dir === Direction.DOWN) dir = Direction.UP;
+                      else if (dir === Direction.LEFT) dir = Direction.RIGHT;
+                      else if (dir === Direction.RIGHT) dir = Direction.LEFT;
+                   }
+                   dispatch({ type: 'MOVE', direction: dir });
+                   lastScrollTime.current = now;
+                   scrollAccumulator.current = { x: 0, y: 0 };
+              }
+          }
+
+          setTimeout(() => {
+              if (Date.now() - lastScrollTime.current > 100) {
+                 scrollAccumulator.current = { x: 0, y: 0 };
+              }
+          }, 150);
+      };
+
+      window.addEventListener('wheel', handleWheel, { passive: false });
+      return () => window.removeEventListener('wheel', handleWheel);
+  }, [state.settings.enableScroll, state.settings.invertScroll, state.settings.sensitivity, view, showStore, state.isCascading]);
+
+  // Audio Resume
+  useEffect(() => {
+      const resumeAudio = () => audioService.resume();
+      window.addEventListener('click', resumeAudio);
+      window.addEventListener('keydown', resumeAudio);
+      window.addEventListener('touchstart', resumeAudio);
+      return () => {
+          window.removeEventListener('click', resumeAudio);
+          window.removeEventListener('keydown', resumeAudio);
+          window.removeEventListener('touchstart', resumeAudio);
+      };
+  }, []);
+
+  if (view === 'SPLASH') {
+    return <SplashScreen 
+        onStart={(selectedClass, mode) => {
+            dispatch({ type: 'RESTART', selectedClass, mode });
+            setView('GAME');
+        }} 
+        onContinue={() => setView('GAME')}
+        onOpenLeaderboard={() => setView('LEADERBOARD')}
+        onOpenSettings={() => setView('SETTINGS')}
+        hasSave={state.score > 0} 
+    />;
   }
 
-  // Determine which effect overlay to show
-  let effectOverlayClass = '';
-  if (itemEffect) {
-    switch (itemEffect) {
-        case ItemType.XP_POTION:
-        case ItemType.GREATER_XP_POTION:
-            effectOverlayClass = 'effect-xp';
-            break;
-        case ItemType.BOMB_SCROLL:
-        case ItemType.CATACLYSM_SCROLL:
-            effectOverlayClass = 'effect-bomb';
-            break;
-        case ItemType.GOLDEN_RUNE:
-        case ItemType.ASCENDANT_RUNE:
-            effectOverlayClass = 'effect-gold';
-            break;
-        case ItemType.LUCKY_CHARM:
-            effectOverlayClass = 'effect-luck';
-            break;
-        case ItemType.REROLL_TOKEN:
-            effectOverlayClass = 'effect-reroll';
-            break;
-    }
+  if (view === 'LEADERBOARD') {
+      return <Leaderboard onBack={() => setView('SPLASH')} />;
+  }
+
+  if (view === 'SETTINGS') {
+      return <Settings 
+        settings={state.settings}
+        onUpdateSettings={(s) => dispatch({ type: 'UPDATE_SETTINGS', settings: s })}
+        onBack={() => setView('SPLASH')} 
+        onClearData={() => {
+            dispatch({ type: 'RESTART' });
+            setView('SPLASH');
+        }}
+      />;
   }
 
   return (
     <div 
-      className="min-h-screen bg-[#050505] text-slate-200 flex flex-col items-center justify-center p-4 relative overflow-hidden font-sans select-none"
-      onTouchStart={handleTouchStart}
-      onTouchEnd={handleTouchEnd}
-    >
-      <div 
-        className="absolute inset-0 transition-opacity duration-1000 ease-in-out"
+        className="min-h-screen w-full flex flex-col items-center justify-center p-2 md:p-4 relative overflow-hidden transition-colors duration-1000 select-none cursor-default touch-none"
         style={{
             backgroundImage: `url('${state.currentStage.backgroundUrl}')`,
             backgroundSize: 'cover',
             backgroundPosition: 'center',
-            opacity: view === 'GAME' ? 0.3 : 0.1
+            paddingBottom: 'env(safe-area-inset-bottom)'
         }}
-      />
-      {/* Dynamic Vignette - Pulses red if boss is present */}
-      <div className={`vignette ${bossPresent ? 'boss-mode' : ''}`}></div>
+    >
+      <div className={`absolute inset-0 bg-black/60 ${state.level >= 30 ? 'bg-black/80' : ''}`}></div>
+      <div className={`absolute inset-0 bg-gradient-to-t from-black via-transparent to-black/80`}></div>
       <div className="scanlines"></div>
-      
-      {view === 'SPLASH' && (
-          <SplashScreen 
-            onStart={handleGameStart} 
-            onContinue={handleContinue}
-            onOpenLeaderboard={() => setView('LEADERBOARD')}
-            onOpenSettings={() => setView('SETTINGS')}
-            hasSave={!!localStorage.getItem('2048_rpg_state_v3')}
-          />
+      <div className="vignette"></div>
+
+      {/* Main Game Container */}
+      <div className="relative z-10 w-full max-w-md flex flex-col items-center">
+        
+        {/* LOGS / NOTIFICATION SYSTEM */}
+        <div className="absolute top-[80px] md:top-24 left-0 right-0 pointer-events-none flex flex-col items-center space-y-2 z-50 h-32">
+             {state.logs.map((log, i) => {
+                 let type = 'INFO';
+                 if (log.includes('ACHIEVEMENT')) type = 'ACHIEVEMENT';
+                 if (log.includes('LEVEL UP')) type = 'LEVEL_UP';
+                 if (log.includes('BOSS') || log.includes('Curse')) type = 'DANGER';
+                 if (log.includes('Loot')) type = 'LOOT';
+
+                 return (
+                    <div 
+                        key={i} 
+                        className={`
+                            floating-text text-sm md:text-base font-bold px-4 py-2 rounded-lg border backdrop-blur-md shadow-xl flex items-center gap-2
+                            ${type === 'ACHIEVEMENT' ? 'bg-yellow-900/80 border-yellow-400 text-yellow-100 animate-in slide-in-from-top-4' : ''}
+                            ${type === 'LEVEL_UP' ? 'bg-indigo-900/80 border-indigo-400 text-indigo-100 animate-in zoom-in-50' : ''}
+                            ${type === 'DANGER' ? 'bg-red-900/80 border-red-500 text-red-100 animate-shake' : ''}
+                            ${type === 'LOOT' ? 'bg-green-900/60 border-green-500 text-green-100' : ''}
+                            ${type === 'INFO' ? 'bg-black/40 border-slate-600/50 text-slate-200 text-xs py-1' : ''}
+                        `}
+                    >
+                        {type === 'ACHIEVEMENT' && <Trophy size={16} className="text-yellow-400" />}
+                        {type === 'LEVEL_UP' && <Star size={16} className="text-indigo-400" />}
+                        {type === 'DANGER' && <Skull size={16} className="text-red-400" />}
+                        {type === 'LOOT' && <Zap size={14} className="text-green-400" />}
+                        <span>{log.replace('ACHIEVEMENT UNLOCKED:', '')}</span>
+                    </div>
+                 );
+             })}
+        </div>
+
+        <HUD 
+          score={state.score} 
+          bestScore={state.bestScore} 
+          level={state.level} 
+          xp={state.xp} 
+          gold={state.gold} 
+          inventory={state.inventory}
+          rerolls={state.rerolls}
+          effectCounters={state.effectCounters}
+          currentStage={state.currentStage}
+          gameMode={state.gameMode}
+          onOpenStore={() => setShowStore(true)}
+          onUseItem={(item) => dispatch({ type: 'USE_ITEM', item })}
+          onReroll={() => dispatch({ type: 'REROLL' })}
+          onMenu={() => setView('SPLASH')}
+        />
+
+        <div className="w-full relative touch-none" style={{ touchAction: 'none' }}>
+            <Grid grid={state.grid} size={state.gridSize} />
+        </div>
+
+      </div>
+
+      {showStore && (
+        <Store 
+          gold={state.gold} 
+          inventory={state.inventory} 
+          onClose={() => setShowStore(false)} 
+          onBuy={(item) => dispatch({ type: 'BUY_ITEM', item })}
+          onCraft={(recipe) => dispatch({ type: 'CRAFT_ITEM', recipe })}
+          onUseItem={(item) => dispatch({ type: 'USE_ITEM', item })}
+        />
       )}
 
-      {view === 'LEADERBOARD' && <Leaderboard onBack={() => setView('SPLASH')} />}
-      {view === 'SETTINGS' && <Settings onBack={() => setView(state.score > 0 ? 'GAME' : 'SPLASH')} onClearData={() => { dispatch({ type: 'RESTART' }); setView('SPLASH'); }} />}
-
-      {view === 'GAME' && (
-          <>
-            {/* Visual Effect Overlay */}
-            {effectOverlayClass && <div className={`absolute inset-0 ${effectOverlayClass}`}></div>}
-            
-            <div className="absolute inset-0 pointer-events-none z-50 overflow-hidden">
-                {floatingTexts.map(ft => (
-                    <div 
-                        key={ft.id}
-                        className={`absolute font-bold text-2xl floating-text ${ft.color}`}
-                        style={{ left: `${ft.x}%`, top: `${ft.y}%` }}
-                    >
-                        {ft.text}
-                    </div>
-                ))}
-            </div>
-
-            {/* Achievement Toast */}
-            {achievementToast && (
-                <div className="absolute bottom-10 left-1/2 -translate-x-1/2 z-[60] animate-in slide-in-from-bottom-5 fade-in duration-300">
-                    <div className="bg-slate-900/90 border border-yellow-500/50 rounded-lg p-4 shadow-[0_0_20px_rgba(234,179,8,0.2)] flex items-center gap-4 min-w-[300px] backdrop-blur-md">
-                        <div className="text-4xl">{achievementToast.icon}</div>
-                        <div>
-                            <div className="text-yellow-400 font-bold uppercase text-xs tracking-wider">Achievement Unlocked</div>
-                            <div className="font-bold text-white text-lg fantasy-font">{achievementToast.name}</div>
-                            <div className="text-slate-400 text-xs">{achievementToast.description}</div>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {state.powerUpEffect === TileType.RUNE_MIDAS && <div className="absolute inset-0 z-40 bg-yellow-500/20 animate-pulse pointer-events-none border-[10px] border-yellow-400/50"></div>}
-            {state.powerUpEffect === TileType.RUNE_CHRONOS && <div className="absolute inset-0 z-40 bg-blue-500/20 animate-[shake_0.5s_infinite] pointer-events-none"></div>}
-            {state.powerUpEffect === TileType.RUNE_VOID && <div className="absolute inset-0 z-40 bg-purple-900/40 animate-[pulse_0.2s_infinite] pointer-events-none scale-110"></div>}
-
-            {stageAnnouncement && (
-                <div className="absolute inset-0 z-50 flex items-center justify-center stage-transition pointer-events-none">
-                    <div className="bg-black/80 px-8 py-4 rounded-xl border-y-2 border-yellow-500/50 backdrop-blur-sm">
-                        <h2 className="text-4xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-yellow-200 to-amber-500 fantasy-font tracking-widest uppercase text-center">
-                            {stageAnnouncement}
-                        </h2>
-                    </div>
-                </div>
-            )}
-
-            <div className="relative z-10 w-full max-w-md flex flex-col items-center">
-                <HUD 
-                    score={state.score} 
-                    bestScore={state.bestScore} 
-                    level={state.level} 
-                    xp={state.xp} 
-                    gold={state.gold}
-                    inventory={state.inventory}
-                    rerolls={state.rerolls}
-                    effectCounters={state.effectCounters}
-                    onOpenStore={() => setShowStore(true)}
-                    onUseItem={handleUseItem}
-                    onReroll={handleReroll}
-                    onMenu={() => setView('SETTINGS')}
-                />
-
-                {state.combo > 1 && (
-                    <div className="absolute top-[165px] z-20 text-center animate-bounce">
-                        <div className="text-2xl font-black text-transparent bg-clip-text bg-gradient-to-b from-yellow-300 to-red-600 drop-shadow-[0_2px_2px_rgba(0,0,0,1)]">
-                            {state.combo}x COMBO!
-                        </div>
-                    </div>
-                )}
-
-                <div className="w-full h-8 mb-2 flex items-center justify-center text-xs sm:text-sm text-yellow-400/80 font-mono tracking-wide shadow-black drop-shadow-md">
-                    {state.logs.length > 0 ? state.logs[state.logs.length - 1] : "The dungeon awaits..."}
-                </div>
-
-                <Grid grid={state.grid} size={state.gridSize} />
-
-                <div className="w-full mt-6 flex justify-between items-center text-slate-400 text-sm font-medium">
-                    <div className="flex gap-4">
-                        <button onClick={handleRestart} className="hover:text-white transition-colors flex items-center gap-1">
-                            <RefreshCw size={14} /> Restart
-                        </button>
-                    </div>
-                    <div className={`hidden sm:block ${state.currentStage.colorTheme} transition-colors duration-500`}>
-                        Location: {state.currentStage.name}
-                    </div>
-                </div>
-            </div>
-
-            {showStore && (
-                <Store 
-                    gold={state.gold} 
-                    inventory={state.inventory}
-                    onClose={() => setShowStore(false)} 
-                    onBuy={(item) => dispatch({ type: 'BUY_ITEM', item })} 
-                    onCraft={(recipe) => dispatch({ type: 'CRAFT_ITEM', recipe })}
-                    onUseItem={handleUseItem}
-                />
-            )}
-
-            {state.gameOver && (
-                <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/95 p-4 animate-in fade-in duration-500">
-                    <div className="bg-slate-900/50 p-8 rounded-2xl border border-red-900/50 shadow-2xl text-center max-w-sm w-full backdrop-blur-md">
-                        <AlertTriangle className="mx-auto text-red-600 mb-4 animate-bounce" size={48} />
-                        <h2 className="text-3xl font-bold text-red-500 mb-2 fantasy-font">DEFEAT</h2>
-                        <div className="grid grid-cols-2 gap-4 mb-6 text-sm text-slate-300">
-                            <div className="bg-slate-950 p-2 rounded border border-slate-800">Score: {state.score}</div>
-                            <div className="bg-slate-950 p-2 rounded border border-slate-800">Lvl: {state.level}</div>
-                        </div>
-                        <div className="space-y-3">
-                            <button 
-                                onClick={handleRestart}
-                                className="w-full py-3 bg-red-800 hover:bg-red-700 text-white font-bold rounded border border-red-600 shadow-[0_0_15px_rgba(220,38,38,0.5)] transition-all"
-                            >
-                                Rise Again
-                            </button>
-                            <button 
-                                onClick={() => { dispatch({type: 'GAME_OVER_ACK'}); setView('LEADERBOARD'); }}
-                                className="w-full py-3 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold rounded border border-slate-600 transition-all"
-                            >
-                                Leaderboard
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {state.victory && (
-                <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/95 p-4 animate-in fade-in duration-1000">
-                    <div className="bg-slate-900/80 p-8 rounded-2xl border border-yellow-500/50 shadow-2xl text-center max-w-sm w-full backdrop-blur-md">
-                        <Crown className="mx-auto text-yellow-400 mb-4 animate-pulse" size={64} />
-                        <h2 className="text-3xl font-bold text-yellow-400 mb-2 fantasy-font">GOD SLAIN</h2>
-                        <p className="text-yellow-200/60 mb-8 font-serif italic">The cycle continues...</p>
-                        <div className="space-y-3">
-                            <button 
-                                onClick={() => dispatch({ type: 'CONTINUE' })}
-                                className="w-full py-3 bg-yellow-700 hover:bg-yellow-600 text-white font-bold rounded border border-yellow-500 shadow-[0_0_20px_rgba(234,179,8,0.4)]"
-                            >
-                                Continue Endless
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
-          </>
+      {state.gameOver && (
+          <RunSummary 
+            gameState={state} 
+            onRestart={() => dispatch({ type: 'RESTART' })} 
+            onShowLeaderboard={() => setView('LEADERBOARD')}
+            onHome={() => setView('SPLASH')}
+          />
+      )}
+      
+      {state.victory && !state.gameWon && (
+        <div className="absolute inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
+          <div className="bg-gradient-to-br from-yellow-900 to-amber-900 p-8 rounded-xl border-2 border-yellow-500 text-center shadow-[0_0_50px_rgba(234,179,8,0.5)] animate-in zoom-in">
+             <h2 className="text-5xl font-black text-transparent bg-clip-text bg-gradient-to-b from-yellow-200 to-amber-500 fantasy-font mb-4">VICTORY</h2>
+             <p className="text-yellow-100 mb-6">You have created the Dragon God tile!</p>
+             <button 
+                onClick={() => dispatch({ type: 'CONTINUE' })}
+                className="px-8 py-3 bg-yellow-500 text-black font-bold rounded-lg hover:bg-yellow-400 hover:scale-105 transition-all shadow-lg"
+             >
+                CONTINUE RUN
+             </button>
+          </div>
+        </div>
       )}
     </div>
   );

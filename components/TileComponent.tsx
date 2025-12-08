@@ -33,6 +33,10 @@ export const TileComponent: React.FC<TileProps> = ({ tile, gridSize }) => {
       }
   }
 
+  // Cascade Animation - Dynamic Ring Color
+  const ringColorClass = style.ringColor || 'ring-cyan-400';
+  const isCascadeClass = tile.isCascade ? `ring-2 ${ringColorClass} ring-offset-2 ring-offset-black animate-pulse` : '';
+
   // Slash effect for high level merges only
   const isSlash = tile.mergedFrom && tile.value >= 32 && tile.mergedFrom[0] !== 'damage' ? 'slash-effect' : '';
   
@@ -44,9 +48,11 @@ export const TileComponent: React.FC<TileProps> = ({ tile, gridSize }) => {
         height: `${size}%`,
         transform: `translate(${tile.x * 100}%, ${tile.y * 100}%)`
       }}
+      draggable={false}
+      onDragStart={(e) => e.preventDefault()}
     >
       <div
-        className={`w-full h-full rounded-lg relative overflow-hidden shadow-2xl ${isNewClass} ${animationClass} ${isSlash} group`}
+        className={`w-full h-full rounded-lg relative overflow-hidden shadow-2xl ${isNewClass} ${animationClass} ${isSlash} ${isCascadeClass} group select-none`}
       >
         {/* Glow Container */}
         <div className={`absolute inset-0 transition-opacity duration-300 ${style.glow} opacity-0 group-hover:opacity-100`}></div>
@@ -57,9 +63,10 @@ export const TileComponent: React.FC<TileProps> = ({ tile, gridSize }) => {
                  <img 
                     src={style.imageUrl} 
                     alt={style.label}
-                    className="w-full h-full object-cover transition-transform duration-700 ease-out group-hover:scale-110 opacity-80 mix-blend-overlay"
+                    className="w-full h-full object-cover transition-transform duration-700 ease-out group-hover:scale-110 opacity-80 mix-blend-overlay select-none"
                     loading="lazy"
                     onError={() => setImgError(true)}
+                    draggable={false}
                  />
              )}
              
@@ -71,7 +78,7 @@ export const TileComponent: React.FC<TileProps> = ({ tile, gridSize }) => {
         </div>
 
         {/* Content Overlay */}
-        <div className="absolute inset-0 flex flex-col items-center justify-center z-10 p-1">
+        <div className="absolute inset-0 flex flex-col items-center justify-center z-10 p-1 select-none">
             {/* Value (Hidden for Bosses) */}
             <span className={`font-serif font-black text-white drop-shadow-[0_2px_4px_rgba(0,0,0,1)] tracking-tighter
                 ${gridSize > 5 ? 'text-lg' : 'text-3xl'}
