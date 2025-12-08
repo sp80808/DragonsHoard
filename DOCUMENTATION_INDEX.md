@@ -1,33 +1,40 @@
 # Dragon's Hoard - Documentation Index
 
 **Last Updated**: December 8, 2025  
-**Total Documents**: 25+  
+**Total Documents**: 29+  
 **Status**: Comprehensive & Current
 
 ---
 
 ## Quick Navigation
 
-### 🚀 Start Here
+### 🚀 Start Here (NEW!)
+- **THIS_WEEK.md** - This week's tasks & priorities (3 min read) ⭐ NEW
+- **QUICK_ROADMAP.md** - 3-month roadmap at a glance (5 min read) ⭐ NEW
+- **DEVELOPMENT_PLAN_2025.md** - Comprehensive development plan (30 min read) ⭐ NEW
+- **CURRENT_STATUS.md** - Current status summary (8 min read)
 - **NEXT_PHASE_SUMMARY.md** - Executive summary (5 min read)
-- **DEVELOPMENT_ROADMAP_UPDATED.md** - Full roadmap (10 min read)
-- **QUICK_REFERENCE.md** - Quick lookup card (2 min read)
 
 ### 📋 Planning Documents
+- **DEVELOPMENT_PLAN_2025.md** - Full 3-month plan with roadmap ⭐ NEW
+- **QUICK_ROADMAP.md** - High-level roadmap overview ⭐ NEW
+- **THIS_WEEK.md** - Weekly task tracker ⭐ NEW
 - **PHASE_2_FINAL_PLAN.md** - Phase 2 detailed plan
 - **PHASE_3_DETAILED_PLAN.md** - Phase 3 detailed plan
 - **PHASE_1_COMPLETION.md** - Phase 1 completion report
 - **PHASE_2_PROGRESS.md** - Phase 2 progress report
 
 ### 💻 Implementation Guides
+- **CASCADE_IMPLEMENTATION.md** - Cascade system documentation ⭐ NEW
+- **VISUAL_IMPROVEMENT_PLAN.md** - Visual polish roadmap
+- **DOPAMINE_IMPLEMENTATION.md** - Phase 1 juice implementation
 - **FRAMER_MOTION_GUIDE.md** - Framer Motion implementation
 - **OPEN_SOURCE_INTEGRATIONS.md** - Open-source library analysis
-- **OPEN_SOURCE_SUMMARY.md** - Library summary
 - **EASY_WINS_IMPLEMENTED.md** - What's been completed
 
 ### 🎮 Game Design
 - **GAME_DESIGN.md** - Game mechanics & design
-- **DOPAMINE_DESIGN.md** - Dopamine design bible
+- **DOPAMINE_DESIGN.md** - Dopamine design bible (comprehensive)
 - **FEATURE_PLAN.md** - Feature planning & roadmap
 
 ### 📚 Reference
@@ -40,9 +47,18 @@
 
 ## Document Categories
 
+### NEW Planning Documents (December 2025) ⭐
+| Document | Purpose | Read Time |
+|----------|---------|-----------|
+| **THIS_WEEK.md** | Weekly task list & priorities | 3 min |
+| **QUICK_ROADMAP.md** | 3-month roadmap overview | 5 min |
+| **DEVELOPMENT_PLAN_2025.md** | Comprehensive development plan | 30 min |
+| **CASCADE_IMPLEMENTATION.md** | Cascade system documentation | 15 min |
+
 ### Executive Summaries (Quick Reads)
 | Document | Purpose | Read Time |
 |----------|---------|-----------|
+| CURRENT_STATUS.md | Current status summary | 8 min |
 | NEXT_PHASE_SUMMARY.md | Current status & next steps | 5 min |
 | DEVELOPMENT_ROADMAP_UPDATED.md | Full project roadmap | 10 min |
 | PROJECT_STATUS.md | Current project status | 8 min |
