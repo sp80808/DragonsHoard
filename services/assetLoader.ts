@@ -1,6 +1,5 @@
 
 
-
 import { TILE_STYLES, BOSS_STYLE, RUNE_STYLES, MUSIC_PATHS, STAGES, getStageBackground } from '../constants';
 import { audioService } from './audioService';
 
@@ -64,10 +63,15 @@ export const loadCriticalAssets = async (onProgress: (percent: number) => void) 
         ...STAGES.map(s => getStageBackground(s.name)).filter(url => !!url)
     ].filter(Boolean);
 
-    // 2. Collect Critical Audio (Only Splash Music)
+    // 2. Collect Critical Audio (Splash + First Gameplay Track)
     const audioToLoad = [
         { key: 'SPLASH', url: MUSIC_PATHS.SPLASH }
     ];
+
+    // Load first gameplay track if available
+    if (MUSIC_PATHS.GAMEPLAY && MUSIC_PATHS.GAMEPLAY.length > 0) {
+        audioToLoad.push({ key: 'GAMEPLAY_0', url: MUSIC_PATHS.GAMEPLAY[0] });
+    }
 
     const totalAssets = imagesToLoad.length + audioToLoad.length;
     if (totalAssets === 0) {
@@ -101,8 +105,14 @@ export const loadCriticalAssets = async (onProgress: (percent: number) => void) 
 export const loadBackgroundAssets = async () => {
     const audioToLoad = [
         { key: 'DEATH', url: MUSIC_PATHS.DEATH }
-        // Gameplay music is now procedural, so we don't load those files.
     ];
+
+    // Load remaining gameplay tracks
+    if (MUSIC_PATHS.GAMEPLAY && MUSIC_PATHS.GAMEPLAY.length > 1) {
+        for (let i = 1; i < MUSIC_PATHS.GAMEPLAY.length; i++) {
+            audioToLoad.push({ key: `GAMEPLAY_${i}`, url: MUSIC_PATHS.GAMEPLAY[i] });
+        }
+    }
 
     const audioPromises = audioToLoad.map(track => 
         retryOperation(() => loadAudio(track.key, track.url))

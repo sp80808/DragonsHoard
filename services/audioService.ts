@@ -13,13 +13,9 @@ class AudioService {
   private reverbNode: ConvolverNode | null = null;
   private reverbGain: GainNode | null = null;
   
-  // Procedural Engine Nodes
-  private droneNodes: AudioNode[] = [];
-  private droneGain: GainNode | null = null;
-  private droneFilter: BiquadFilterNode | null = null;
-  
-  // File-based Music
+  // Active Nodes
   private activeMusicSource: AudioBufferSourceNode | null = null;
+  private musicFilter: BiquadFilterNode | null = null;
 
   private enabled: boolean = true;
   private volume: number = 0.3; 
@@ -121,25 +117,19 @@ class AudioService {
       // Stop File-based Music
       if (this.activeMusicSource) {
           try {
-             // Fade out specific source gain if we had one, otherwise hard stop
+             // Stop gently
              this.activeMusicSource.stop(t + fadeOutDuration);
           } catch(e) {}
           this.activeMusicSource = null;
       }
-
-      // Stop Procedural Engine
-      this.stopDroneEngine(fadeOutDuration);
+      this.musicFilter = null;
   }
 
   playSplashTheme() {
       if (!this.enabled || !this.ctx) return;
       this.stopCurrentMusic();
       
-      if (!this.buffers['SPLASH']) {
-          // Fallback to simple drone if file missing
-          this.startProceduralAtmosphere(true);
-          return;
-      }
+      if (!this.buffers['SPLASH']) return;
 
       const source = this.ctx.createBufferSource();
       source.buffer = this.buffers['SPLASH'];
@@ -161,7 +151,7 @@ class AudioService {
       if (!this.enabled || !this.ctx) return;
       this.stopCurrentMusic();
       
-      if (!this.buffers['DEATH']) return; // Silence is fine for death
+      if (!this.buffers['DEATH']) return;
 
       const source = this.ctx.createBufferSource();
       source.buffer = this.buffers['DEATH'];
@@ -181,106 +171,55 @@ class AudioService {
       if (!this.enabled || !this.ctx) return;
       this.stopCurrentMusic();
       
-      // Use Procedural Engine instead of Files
-      this.startProceduralAtmosphere();
-  }
+      // Pick random gameplay track
+      const availableTracks = Object.keys(this.buffers).filter(k => k.startsWith('GAMEPLAY_'));
+      if (availableTracks.length === 0) return;
 
-  // --- Procedural "Drone" Engine ---
-  // Generates dark ambient music in real-time without MP3s
-  
-  startProceduralAtmosphere(isSplash = false) {
-      if (!this.ctx || !this.musicGain) return;
-      
-      const t = this.ctx.currentTime;
-      const rootFreq = isSplash ? 55.00 : 69.30; // A1 or C#2 (Darker)
+      const randomKey = availableTracks[Math.floor(Math.random() * availableTracks.length)];
+      const buffer = this.buffers[randomKey];
+      if (!buffer) return;
 
-      // 1. Create Filter Chain (Lowpass for that "underwater" sound)
-      this.droneFilter = this.ctx.createBiquadFilter();
-      this.droneFilter.type = 'lowpass';
-      this.droneFilter.frequency.value = isSplash ? 300 : 120; // Start very muffled
-      this.droneFilter.Q.value = 0.5;
+      const source = this.ctx.createBufferSource();
+      source.buffer = buffer;
+      source.loop = true;
 
-      this.droneGain = this.ctx.createGain();
-      this.droneGain.gain.setValueAtTime(0, t);
-      this.droneGain.gain.linearRampToValueAtTime(0.3, t + 3); // Slow fade in
+      // Create Filter for Dynamic Intensity (Muffled -> Clear)
+      this.musicFilter = this.ctx.createBiquadFilter();
+      this.musicFilter.type = 'lowpass';
+      this.musicFilter.frequency.value = 150; // Start Muffled (Calm)
+      this.musicFilter.Q.value = 0.5;
 
-      // Connect: Oscillators -> Filter -> DroneGain -> Reverb -> MusicGain
-      this.droneGain.connect(this.reverbNode!); // Heavy reverb is key
-      this.droneGain.connect(this.musicGain); // Also direct signal
-      this.droneFilter.connect(this.droneGain);
+      const trackGain = this.ctx.createGain();
+      trackGain.gain.value = 0.4; // Slightly lower as gameplay tracks can be loud
 
-      // 2. Oscillator 1: The Foundation (Sawtooth)
-      const osc1 = this.ctx.createOscillator();
-      osc1.type = 'sawtooth';
-      osc1.frequency.value = rootFreq; 
-      
-      // 3. Oscillator 2: Detuned Texture (Sawtooth)
-      const osc2 = this.ctx.createOscillator();
-      osc2.type = 'sawtooth';
-      osc2.frequency.value = rootFreq * 1.01; // Slight detune for phasing
-      
-      // 4. Oscillator 3: Sub Bass (Sine)
-      const osc3 = this.ctx.createOscillator();
-      osc3.type = 'sine';
-      osc3.frequency.value = rootFreq / 2; // Octave down
+      // Connect: Source -> Filter -> Gain -> MusicMix
+      source.connect(this.musicFilter);
+      this.musicFilter.connect(trackGain);
+      trackGain.connect(this.musicGain!);
 
-      // 5. LFO to modulate filter (The "Breathing" effect)
-      const lfo = this.ctx.createOscillator();
-      lfo.type = 'sine';
-      lfo.frequency.value = 0.1; // Very slow
-      const lfoGain = this.ctx.createGain();
-      lfoGain.gain.value = 50; // Filter moves by +/- 50Hz
-      
-      lfo.connect(lfoGain);
-      lfoGain.connect(this.droneFilter.frequency);
-
-      // Connect all
-      osc1.connect(this.droneFilter);
-      osc2.connect(this.droneFilter);
-      osc3.connect(this.droneFilter);
-
-      // Start
-      osc1.start();
-      osc2.start();
-      osc3.start();
-      lfo.start();
-
-      this.droneNodes = [osc1, osc2, osc3, lfo, lfoGain, this.droneFilter, this.droneGain];
-  }
-
-  stopDroneEngine(fadeOutDuration: number) {
-      if (!this.droneGain || !this.ctx) return;
-      
-      const t = this.ctx.currentTime;
-      this.droneGain.gain.setTargetAtTime(0, t, fadeOutDuration / 3);
-      
-      // Cleanup after fade
-      setTimeout(() => {
-          this.droneNodes.forEach(node => {
-              try { 
-                  if (node instanceof OscillatorNode) node.stop(); 
-                  node.disconnect(); 
-              } catch(e) {}
-          });
-          this.droneNodes = [];
-          this.droneGain = null;
-          this.droneFilter = null;
-      }, fadeOutDuration * 1000 + 100);
+      source.start();
+      this.activeMusicSource = source;
   }
 
   /**
-   * Updates drone intensity based on game state.
+   * Updates music intensity based on game state.
    * @param intensity 0.0 to 1.0
    */
   updateGameplayIntensity(intensity: number) {
-      if (!this.droneFilter || !this.ctx) return;
+      if (!this.musicFilter || !this.ctx) return;
       
       const t = this.ctx.currentTime;
       
-      // Map intensity to Filter Opening (100Hz -> 800Hz)
-      // We keep it relatively dark even at high intensity to maintain "Dark Fantasy" vibe
-      const targetFreq = 120 + (Math.pow(intensity, 2) * 800); 
-      this.droneFilter.frequency.setTargetAtTime(targetFreq, t, 1.0);
+      // Map intensity to Filter Opening (100Hz -> 20000Hz)
+      // Cubic curve for dramatic opening only when very intense
+      // 0.0 -> 100Hz
+      // 0.5 -> ~2000Hz
+      // 1.0 -> 20000Hz
+      const minFreq = 100;
+      const maxFreq = 20000;
+      const targetFreq = minFreq + (Math.pow(intensity, 3) * (maxFreq - minFreq));
+      
+      this.musicFilter.frequency.setTargetAtTime(targetFreq, t, 1.0);
   }
 
   // --- SFX ---
@@ -295,7 +234,7 @@ class AudioService {
           
           const filter = this.ctx.createBiquadFilter();
           filter.type = 'lowpass';
-          filter.frequency.value = 600; 
+          filter.frequency.value = 400; // Very soft
           filter.Q.value = 0.5;
           filter.connect(this.sfxGain!);
 
@@ -309,7 +248,7 @@ class AudioService {
               osc.frequency.setValueAtTime(freq, t + (i * 0.1)); 
               
               gain.gain.setValueAtTime(0, t + (i * 0.1));
-              gain.gain.linearRampToValueAtTime(0.05, t + (i * 0.1) + 0.1); 
+              gain.gain.linearRampToValueAtTime(0.05, t + (i * 0.1) + 0.1); // Very Quiet
               gain.gain.exponentialRampToValueAtTime(0.001, t + (i * 0.1) + 2.0); 
 
               osc.start(t + (i * 0.1));

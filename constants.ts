@@ -9,13 +9,15 @@ export const WINNING_VALUE = 2048;
 
 export const MUSIC_PATHS = {
   // Local files. 
-  // Gameplay music is now PROCEDURAL to save space. 
-  // Only these two files are needed in the 'music' folder.
   SPLASH: 'music/dragons-horde-splah.mp3', 
   DEATH: 'music/death-music.mp3',
   
-  // Empty array implies procedural generation
-  GAMEPLAY: [] as string[]
+  // Restore the gameplay tracks
+  GAMEPLAY: [
+    'music/gameplay1.mp3',
+    'music/gameplay2.mp3',
+    'music/gameplay3.mp3'
+  ]
 };
 
 export const getXpThreshold = (level: number) => Math.floor(1000 * Math.pow(level, 1.5));
