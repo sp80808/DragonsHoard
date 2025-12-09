@@ -1,10 +1,22 @@
 
+
 import { TileType, ItemType, InventoryItem, Stage, CraftingRecipe, Achievement } from './types';
-import { Shield, Scroll, Swords, Star, Crown, Flame, Zap } from 'lucide-react';
+import { Shield, Scroll, Swords, Star, Crown, Flame, Zap, Eye } from 'lucide-react';
 import React from 'react';
 
 export const GRID_SIZE_INITIAL = 4;
 export const WINNING_VALUE = 2048;
+
+export const MUSIC_PATHS = {
+  // Local files. 
+  // Gameplay music is now PROCEDURAL to save space. 
+  // Only these two files are needed in the 'music' folder.
+  SPLASH: 'music/dragons-horde-splah.mp3', 
+  DEATH: 'music/death-music.mp3',
+  
+  // Empty array implies procedural generation
+  GAMEPLAY: [] as string[]
+};
 
 export const getXpThreshold = (level: number) => Math.floor(1000 * Math.pow(level, 1.5));
 
@@ -15,199 +27,106 @@ const genUrl = (prompt: string, seed: string | number = 42) =>
 const bgUrl = (prompt: string, seed: string | number) =>
   `https://image.pollinations.ai/prompt/dark fantasy environment background ${prompt} cinematic atmospheric 8k?width=1024&height=1024&nologo=true&seed=${seed}`;
 
-export const TILE_STYLES: Record<number, { label: string; color: string; ringColor: string; icon: string; glow: string; imageUrl: string }> = {
-  2: { label: 'Slime', color: 'from-green-900 to-green-700', ringColor: 'ring-green-500', icon: '🟢', glow: 'shadow-green-500/50', imageUrl: genUrl('cute green slime blob monster', 2) },
-  4: { label: 'Goblin', color: 'from-emerald-900 to-teal-800', ringColor: 'ring-emerald-500', icon: '👺', glow: 'shadow-emerald-500/50', imageUrl: genUrl('snarling green goblin warrior face', 4) },
-  8: { label: 'Orc', color: 'from-red-900 to-red-700', ringColor: 'ring-red-500', icon: '👹', glow: 'shadow-red-500/50', imageUrl: genUrl('fierce red orc barbarian', 8) },
-  16: { label: 'Troll', color: 'from-stone-700 to-stone-500', ringColor: 'ring-stone-400', icon: '🪨', glow: 'shadow-stone-500/50', imageUrl: genUrl('grey rock troll giant', 16) },
-  32: { label: 'Drake', color: 'from-orange-800 to-orange-600', ringColor: 'ring-orange-500', icon: '🦎', glow: 'shadow-orange-500/50', imageUrl: genUrl('orange fire drake lizard', 32) },
-  64: { label: 'Wyvern', color: 'from-cyan-900 to-blue-800', ringColor: 'ring-cyan-500', icon: '🐉', glow: 'shadow-cyan-500/50', imageUrl: genUrl('blue lightning wyvern flying', 64) },
-  128: { label: 'Demon', color: 'from-rose-900 to-rose-700', ringColor: 'ring-rose-500', icon: '🔥', glow: 'shadow-rose-500/50', imageUrl: genUrl('horned red demon lord fire', 128) },
-  256: { label: 'Elder', color: 'from-purple-900 to-purple-700', ringColor: 'ring-purple-500', icon: '🔮', glow: 'shadow-purple-500/50', imageUrl: genUrl('purple mystic elder dragon', 256) },
-  512: { label: 'Legend', color: 'from-indigo-900 to-blue-900', ringColor: 'ring-indigo-500', icon: '⚡', glow: 'shadow-blue-500/50', imageUrl: genUrl('majestic storm dragon lightning aura', 512) },
-  1024: { label: 'Ancient', color: 'from-yellow-700 to-amber-600', ringColor: 'ring-amber-500', icon: '📜', glow: 'shadow-amber-500/50', imageUrl: genUrl('golden ancient dragon god scales', 1024) },
-  2048: { label: 'God', color: 'from-yellow-500 via-orange-500 to-red-500', ringColor: 'ring-yellow-400', icon: '🐲', glow: 'shadow-yellow-500/80', imageUrl: genUrl('ultimate cosmic dragon god glowing eyes', 2048) },
-};
-
-export const BOSS_STYLE = { 
-  label: 'BOSS', 
-  color: 'from-red-950 via-black to-red-900',
-  ringColor: 'ring-red-600', 
-  icon: '☠️', 
-  glow: 'shadow-red-500/80', 
-  imageUrl: genUrl('terrifying giant raid boss monster red eyes smoke', 'BOSS') 
-};
-
-export const FALLBACK_STYLE = { label: 'Ascended', color: 'from-slate-900 to-black', ringColor: 'ring-white', icon: '🌟', glow: 'shadow-white/50', imageUrl: genUrl('cosmic star energy', 9999) };
-
-export const RUNE_STYLES: Record<string, { label: string; color: string; ringColor: string; icon: string; glow: string; imageUrl: string }> = {
-  RUNE_MIDAS: { label: 'Midas', color: 'from-yellow-400 to-amber-600', ringColor: 'ring-yellow-400', icon: '👑', glow: 'shadow-yellow-400/80', imageUrl: genUrl('golden midas touch hand magic rune', 'midas') },
-  RUNE_CHRONOS: { label: 'Chronos', color: 'from-blue-400 to-cyan-600', ringColor: 'ring-cyan-400', icon: '⏳', glow: 'shadow-cyan-400/80', imageUrl: genUrl('blue time manipulation magic rune hourglass', 'chronos') },
-  RUNE_VOID: { label: 'Void', color: 'from-purple-950 to-black', ringColor: 'ring-purple-500', icon: '⚫', glow: 'shadow-purple-900/80', imageUrl: genUrl('black hole void swirling magic rune', 'void') },
-};
-
-export const STAGES: { name: string; minLevel: number; prompt: string; color: string; barColor: string }[] = [
-  { name: "The Crypt", minLevel: 1, prompt: "medieval dungeon stone walls torches cobwebs dark", color: "text-slate-400", barColor: "from-slate-600 to-slate-400" },
-  { name: "Fungal Caverns", minLevel: 10, prompt: "bioluminescent glowing mushrooms purple cave underground magical", color: "text-purple-400", barColor: "from-purple-600 via-fuchsia-500 to-purple-400" },
-  { name: "Magma Core", minLevel: 20, prompt: "volcanic lava cave flowing magma fire rocks heat", color: "text-orange-500", barColor: "from-red-600 via-orange-500 to-yellow-500" },
-  { name: "The Void", minLevel: 30, prompt: "cosmic void deep space nebula stars purple black ethereal", color: "text-indigo-400", barColor: "from-indigo-900 via-violet-600 to-purple-500" },
-  { name: "Elysium", minLevel: 40, prompt: "heavenly clouds gold gates divine light bright sky", color: "text-yellow-300", barColor: "from-yellow-400 via-amber-300 to-yellow-100" }
+// STAGES CONFIGURATION
+export const STAGES: Stage[] = [
+    { name: 'TheDungeon', minLevel: 1, backgroundUrl: bgUrl('ancient stone dungeon torchlight', 1), colorTheme: 'text-slate-200', barColor: 'from-slate-600 to-slate-400' },
+    { name: 'FungalCaverns', minLevel: 5, backgroundUrl: bgUrl('glowing mushroom cave bioluminescent purple', 5), colorTheme: 'text-purple-300', barColor: 'from-purple-600 to-indigo-500' },
+    { name: 'MoltenDepths', minLevel: 10, backgroundUrl: bgUrl('volcanic lava cave magma fire', 10), colorTheme: 'text-orange-300', barColor: 'from-red-600 to-orange-500' },
+    { name: 'CrystalSpire', minLevel: 20, backgroundUrl: bgUrl('crystal palace celestial floating islands', 20), colorTheme: 'text-cyan-200', barColor: 'from-cyan-500 to-blue-400' },
+    { name: 'VoidRealm', minLevel: 30, backgroundUrl: bgUrl('cosmic void horror eldritch stars', 30), colorTheme: 'text-fuchsia-300', barColor: 'from-fuchsia-800 to-purple-900' }
 ];
 
-export const getStage = (level: number) => {
-  return [...STAGES].reverse().find(s => level >= s.minLevel) || STAGES[0];
+export const getStage = (level: number): Stage => {
+    return STAGES.slice().reverse().find(s => level >= s.minLevel) || STAGES[0];
 };
 
 export const getStageBackground = (stageName: string) => {
-  const stage = STAGES.find(s => s.name === stageName) || STAGES[0];
-  return bgUrl(stage.prompt, stage.name.replace(' ', ''));
+    return STAGES.find(s => s.name === stageName)?.backgroundUrl || STAGES[0].backgroundUrl;
 };
 
-// --- LEVEL RANK ICONS ---
-export const getLevelRank = (level: number) => {
-    if (level < 5) return { title: 'Novice', icon: Shield, color: 'text-slate-400', bg: 'bg-slate-500' };
-    if (level < 10) return { title: 'Apprentice', icon: Scroll, color: 'text-blue-400', bg: 'bg-blue-600' };
-    if (level < 20) return { title: 'Warrior', icon: Swords, color: 'text-red-400', bg: 'bg-red-600' };
-    if (level < 30) return { title: 'Champion', icon: Star, color: 'text-yellow-400', bg: 'bg-yellow-600' };
-    if (level < 40) return { title: 'Master', icon: Crown, color: 'text-purple-400', bg: 'bg-purple-600' };
-    if (level < 50) return { title: 'Grandmaster', icon: Zap, color: 'text-cyan-400', bg: 'bg-cyan-600' };
-    return { title: 'Legend', icon: Flame, color: 'text-orange-500', bg: 'bg-orange-600' };
+// TILE STYLES
+export const TILE_STYLES: Record<number, { label: string; color: string; ringColor: string; icon: string; glow: string; imageUrl: string; particleColor: string }> = {
+  2: { label: 'Slime', color: 'from-green-900 to-green-700', ringColor: 'ring-green-500', icon: '🟢', glow: 'shadow-green-500/50', imageUrl: genUrl('cute green slime blob monster', 2), particleColor: '#22c55e' },
+  4: { label: 'Goblin', color: 'from-emerald-900 to-teal-800', ringColor: 'ring-emerald-500', icon: '👺', glow: 'shadow-emerald-500/50', imageUrl: genUrl('snarling green goblin warrior face', 4), particleColor: '#10b981' },
+  8: { label: 'Orc', color: 'from-red-900 to-red-700', ringColor: 'ring-red-500', icon: '👹', glow: 'shadow-red-500/50', imageUrl: genUrl('fierce red orc barbarian', 8), particleColor: '#ef4444' },
+  16: { label: 'Troll', color: 'from-stone-700 to-stone-500', ringColor: 'ring-stone-400', icon: '🪨', glow: 'shadow-stone-500/50', imageUrl: genUrl('grey rock troll giant', 16), particleColor: '#78716c' },
+  32: { label: 'Drake', color: 'from-orange-900 to-orange-700', ringColor: 'ring-orange-500', icon: '🦎', glow: 'shadow-orange-500/50', imageUrl: genUrl('orange scaled fire drake', 32), particleColor: '#f97316' },
+  64: { label: 'Wyvern', color: 'from-blue-900 to-blue-700', ringColor: 'ring-blue-500', icon: '🐉', glow: 'shadow-blue-500/50', imageUrl: genUrl('blue lightning wyvern flying', 64), particleColor: '#3b82f6' },
+  128: { label: 'Demon', color: 'from-purple-900 to-purple-700', ringColor: 'ring-purple-500', icon: '👿', glow: 'shadow-purple-500/50', imageUrl: genUrl('dark purple horned demon lord', 128), particleColor: '#a855f7' },
+  256: { label: 'Hydra', color: 'from-teal-900 to-teal-700', ringColor: 'ring-teal-500', icon: '🐍', glow: 'shadow-teal-500/50', imageUrl: genUrl('multi headed green hydra serpent', 256), particleColor: '#14b8a6' },
+  512: { label: 'Giant', color: 'from-yellow-900 to-yellow-700', ringColor: 'ring-yellow-500', icon: '🗿', glow: 'shadow-yellow-500/50', imageUrl: genUrl('colossal mountain giant titan', 512), particleColor: '#eab308' },
+  1024: { label: 'Dragon', color: 'from-rose-900 to-rose-700', ringColor: 'ring-rose-500', icon: '🐲', glow: 'shadow-rose-500/50', imageUrl: genUrl('massive red ancient dragon breathing fire', 1024), particleColor: '#f43f5e' },
+  2048: { label: 'God', color: 'from-amber-600 via-yellow-500 to-amber-200', ringColor: 'ring-amber-400', icon: '👑', glow: 'shadow-amber-500/80', imageUrl: genUrl('golden dragon god divine glowing aura', 2048), particleColor: '#fbbf24' },
 };
 
-export const PERKS = [
-  { level: 3, desc: "Luck of the Goblin: 5% chance for 4-spawn" },
-  { level: 5, desc: "Expansion: Grid size increased to 5x5!" },
-  { level: 5, desc: "BOSSES: Dangerous bosses appear every 5 levels!" },
-  { level: 7, desc: "Veteran: +50% XP from merges" },
-  { level: 10, desc: "Loot Mode: Merges drop Gold & Items" },
-  { level: 10, desc: "Expansion: Grid size increased to 6x6!" },
-  { level: 15, desc: "Reroll Unlocked: 1 Free Reroll per level" },
-  { level: 15, desc: "Expansion: Grid size increased to 7x7!" },
-  { level: 20, desc: "Auto-Merge: Rarely auto-combine adjacent tiles" },
-  { level: 20, desc: "Expansion: Grid size increased to 8x8!" },
-];
+export const BOSS_STYLE = { label: 'BOSS', color: 'from-red-950 to-black', ringColor: 'ring-red-600', icon: '💀', glow: 'shadow-red-600/100', imageUrl: genUrl('terrifying skeleton lich king dark magic', 666), particleColor: '#ef4444' };
+export const FALLBACK_STYLE = { label: '???', color: 'from-gray-800 to-black', ringColor: 'ring-gray-500', icon: '❓', glow: 'shadow-none', imageUrl: '', particleColor: '#ffffff' };
 
-export interface ShopItemDef {
-    id: ItemType;
-    name: string;
-    price: number;
-    icon: string;
-    desc: string;
-    category: 'CONSUMABLE' | 'MAGIC' | 'BATTLE';
-}
+export const RUNE_STYLES: Record<string, any> = {
+    [TileType.RUNE_MIDAS]: { label: 'MIDAS', color: 'from-yellow-800 to-yellow-900', ringColor: 'ring-yellow-400', icon: '💰', glow: 'shadow-yellow-400/50', imageUrl: genUrl('gold coin rune magical glowing', 777), particleColor: '#fbbf24' },
+    [TileType.RUNE_CHRONOS]: { label: 'TIME', color: 'from-blue-800 to-blue-900', ringColor: 'ring-blue-400', icon: '⏳', glow: 'shadow-blue-400/50', imageUrl: genUrl('blue hourglass rune magical glowing', 888), particleColor: '#60a5fa' },
+    [TileType.RUNE_VOID]: { label: 'VOID', color: 'from-purple-950 to-black', ringColor: 'ring-purple-600', icon: '⚫', glow: 'shadow-purple-600/50', imageUrl: genUrl('black hole void rune magical glowing', 999), particleColor: '#a855f7' },
+};
 
-export const SHOP_ITEMS: ShopItemDef[] = [
-  // Consumables (Essentials)
-  { id: ItemType.XP_POTION, name: "XP Elixir", price: 50, icon: "🧪", desc: "+1000 XP instantly. Level up faster.", category: 'CONSUMABLE' },
-  { id: ItemType.BOMB_SCROLL, name: "Purge Scroll", price: 100, icon: "📜", desc: "Destroys 3 lowest value tiles.", category: 'CONSUMABLE' },
-  { id: ItemType.REROLL_TOKEN, name: "Reroll Token", price: 75, icon: "🔄", desc: "One free board reset.", category: 'CONSUMABLE' },
+export const SHOP_ITEMS = [
+  // Consumables
+  { id: ItemType.XP_POTION, name: 'XP Potion', price: 100, desc: '+1000 XP instantly.', icon: '🧪', category: 'CONSUMABLE' },
+  { id: ItemType.BOMB_SCROLL, name: 'Purge Scroll', price: 250, desc: 'Destroy 3 weakest tiles.', icon: '📜', category: 'BATTLE' },
+  { id: ItemType.REROLL_TOKEN, name: 'Fate Token', price: 150, desc: 'Reroll the board once.', icon: '🎲', category: 'CONSUMABLE' },
   
-  // Magic (Runes & Buffs)
-  { id: ItemType.GOLDEN_RUNE, name: "Golden Rune", price: 500, icon: "🌟", desc: "Next spawn is a high-tier tile.", category: 'MAGIC' },
-  { id: ItemType.LUCKY_CHARM, name: "Lucky Charm", price: 150, icon: "🍀", desc: "Better loot chance (3 turns).", category: 'MAGIC' },
-  { id: ItemType.LUCKY_DICE, name: "Lucky Dice", price: 300, icon: "🎲", desc: "More Power-Up tiles spawn for 20 turns.", category: 'MAGIC' },
-  { id: ItemType.CHAIN_CATALYST, name: "Chain Catalyst", price: 250, icon: "⛓️", desc: "Guarantees Cascades for 10 turns.", category: 'MAGIC' },
+  // Magic
+  { id: ItemType.GOLDEN_RUNE, name: 'Golden Rune', price: 400, desc: 'Next spawn is Tier 3 (16).', icon: '🌟', category: 'MAGIC' },
+  { id: ItemType.LUCKY_CHARM, name: 'Lucky Charm', price: 300, desc: 'Better loot chance (3 turns).', icon: '🍀', category: 'MAGIC' },
+  { id: ItemType.LUCKY_DICE, name: 'Lucky Dice', price: 350, desc: 'Runes spawn 5x more often (20 turns).', icon: '🎲', category: 'MAGIC' },
   
-  // Battle (Bosses & Economy)
-  { id: ItemType.MIDAS_POTION, name: "Midas Brew", price: 400, icon: "🏺", desc: "2x Gold gain for 50 turns.", category: 'BATTLE' },
-  { id: ItemType.SIEGE_BREAKER, name: "Siege Breaker", price: 600, icon: "🔨", desc: "Next boss hit deals 3x Damage.", category: 'BATTLE' },
+  // Battle
+  { id: ItemType.SIEGE_BREAKER, name: 'Siege Breaker', price: 500, desc: 'Next boss hit deals 3x Damage.', icon: '🔨', category: 'BATTLE' },
+  { id: ItemType.CHAIN_CATALYST, name: 'Chain Catalyst', price: 600, desc: 'Enable Auto-Cascades (10 turns).', icon: '⚡', category: 'BATTLE' },
+  { id: ItemType.MIDAS_POTION, name: 'Midas Brew', price: 450, desc: '2x Gold from merges (50 turns).', icon: '⚱️', category: 'CONSUMABLE' },
+  { id: ItemType.VOID_STONE, name: 'Void Stone', price: 800, desc: 'Consumes 1 weak tile every turn (10 turns).', icon: '🌑', category: 'MAGIC' },
+  { id: ItemType.RADIANT_AURA, name: 'Radiant Aura', price: 700, desc: '+50% XP Gain (20 turns).', icon: '☀️', category: 'MAGIC' }
 ];
 
 export const RECIPES: CraftingRecipe[] = [
-  {
-    id: 'craft_greater_xp',
-    resultId: ItemType.GREATER_XP_POTION,
-    name: "Greater Elixir",
-    description: "Grants +2500 XP instantly.",
-    icon: "⚗️",
-    goldCost: 100,
-    ingredients: [{ type: ItemType.XP_POTION, count: 2 }]
-  },
-  {
-    id: 'craft_cataclysm',
-    resultId: ItemType.CATACLYSM_SCROLL,
-    name: "Cataclysm Scroll",
-    description: "Destroys 50% of tiles (non-boss).",
-    icon: "🌋",
-    goldCost: 200,
-    ingredients: [{ type: ItemType.BOMB_SCROLL, count: 2 }]
-  },
-  {
-    id: 'craft_ascendant',
-    resultId: ItemType.ASCENDANT_RUNE,
-    name: "Ascendant Rune",
-    description: "Next 5 spawns are high-tier.",
-    icon: "🧿",
-    goldCost: 500,
-    ingredients: [{ type: ItemType.GOLDEN_RUNE, count: 2 }]
-  }
+    { 
+        id: 'RECIPE_GREATER_XP', resultId: ItemType.GREATER_XP_POTION, name: 'Greater XP Potion', description: 'Grants 2500 XP.', icon: '⚗️', goldCost: 100,
+        ingredients: [ { type: ItemType.XP_POTION, count: 2 } ]
+    },
+    { 
+        id: 'RECIPE_CATACLYSM', resultId: ItemType.CATACLYSM_SCROLL, name: 'Cataclysm Scroll', description: 'Removes 50% of tiles.', icon: '🌋', goldCost: 300,
+        ingredients: [ { type: ItemType.BOMB_SCROLL, count: 2 } ]
+    },
+    { 
+        id: 'RECIPE_ASCENDANT', resultId: ItemType.ASCENDANT_RUNE, name: 'Ascendant Rune', description: 'Next 5 spawns are High Tier.', icon: '👑', goldCost: 500,
+        ingredients: [ { type: ItemType.GOLDEN_RUNE, count: 2 } ]
+    }
 ];
 
 export const getItemDefinition = (type: ItemType) => {
     const shopItem = SHOP_ITEMS.find(i => i.id === type);
     if (shopItem) return shopItem;
     
+    // Check recipes for crafted items
     const recipe = RECIPES.find(r => r.resultId === type);
-    if (recipe) return { name: recipe.name, desc: recipe.description, icon: recipe.icon };
-    
-    return { name: "Unknown", desc: "???", icon: "❓" };
+    if (recipe) return { name: recipe.name, desc: recipe.description, icon: recipe.icon, price: 0 }; // Price 0 as it's not bought directly usually
+
+    return { name: 'Unknown', desc: '???', icon: '❓', price: 0 };
+};
+
+export const getLevelRank = (level: number) => {
+    if (level < 5) return { title: 'Novice', color: 'text-slate-400', border: 'border-slate-500', bg: 'from-slate-800 to-slate-900', icon: Shield };
+    if (level < 10) return { title: 'Apprentice', color: 'text-blue-400', border: 'border-blue-500', bg: 'from-blue-900 to-slate-900', icon: Scroll };
+    if (level < 20) return { title: 'Adept', color: 'text-green-400', border: 'border-green-500', bg: 'from-green-900 to-slate-900', icon: Star };
+    if (level < 30) return { title: 'Expert', color: 'text-yellow-400', border: 'border-yellow-500', bg: 'from-yellow-900 to-slate-900', icon: Crown };
+    if (level < 50) return { title: 'Master', color: 'text-orange-500', border: 'border-orange-500', bg: 'from-orange-900 to-red-900', icon: Flame };
+    return { title: 'Legend', color: 'text-red-500', border: 'border-red-500', bg: 'from-red-950 to-black', icon: Zap };
 };
 
 export const ACHIEVEMENTS: Achievement[] = [
-  {
-    id: 'first_blood',
-    name: 'First Blood',
-    description: 'Merge your first tiles.',
-    icon: '⚔️',
-    condition: (stats) => stats.totalMerges > 0,
-    reward: { gold: 50 }
-  },
-  {
-    id: 'slime_hunter',
-    name: 'Slime Hunter',
-    description: 'Merge 50 Slimes (Value 2).',
-    icon: '🟢',
-    condition: (stats) => stats.slimesMerged >= 50,
-    reward: { xp: 500 }
-  },
-  {
-    id: 'boss_slayer',
-    name: 'Boss Slayer',
-    description: 'Defeat your first Boss.',
-    icon: '☠️',
-    condition: (stats) => stats.bossesDefeated >= 1,
-    reward: { gold: 500, xp: 1000 }
-  },
-  {
-    id: 'combo_novice',
-    name: 'Combo Novice',
-    description: 'Achieve a 4x Combo.',
-    icon: '🔥',
-    condition: (stats) => stats.highestCombo >= 4,
-    reward: { gold: 100 }
-  },
-  {
-    id: 'dragon_tamer',
-    name: 'Dragon Tamer',
-    description: 'Create a Drake (32).',
-    icon: '🦎',
-    condition: (stats) => stats.highestTile >= 32,
-    reward: { gold: 250, xp: 250 }
-  },
-  {
-    id: 'hoarder',
-    name: 'Gold Hoarder',
-    description: 'Collect 1000 Gold total.',
-    icon: '💰',
-    condition: (stats) => stats.goldCollected >= 1000,
-    reward: { item: ItemType.LUCKY_CHARM }
-  },
-  {
-    id: 'legendary',
-    name: 'Legendary',
-    description: 'Create a Legend (512).',
-    icon: '⚡',
-    condition: (stats) => stats.highestTile >= 512,
-    reward: { item: ItemType.GOLDEN_RUNE, gold: 1000 }
-  }
+    { id: 'FIRST_MERGE', name: 'First Blood', description: 'Merge two Slimes.', icon: '🩸', condition: (s) => s.totalMerges >= 1, reward: { xp: 100 } },
+    { id: 'COMBO_KING', name: 'Combo King', description: 'Reach a x5 Combo.', icon: '⚡', condition: (s) => s.highestCombo >= 5, reward: { gold: 50 } },
+    { id: 'BOSS_SLAYER', name: 'Boss Slayer', description: 'Defeat your first Boss.', icon: '💀', condition: (s) => s.bossesDefeated >= 1, reward: { gold: 200, xp: 500 } },
+    { id: 'RICH', name: 'Hoarder', description: 'Collect 1000 Gold.', icon: '💰', condition: (s) => s.goldCollected >= 1000, reward: { xp: 500 } },
+    { id: 'LEGENDARY', name: 'Legendary', description: 'Create a Dragon (1024).', icon: '🐲', condition: (s) => s.highestTile >= 1024, reward: { gold: 1000 } },
+    { id: 'GODLIKE', name: 'Godlike', description: 'Create the Dragon God (2048).', icon: '👑', condition: (s) => s.highestTile >= 2048, reward: { gold: 5000, xp: 10000 } }
 ];

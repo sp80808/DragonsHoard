@@ -124,99 +124,49 @@
         animation: hitFlash 0.3s ease-out;
       }
 
-      .shake {
-        animation: shake 0.5s cubic-bezier(.36,.07,.19,.97) both;
+      /* Screen/Tile Shake Intensities */
+      @keyframes shakeSmall {
+        0%, 100% { transform: translate(0, 0); }
+        25% { transform: translate(-1px, 1px); }
+        75% { transform: translate(1px, -1px); }
       }
 
-      @keyframes shake {
-        10%, 90% { transform: translate3d(-2px, 0, 0); }
-        20%, 80% { transform: translate3d(4px, 0, 0); }
-        30%, 50%, 70% { transform: translate3d(-6px, 0, 0); }
-        40%, 60% { transform: translate3d(6px, 0, 0); }
+      @keyframes shakeMedium {
+        0%, 100% { transform: translate(0, 0); }
+        20% { transform: translate(-2px, 2px); }
+        40% { transform: translate(2px, -2px); }
+        60% { transform: translate(-2px, 2px); }
+        80% { transform: translate(2px, -2px); }
       }
 
-      /* Stage Transition */
-      .stage-transition {
-        animation: stageFlash 3s ease-in-out forwards;
+      @keyframes shakeLarge {
+        0%, 100% { transform: translate(0, 0); }
+        10% { transform: translate(-4px, -4px) rotate(-1deg); }
+        20% { transform: translate(4px, 4px) rotate(1deg); }
+        30% { transform: translate(-4px, 4px) rotate(-1deg); }
+        40% { transform: translate(4px, -4px) rotate(1deg); }
+        50% { transform: translate(0, 0); }
       }
 
-      @keyframes stageFlash {
-        0% { opacity: 0; transform: scale(1.1); }
-        20% { opacity: 1; transform: scale(1); }
-        80% { opacity: 1; transform: scale(1); }
-        100% { opacity: 0; transform: scale(0.95); }
+      .animate-shake-sm { animation: shakeSmall 0.3s ease-in-out; }
+      .animate-shake-md { animation: shakeMedium 0.4s ease-in-out; }
+      .animate-shake-lg { animation: shakeLarge 0.5s ease-in-out; }
+      .animate-shake { animation: shakeLarge 0.5s cubic-bezier(.36,.07,.19,.97) both; } /* Global fallback */
+
+      /* GODWAVE - Tier 4 Epic Pulse */
+      @keyframes godwaveExpand {
+        0% { transform: scale(0.9); opacity: 0.8; box-shadow: 0 0 0 rgba(251, 191, 36, 0.8); border-width: 4px; border-color: rgba(251, 191, 36, 1); }
+        100% { transform: scale(1.6); opacity: 0; box-shadow: 0 0 50px rgba(251, 191, 36, 0); border-width: 0px; border-color: rgba(251, 191, 36, 0); }
       }
 
-      /* Sword Slash */
-      @keyframes slash {
-        0% { clip-path: polygon(0 0, 0 0, 0 0, 0 0); opacity: 0; }
-        20% { clip-path: polygon(0 0, 100% 100%, 100% 100%, 0 0); opacity: 1; background: white; }
-        100% { clip-path: polygon(100% 100%, 100% 100%, 100% 100%, 100% 100%); opacity: 0; }
-      }
-      
-      .slash-effect::after {
-        content: '';
-        position: absolute;
-        inset: -20%;
-        background: linear-gradient(45deg, transparent 45%, rgba(255,255,255,0.8) 50%, transparent 55%);
-        animation: slash 0.4s ease-out;
-        pointer-events: none;
-        z-index: 50;
+      .animate-godwave {
+        animation: godwaveExpand 0.7s cubic-bezier(0.165, 0.84, 0.44, 1) forwards;
       }
 
       /* XP Bar Shimmer */
       @keyframes shimmer {
         0% { transform: translateX(-150%) skewX(-20deg); }
         100% { transform: translateX(200%) skewX(-20deg); }
-      }
-
-      /* Item Usage Effects */
-      @keyframes itemFadeOut {
-        0% { opacity: 1; }
-        100% { opacity: 0; }
-      }
-
-      .effect-xp {
-        background: radial-gradient(circle at center, rgba(56, 189, 248, 0.4) 0%, transparent 70%);
-        animation: itemFadeOut 1s ease-out forwards;
-        pointer-events: none;
-        z-index: 60;
-      }
-
-      .effect-bomb {
-        background: radial-gradient(circle at center, rgba(239, 68, 68, 0.4) 0%, transparent 70%);
-        animation: shake 0.5s ease-in-out, itemFadeOut 0.5s ease-out forwards;
-        pointer-events: none;
-        z-index: 60;
-      }
-
-      .effect-gold {
-        box-shadow: inset 0 0 100px rgba(234, 179, 8, 0.5);
-        background: linear-gradient(135deg, transparent 40%, rgba(250, 204, 21, 0.2) 50%, transparent 60%);
-        background-size: 200% 200%;
-        animation: shimmer 1s linear, itemFadeOut 1s ease-out forwards;
-        pointer-events: none;
-        z-index: 60;
-      }
-
-      .effect-luck {
-        background: radial-gradient(circle at center, rgba(34, 197, 94, 0.3) 0%, transparent 70%);
-        box-shadow: inset 0 0 50px rgba(34, 197, 94, 0.3);
-        animation: itemFadeOut 1s ease-out forwards;
-        pointer-events: none;
-        z-index: 60;
-      }
-
-      .effect-reroll {
-        background: conic-gradient(from 0deg, transparent, rgba(168, 85, 247, 0.3), transparent);
-        animation: spin 0.5s linear, itemFadeOut 0.5s ease-out forwards;
-        pointer-events: none;
-        z-index: 60;
-      }
-
-      @keyframes spin {
-        from { transform: rotate(0deg); }
-        to { transform: rotate(360deg); }
       }
 
       /* Tutorial Hand Animation */

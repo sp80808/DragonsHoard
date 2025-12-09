@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { getXpThreshold, getLevelRank } from '../constants';
-import { Trophy, Star, Store as StoreIcon, Coins, RefreshCw, Menu, Clover, Skull, Zap, Info, HelpCircle, Flame, Hammer } from 'lucide-react';
+import { Trophy, Star, Store as StoreIcon, Coins, RefreshCw, Menu, Clover, Skull, Zap, Info, HelpCircle, Flame, Hammer, Moon, Sun } from 'lucide-react';
 import { InventoryItem, Stage, GameMode, InputSettings } from '../types';
 
 interface HUDProps {
@@ -78,6 +78,11 @@ export const HUD: React.FC<HUDProps> = ({
   if ((effectCounters['CHAIN_CATALYST'] || 0) > 0) buffs.push({ id: 'chain', icon: <Flame size={12} className="text-orange-400" />, label: 'CHAIN', count: effectCounters['CHAIN_CATALYST'], color: 'bg-orange-900/40 border-orange-500/30' });
   if ((effectCounters['MIDAS_POTION'] || 0) > 0) buffs.push({ id: 'midas', icon: <Coins size={12} className="text-yellow-400" />, label: 'MIDAS', count: effectCounters['MIDAS_POTION'], color: 'bg-yellow-900/40 border-yellow-500/30' });
   if ((effectCounters['SIEGE_BREAKER'] || 0) > 0) buffs.push({ id: 'siege', icon: <Hammer size={12} className="text-red-400" />, label: 'MIGHT', count: effectCounters['SIEGE_BREAKER'], color: 'bg-red-900/40 border-red-500/30' });
+  
+  // New Additions
+  if ((effectCounters['VOID_STONE'] || 0) > 0) buffs.push({ id: 'void', icon: <Moon size={12} className="text-purple-400" />, label: 'VOID', count: effectCounters['VOID_STONE'], color: 'bg-purple-900/40 border-purple-500/30' });
+  if ((effectCounters['RADIANT_AURA'] || 0) > 0) buffs.push({ id: 'radiant', icon: <Sun size={12} className="text-amber-200" />, label: 'AURA', count: effectCounters['RADIANT_AURA'], color: 'bg-amber-900/40 border-amber-500/30' });
+
 
   // Tooltip Helper Component
   const MicroTooltip = ({ id, icon, title, content, side = 'left' }: { id: string, icon: React.ReactNode, title: string, content: React.ReactNode, side?: 'left' | 'right' }) => {
@@ -199,30 +204,41 @@ export const HUD: React.FC<HUDProps> = ({
       <>
         <div className="flex gap-2 h-10 md:h-14">
             {/* XP Bar Container */}
-            <div className={`flex-1 bg-[#0a0c10] p-1 rounded-lg border border-slate-700 relative flex items-center shadow-lg overflow-visible group`}>
+            <div className={`flex-1 bg-[#0a0c10] p-1 rounded-lg border border-slate-700 relative flex items-center shadow-lg overflow-visible group pl-4`}>
                 
-                {/* Level Badge - Hexagonal/Shield style */}
-                <div className="relative -ml-2 z-20 shrink-0">
-                     <div className="w-10 h-10 md:w-12 md:h-12 bg-gradient-to-br from-slate-700 to-slate-900 border-2 border-slate-500 rounded-xl rotate-45 flex items-center justify-center shadow-lg relative group-hover:scale-105 transition-transform">
-                          <div className="absolute inset-0 bg-slate-950/50 rounded-lg"></div>
-                          {/* Inner Content (Counter-rotated) */}
-                          <div className="-rotate-45 flex flex-col items-center justify-center">
-                              <RankIcon size={14} className={`${rank.color} mb-0.5`} />
+                {/* Level Badge - Hexagonal Banner Style */}
+                <div className="absolute -left-1 top-1/2 -translate-y-1/2 z-20 filter drop-shadow-xl hover:scale-105 transition-transform duration-300">
+                     <div 
+                        className={`w-12 h-14 md:w-14 md:h-16 ${rank.bg} flex items-center justify-center relative`}
+                        style={{ clipPath: 'polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%)' }}
+                     >
+                          {/* Inner Border */}
+                          <div 
+                            className="absolute inset-[2px] bg-slate-900 z-0" 
+                            style={{ clipPath: 'polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%)' }}
+                          ></div>
+                          
+                          {/* Rank Icon Content */}
+                          <div className="relative z-10 flex flex-col items-center justify-center -mt-1">
+                              <RankIcon size={18} className={`${rank.color} mb-0.5 filter drop-shadow-[0_0_5px_currentColor]`} />
                               <span className="text-xs md:text-sm font-black text-white leading-none font-mono">{level}</span>
                           </div>
+
+                          {/* Top Shine */}
+                          <div className="absolute top-0 left-0 right-0 h-1/2 bg-gradient-to-b from-white/20 to-transparent pointer-events-none z-20" style={{ clipPath: 'polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%)' }}></div>
                      </div>
                      
-                     {/* Rank Title Label below badge */}
-                     <div className={`absolute -bottom-3 left-1/2 -translate-x-1/2 text-[8px] font-bold uppercase tracking-wide bg-black/80 px-1.5 rounded border border-slate-800 ${rank.color} whitespace-nowrap z-30`}>
+                     {/* Rank Title Label */}
+                     <div className={`absolute -bottom-2 left-1/2 -translate-x-1/2 text-[7px] font-bold uppercase tracking-wide bg-slate-900 border ${rank.border} text-white px-2 py-0.5 rounded-full whitespace-nowrap z-30 shadow-md`}>
                         {rank.title}
                      </div>
                 </div>
 
-                {/* Progress Bar Area */}
-                <div className="flex-1 flex flex-col justify-center pl-3 pr-1 h-full relative">
+                {/* Progress Bar Area - Magic Vial Style */}
+                <div className="flex-1 flex flex-col justify-center pl-10 pr-1 h-full relative">
                     <div className="flex justify-between items-center mb-0.5 z-10">
                         <div className="flex items-center gap-1">
-                             <span className={`text-[9px] md:text-[10px] font-bold uppercase tracking-wider text-slate-400`}>Experience</span>
+                             <span className={`text-[9px] md:text-[10px] font-bold uppercase tracking-wider text-slate-400`}>XP</span>
                              <MicroTooltip 
                                 id="progression-help"
                                 icon={<Info size={10} />}
@@ -242,19 +258,24 @@ export const HUD: React.FC<HUDProps> = ({
                         </span>
                     </div>
 
-                    <div className="w-full h-3 md:h-4 bg-black/60 rounded-r-md border border-slate-800/50 relative overflow-hidden">
+                    <div className="w-full h-3 md:h-4 bg-black/80 rounded-full border border-slate-700/80 relative overflow-hidden shadow-[inset_0_2px_4px_rgba(0,0,0,1)]">
+                        {/* Fluid Fill */}
                         <div 
-                            className={`h-full bg-gradient-to-r ${barGradient} transition-all duration-500 ease-out relative shadow-[0_0_10px_rgba(0,0,0,0.3)]`}
+                            className={`h-full bg-gradient-to-r ${barGradient} transition-all duration-700 ease-out relative shadow-[0_0_15px_rgba(255,255,255,0.1)]`}
                             style={{ width: `${xpPercent}%` }}
                         >
+                            {/* Bubbles / Shimmer */}
                             <div 
-                                className="absolute inset-0 w-full h-full"
+                                className="absolute inset-0 w-full h-full opacity-50"
                                 style={{ 
-                                    background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.2) 40%, rgba(255,255,255,0.6) 50%, rgba(255,255,255,0.2) 60%, transparent)',
+                                    background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.4) 50%, transparent)',
                                     animation: `shimmer ${shimmerDuration} infinite linear`
                                 }}
                             ></div>
                         </div>
+                        
+                        {/* Glass Reflection Overlay */}
+                        <div className="absolute inset-0 bg-gradient-to-b from-white/10 to-transparent pointer-events-none rounded-full"></div>
                     </div>
                 </div>
             </div>
@@ -277,6 +298,11 @@ export const HUD: React.FC<HUDProps> = ({
                     const item = inventory[slotIndex];
                     return (
                         <div key={slotIndex} className="flex-1 bg-slate-900/50 border border-slate-800 rounded-lg relative flex items-center justify-center group overflow-hidden">
+                            {/* Hotkey Indicator - Always Visible */}
+                            <div className="absolute top-0 left-0 bg-slate-800/90 px-1.5 py-0.5 rounded-br-md text-[9px] font-mono text-slate-500 border-r border-b border-slate-700/50 z-10">
+                                {slotIndex + 1}
+                            </div>
+
                             {item ? (
                                 <button 
                                     onClick={() => onUseItem(item)}

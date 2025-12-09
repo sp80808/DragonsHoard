@@ -27,7 +27,11 @@ export enum ItemType {
   CHAIN_CATALYST = 'CHAIN_CATALYST', // 10 turns of guaranteed/boosted cascades
   LUCKY_DICE = 'LUCKY_DICE', // Increases power-up spawn rate
   MIDAS_POTION = 'MIDAS_POTION', // 2x Gold for 50 turns
-  SIEGE_BREAKER = 'SIEGE_BREAKER', // Next hit on boss does 3x damage
+  SIEGE_BREAKER = 'SIEGE_BREAKER', // Next boss hit deals 3x damage
+  
+  // New Additions
+  VOID_STONE = 'VOID_STONE', // Consumes 1 weak tile/turn
+  RADIANT_AURA = 'RADIANT_AURA', // +50% XP
   
   // Crafted Items
   GREATER_XP_POTION = 'GREATER_XP_POTION',
@@ -83,6 +87,7 @@ export interface Stage {
   backgroundUrl: string;
   colorTheme: string;
   barColor: string; // CSS gradient class for XP bar
+  prompt?: string;
 }
 
 export interface FloatingText {
@@ -203,6 +208,7 @@ export interface MoveResult {
   score: number;
   xpGained: number;
   goldGained: number;
+  itemsFound: InventoryItem[]; // New loot field
   moved: boolean;
   mergedIds: string[];
   lastSpawnedTileId?: string;

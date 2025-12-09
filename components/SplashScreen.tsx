@@ -138,69 +138,70 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({ onStart, onContinue,
           <div className="flex-1 flex flex-col gap-4 lg:gap-6 w-full max-w-md mx-auto justify-center pb-8 lg:pb-0">
               
               {/* Profile Card - RPG RANK STYLE */}
-              <div className="bg-[#0b0f19] border border-amber-900/30 rounded-2xl p-0 backdrop-blur-xl shadow-2xl relative overflow-hidden group hover:border-amber-700/50 transition-colors duration-500">
+              <div className={`bg-slate-950/80 border ${rank.border} rounded-3xl p-0 backdrop-blur-xl shadow-2xl relative overflow-hidden group hover:border-opacity-100 border-opacity-30 transition-all duration-500`}>
                   {/* Card Header Background */}
-                  <div className="absolute top-0 left-0 right-0 h-24 bg-gradient-to-b from-slate-800/50 to-transparent"></div>
+                  <div className={`absolute top-0 left-0 right-0 h-32 bg-gradient-to-b ${rank.bg} opacity-20`}></div>
+                  <div className="absolute top-0 left-0 w-full h-full bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-10 pointer-events-none"></div>
 
-                  <div className="flex items-center gap-5 p-6 relative z-10">
+                  <div className="flex flex-col items-center p-8 relative z-10">
                       {/* Rank Icon Container */}
-                      <div className="w-20 h-20 lg:w-24 lg:h-24 relative flex items-center justify-center shrink-0">
+                      <div className="w-24 h-24 mb-4 relative flex items-center justify-center shrink-0">
                           {/* Animated Glow behind Badge */}
-                          <div className={`absolute inset-0 rounded-full blur-xl opacity-40 animate-pulse ${rank.bg}`}></div>
+                          <div className={`absolute inset-0 rounded-full blur-xl opacity-60 animate-pulse ${rank.bg}`}></div>
                           
                           {/* The Badge */}
-                          <div className={`relative w-full h-full bg-gradient-to-br from-slate-800 to-slate-950 rounded-full border-4 flex items-center justify-center shadow-2xl ${rank.color.replace('text', 'border')}`}>
-                              <RankIcon size={40} className={`${rank.color} drop-shadow-[0_0_10px_rgba(0,0,0,0.8)]`} strokeWidth={1.5} />
+                          <div className={`relative w-full h-full bg-slate-900 rounded-full border-4 flex items-center justify-center shadow-[0_0_20px_rgba(0,0,0,0.5)] ${rank.border}`}>
+                              <RankIcon size={48} className={`${rank.color} drop-shadow-[0_0_10px_currentColor]`} strokeWidth={1.5} />
                               
-                              {/* Level Pill */}
-                              <div className="absolute -bottom-2 bg-slate-950 border border-slate-700 px-2 py-0.5 rounded-full text-xs font-bold text-white shadow-lg">
-                                  LVL {profile.accountLevel}
+                              {/* Level Badge */}
+                              <div className="absolute -bottom-3 bg-slate-950 border border-slate-700 px-3 py-1 rounded-full text-sm font-bold text-white shadow-lg flex items-center gap-1">
+                                  <span className="text-slate-400 text-[10px] uppercase">Lvl</span> {profile.accountLevel}
                               </div>
                           </div>
                       </div>
 
                       {/* Rank Text Details */}
-                      <div className="flex-1 min-w-0">
-                          <div className="text-[10px] text-slate-500 uppercase tracking-[0.2em] font-bold mb-1">Current Rank</div>
-                          <div className={`text-2xl lg:text-3xl font-black ${rank.color} leading-none tracking-tight truncate fantasy-font drop-shadow-sm`}>
+                      <div className="text-center">
+                          <div className="text-[10px] text-slate-400 uppercase tracking-[0.3em] font-bold mb-1">Current Rank</div>
+                          <div className={`text-4xl font-black ${rank.color} tracking-tight fantasy-font drop-shadow-md`}>
                               {rank.title}
-                          </div>
-                          <div className="text-xs text-slate-400 mt-1 font-medium truncate">
-                              Games Played: <span className="text-slate-200">{profile.gamesPlayed}</span>
                           </div>
                       </div>
                   </div>
                   
                   {/* Detailed XP Bar */}
-                  <div className="relative bg-slate-950/50 border-t border-white/5 p-4">
+                  <div className="bg-slate-900/80 border-t border-white/5 p-6">
                       <div className="flex justify-between text-[10px] text-slate-400 mb-2 font-mono font-bold tracking-wider">
                           <span>XP PROGRESS</span>
                           <span>{Math.floor(xpIntoLevel)} / {Math.floor(xpForLevel)}</span>
                       </div>
                       
-                      <div className="h-3 lg:h-4 bg-black rounded-full overflow-hidden border border-slate-800 shadow-[inset_0_2px_4px_rgba(0,0,0,0.8)] relative">
+                      <div className="h-4 bg-black rounded-full overflow-hidden border border-slate-800 shadow-[inset_0_2px_4px_rgba(0,0,0,0.8)] relative">
                            {/* Background Strips */}
                            <div className="absolute inset-0 opacity-20 bg-[repeating-linear-gradient(45deg,transparent,transparent_5px,#fff_5px,#fff_6px)]"></div>
                            
                            {/* Fill */}
                            <div 
-                                className={`h-full relative shadow-[0_0_15px_rgba(0,0,0,0.5)] transition-all duration-1000 ease-out ${rank.bg}`} 
+                                className={`h-full relative shadow-[0_0_15px_currentColor] transition-all duration-1000 ease-out ${rank.bg}`} 
                                 style={{ width: `${xpPercent}%` }}
                            >
-                              <div className="absolute inset-0 bg-gradient-to-b from-white/20 to-transparent"></div>
-                              <div className="absolute right-0 top-0 bottom-0 w-[1px] bg-white/50 shadow-[0_0_10px_white]"></div>
+                              <div className="absolute inset-0 bg-gradient-to-b from-white/30 to-transparent"></div>
+                              <div className="absolute right-0 top-0 bottom-0 w-[2px] bg-white/70 shadow-[0_0_10px_white]"></div>
                            </div>
                       </div>
                       
                       {/* Next Reward Hint */}
-                      <div className="mt-2 text-[10px] text-center text-slate-500">
-                          Next Rank: <span className="text-slate-300">Level {Math.ceil((profile.accountLevel + 1) / 10) * 10}</span>
+                      <div className="mt-4 flex justify-between items-center">
+                          <div className="text-[10px] text-slate-500">Games Played: <span className="text-slate-300">{profile.gamesPlayed}</span></div>
+                          <div className="text-[10px] text-slate-500">
+                              Next Rank: <span className="text-slate-300 font-bold">Level {Math.ceil((profile.accountLevel + 1) / 10) * 10}</span>
+                          </div>
                       </div>
                   </div>
               </div>
 
               {/* Daily Bounties */}
-              <div className="bg-slate-900/40 border border-white/10 rounded-2xl p-4 lg:p-6 backdrop-blur-xl shadow-2xl flex-1 flex flex-col relative min-h-[180px]">
+              <div className="bg-slate-900/40 border border-white/10 rounded-2xl p-4 lg:p-6 backdrop-blur-xl shadow-2xl flex-1 flex flex-col relative min-h-[160px]">
                   <h3 className="text-amber-500 font-bold uppercase tracking-[0.15em] text-xs mb-4 flex items-center gap-2 relative z-10">
                       <Scroll size={14} /> Daily Bounties
                   </h3>

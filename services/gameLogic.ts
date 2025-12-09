@@ -102,7 +102,7 @@ export const initializeGame = (restart = false, heroClass: HeroClass = HeroClass
       name: stage.name,
       minLevel: stage.minLevel,
       backgroundUrl: getStageBackground(stage.name),
-      colorTheme: stage.color,
+      colorTheme: stage.colorTheme,
       barColor: stage.barColor
   };
 
@@ -177,14 +177,17 @@ export const moveGrid = (
     mode: GameMode, 
     effectCounters: Record<string, number>
 ): MoveResult => {
-  let newGrid = JSON.parse(JSON.stringify(grid)) as Tile[];
+  // Optimization: Shallow copy grid elements instead of deep JSON clone
+  let newGrid = grid.map(t => ({...t}));
   let score = 0;
   let xpGained = 0;
   let goldGained = 0;
+  let itemsFound: InventoryItem[] = [];
   let moved = false;
   let mergedIds: string[] = [];
   let powerUpTriggered: TileType | undefined;
   let bossDefeated = false;
+  const logs: string[] = [];
 
   // Remove "new" and "cascade" flags
   newGrid.forEach(t => { delete t.isNew; delete t.isCascade; delete t.mergedFrom; });
@@ -236,18 +239,6 @@ export const moveGrid = (
             const siegeMultiplier = (effectCounters['SIEGE_BREAKER'] || 0) > 0 ? 3 : 1;
             const damage = baseDmg * siegeMultiplier;
             
-            // Consume Siege Breaker stack
-            if (siegeMultiplier > 1 && effectCounters) {
-                // We rely on caller to decrement, but for damage calc we use it.
-                // Actually, let's just use it here. 
-                // We'll return a log or handle decrement in App.tsx via mergedIds? 
-                // Easier: Siege breaker consumes on hit.
-                // We can't mutate counters passed in props easily, so we assume App.tsx handles the turn decrement 
-                // OR we handle specific single-use triggers here.
-                // For Siege Breaker (next hit), it should be consumed. 
-                // We will assume 1 turn duration for the item logic in App.tsx or use a specific flag.
-            }
-
             nextTile.health = Math.max(0, (nextTile.health || 0) - damage);
             nextTile.mergedFrom = ['damage']; // Visual shake
 
@@ -268,26 +259,17 @@ export const moveGrid = (
         }
 
         // 2. Rune Collision (Activation)
-        // If moving tile is Rune OR target is Rune
         const isTileRune = tile.type.startsWith('RUNE_');
         const isNextRune = nextTile.type.startsWith('RUNE_');
 
         if (isTileRune || isNextRune) {
-            // Determine which is the rune
             const runeType = isTileRune ? tile.type : nextTile.type;
-            const nonRuneTile = isTileRune ? nextTile : tile;
-            
-            // Trigger Powerup
             powerUpTriggered = runeType;
             
-            // Remove the Rune tile
             if (isTileRune) {
                 newGrid = newGrid.filter(t => t.id !== tile.id);
-                // Move logic: Tile disappeared into NextTile?
-                // Actually if Tile was Rune moving into Next, Rune vanishes, Next stays.
                 moved = true;
             } else {
-                // Next was Rune. Tile moves into it. Rune vanishes, Tile takes its place.
                 newGrid = newGrid.filter(t => t.id !== nextTile.id);
                 tile.x = next.x;
                 tile.y = next.y;
@@ -309,10 +291,9 @@ export const moveGrid = (
             health: undefined, maxHealth: undefined
           };
 
-          // Special Tile Types Inheritance
           if (tile.type === TileType.GOLDEN || nextTile.type === TileType.GOLDEN) {
               mergedTile.type = TileType.GOLDEN;
-              goldGained += mergedValue; // Bonus gold
+              goldGained += mergedValue; 
           }
 
           newGrid = newGrid.filter(t => t.id !== tile.id && t.id !== nextTile.id);
@@ -325,6 +306,46 @@ export const moveGrid = (
           // Midas Potion Effect
           const goldMult = (effectCounters['MIDAS_POTION'] || 0) > 0 ? 2 : 1;
           goldGained += Math.floor((mergedValue / 10) * goldMult);
+
+          // === LOOT LOGIC ===
+          if (mode === 'RPG') {
+              // Modifiers
+              const luckBuff = (effectCounters['LUCKY_LOOT'] || 0) > 0 ? 0.05 : 0;
+              const diceBuff = (effectCounters['LUCKY_DICE'] || 0) > 0 ? 0.05 : 0;
+              
+              // Base Chance scales with Tile Value (Higher value = higher loot chance)
+              // 4 -> ~1%
+              // 32 -> ~2%
+              // 512 -> ~10%
+              const baseChance = Math.min(0.1, (Math.log2(mergedValue) * 0.005) + 0.005);
+              const totalChance = baseChance + luckBuff + diceBuff;
+
+              if (Math.random() < totalChance) {
+                  const roll = Math.random();
+                  
+                  // 80% chance for Gold Pouch (if loot triggers)
+                  if (roll < 0.8) {
+                      const goldAmount = Math.floor(mergedValue * 0.5) + 10;
+                      goldGained += goldAmount;
+                      logs.push(`Found Pouch: ${goldAmount} G`);
+                  } 
+                  // 20% chance for Item
+                  else {
+                      const availableItems = SHOP_ITEMS.filter(i => i.category !== 'BATTLE'); // Don't drop heavy battle items randomly
+                      const itemDef = availableItems[Math.floor(Math.random() * availableItems.length)];
+                      
+                      const item: InventoryItem = {
+                          id: createId(),
+                          type: itemDef.id,
+                          name: itemDef.name,
+                          description: itemDef.desc,
+                          icon: itemDef.icon
+                      };
+                      itemsFound.push(item);
+                  }
+              }
+          }
+          // ==================
 
           mergedIds.push(mergedTile.id);
           combo++;
@@ -344,15 +365,29 @@ export const moveGrid = (
     });
   });
 
-  const logs: string[] = [];
   if (bossDefeated) logs.push("BOSS DEFEATED! +500 Score");
   if (combo > 1) logs.push(`Combo x${combo}!`);
+
+  // Radiant Aura Effect (+50% XP)
+  if ((effectCounters['RADIANT_AURA'] || 0) > 0) {
+      xpGained = Math.floor(xpGained * 1.5);
+  }
 
   // Calculate Combo Multiplier for XP
   const comboMultiplier = 1 + (combo * 0.1);
   xpGained = Math.floor(xpGained * comboMultiplier);
 
-  return { grid: newGrid, score, xpGained, goldGained, moved, mergedIds, combo, comboMultiplier, logs, powerUpTriggered, bossDefeated };
+  // Void Stone Logic: Consume 1 weak tile at end of turn (Active Effect)
+  if ((effectCounters['VOID_STONE'] || 0) > 0 && moved) {
+     const lowTiles = newGrid.filter(t => t.value <= 4 && t.type !== TileType.BOSS);
+     if (lowTiles.length > 0) {
+         const target = lowTiles[Math.floor(Math.random() * lowTiles.length)];
+         newGrid = newGrid.filter(t => t.id !== target.id);
+         // Silent effect, no log to avoid spam
+     }
+  }
+
+  return { grid: newGrid, score, xpGained, goldGained, itemsFound, moved, mergedIds, combo, comboMultiplier, logs, powerUpTriggered, bossDefeated };
 };
 
 export const isGameOver = (grid: Tile[], size: number) => {
@@ -387,14 +422,12 @@ export const isGameOver = (grid: Tile[], size: number) => {
   return true;
 };
 
-// --- LOOT SYSTEM ---
+// --- LOOT SYSTEM (Legacy/Fallback) ---
 export const checkLoot = (level: number, mergedIds: string[], hasLuckyCharm: boolean, isClassic: boolean): LootResult | null => {
     if (isClassic || mergedIds.length === 0) return null;
     
-    // Base Chance: 2% per merge
-    // Lucky Charm: +5%
-    // Level Bonus: +0.1% per level
-    const chance = 0.02 + (hasLuckyCharm ? 0.05 : 0) + (level * 0.001);
+    // Base Chance: 1% per move independent of specific tile values (fallback event)
+    const chance = 0.01 + (hasLuckyCharm ? 0.05 : 0);
     
     if (Math.random() < chance) {
         const roll = Math.random();
@@ -526,8 +559,6 @@ export const useInventoryItem = (state: GameState, item: InventoryItem): Partial
             break;
 
         case ItemType.REROLL_TOKEN:
-            // Handled in reducer via REROLL action usually, but if used from inventory:
-            // We just add a free reroll charge
             return { rerolls: state.rerolls + 1, logs: [...logs, "+1 Free Reroll"] };
 
         case ItemType.GOLDEN_RUNE:
@@ -564,6 +595,16 @@ export const useInventoryItem = (state: GameState, item: InventoryItem): Partial
         case ItemType.SIEGE_BREAKER:
             newEffectCounters['SIEGE_BREAKER'] = (newEffectCounters['SIEGE_BREAKER'] || 0) + 1;
             logs.push("Siege Breaker: Next boss hit 3x DMG.");
+            break;
+
+        case ItemType.VOID_STONE:
+            newEffectCounters['VOID_STONE'] = (newEffectCounters['VOID_STONE'] || 0) + 10;
+            logs.push("Void Stone activated (10 turns).");
+            break;
+
+        case ItemType.RADIANT_AURA:
+            newEffectCounters['RADIANT_AURA'] = (newEffectCounters['RADIANT_AURA'] || 0) + 20;
+            logs.push("Radiant Aura: +50% XP (20 turns).");
             break;
 
         default:
@@ -614,7 +655,7 @@ export const executeAutoCascade = (grid: Tile[], size: number, cascadeStep: numb
     // OR: Random matches pop? 
     // Let's implement "Chain Reaction": Adjacent matching tiles automatically merge if they exist.
     
-    let newGrid = JSON.parse(JSON.stringify(grid)) as Tile[];
+    let newGrid = grid.map(t => ({...t}));
     let xp = 0;
     let gold = 0;
     let occurred = false;
