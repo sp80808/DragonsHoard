@@ -41,19 +41,17 @@ export const TileComponent: React.FC<TileProps> = ({ tile, gridSize }) => {
           
           // Tier 1: Flash (All merges for satisfaction)
           mergeClass += ' upgrade-flash';
+          
+          // Base Shake: Subtle shake for all merges
+          shakeClass = 'animate-shake-sm';
 
-          // Tier 2: Visual Shockwave & Subtle Shake (Drake+)
+          // Tier 2: Visual Shockwave & Stronger Shake (Drake+ / 32+)
           if (tile.value >= 32) {
               showShockwave = true;
-              shakeClass = 'animate-shake-sm';
-          }
-
-          // Tier 3: Stronger Shake (Demon+)
-          if (tile.value >= 128) {
               shakeClass = 'animate-shake-md';
           }
 
-          // Tier 4: Godwave & Heavy Shake (Legend+)
+          // Tier 4: Godwave & Heavy Shake (Legend+ / 512+)
           if (tile.value >= 512) {
               showGodwave = true;
               shakeClass = 'animate-shake-lg';
