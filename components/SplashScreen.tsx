@@ -1,8 +1,9 @@
 
 import React, { useEffect, useState } from 'react';
-import { Play, Trophy, Settings, User, Scroll, CheckCircle2, Circle, ChevronLeft, ChevronRight, Lock, Swords, Grid, BookOpen } from 'lucide-react';
+import { Play, Trophy, Settings, Scroll, CheckCircle2, Circle, ChevronLeft, ChevronRight, Lock, Swords, Grid, BookOpen } from 'lucide-react';
 import { getPlayerProfile, getNextLevelXp } from '../services/storageService';
 import { PlayerProfile, HeroClass, GameMode } from '../types';
+import { getLevelRank } from '../constants';
 
 interface SplashScreenProps {
   onStart: (selectedClass: HeroClass, mode: GameMode) => void;
@@ -44,6 +45,10 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({ onStart, onContinue,
   const currentClass = allClasses[selectedClassIndex];
   const isLocked = !profile.unlockedClasses.includes(currentClass);
   const classInfo = CLASS_DESCRIPTIONS[currentClass];
+
+  // Rank Info
+  const rank = getLevelRank(profile.accountLevel);
+  const RankIcon = rank.icon;
 
   const nextClass = () => setSelectedClassIndex((prev) => (prev + 1) % allClasses.length);
   const prevClass = () => setSelectedClassIndex((prev) => (prev - 1 + allClasses.length) % allClasses.length);
@@ -88,7 +93,7 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({ onStart, onContinue,
                   {hasSave && (
                       <button 
                           onClick={onContinue}
-                          className="w-full py-4 bg-slate-800/60 backdrop-blur-md hover:bg-slate-700/80 border border-slate-600/50 text-slate-200 font-bold rounded-xl flex items-center justify-center gap-3 transition-all hover:scale-[1.02] active:scale-95 duration-200"
+                          className="w-full py-4 bg-slate-800/60 backdrop-blur-md hover:bg-slate-700/80 border border-slate-600/50 text-slate-200 font-bold rounded-xl flex items-center justify-center gap-3 transition-all hover:scale-[1.02] active:scale-95 duration-200 shadow-lg"
                       >
                           <Play size={24} className="text-green-400" /> CONTINUE RUN
                       </button>
@@ -96,15 +101,16 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({ onStart, onContinue,
 
                   <button 
                       onClick={handleStartAttempt}
-                      className={`w-full py-5 font-bold rounded-xl border flex items-center justify-center gap-3 transition-all transform hover:scale-[1.02] shadow-xl active:scale-95 duration-200
+                      className={`w-full py-5 font-bold rounded-xl border flex items-center justify-center gap-3 transition-all transform hover:scale-[1.02] shadow-2xl active:scale-95 duration-200 relative overflow-hidden
                           ${isLocked 
                               ? 'bg-slate-900/80 border-slate-800 text-slate-500 cursor-not-allowed' 
                               : 'bg-gradient-to-r from-amber-700 to-yellow-600 hover:from-amber-600 hover:to-yellow-500 text-white border-yellow-500/50 shadow-amber-900/30'}
                           ${shakeError ? 'animate-shake border-red-500 text-red-400 bg-red-900/20' : ''}
                       `}
                   >
+                       <div className="absolute inset-0 bg-gradient-to-tr from-white/10 to-transparent opacity-0 hover:opacity-100 transition-opacity duration-500"></div>
                       {isLocked ? <Lock size={24} /> : <Swords size={24} fill="currentColor" className="opacity-80" />} 
-                      START NEW RUN
+                      <span className="tracking-wide">START NEW RUN</span>
                   </button>
 
                   <button 
@@ -131,30 +137,64 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({ onStart, onContinue,
           {/* Right Column: Glassmorphism Hub */}
           <div className="flex-1 flex flex-col gap-4 lg:gap-6 w-full max-w-md mx-auto justify-center pb-8 lg:pb-0">
               
-              {/* Profile Card */}
-              <div className="bg-slate-900/40 border border-white/10 rounded-2xl p-4 lg:p-6 backdrop-blur-xl shadow-2xl relative overflow-hidden group">
-                  <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/5 to-purple-500/5 pointer-events-none"></div>
-                  
-                  <div className="flex items-center gap-5 mb-4 relative z-10">
-                      <div className="w-12 h-12 lg:w-14 lg:h-14 rounded-2xl bg-indigo-950/50 border border-indigo-500/30 flex items-center justify-center shadow-[0_0_15px_rgba(99,102,241,0.15)]">
-                          <User className="text-indigo-400" size={24} />
+              {/* Profile Card - RPG RANK STYLE */}
+              <div className="bg-[#0b0f19] border border-amber-900/30 rounded-2xl p-0 backdrop-blur-xl shadow-2xl relative overflow-hidden group hover:border-amber-700/50 transition-colors duration-500">
+                  {/* Card Header Background */}
+                  <div className="absolute top-0 left-0 right-0 h-24 bg-gradient-to-b from-slate-800/50 to-transparent"></div>
+
+                  <div className="flex items-center gap-5 p-6 relative z-10">
+                      {/* Rank Icon Container */}
+                      <div className="w-20 h-20 lg:w-24 lg:h-24 relative flex items-center justify-center shrink-0">
+                          {/* Animated Glow behind Badge */}
+                          <div className={`absolute inset-0 rounded-full blur-xl opacity-40 animate-pulse ${rank.bg}`}></div>
+                          
+                          {/* The Badge */}
+                          <div className={`relative w-full h-full bg-gradient-to-br from-slate-800 to-slate-950 rounded-full border-4 flex items-center justify-center shadow-2xl ${rank.color.replace('text', 'border')}`}>
+                              <RankIcon size={40} className={`${rank.color} drop-shadow-[0_0_10px_rgba(0,0,0,0.8)]`} strokeWidth={1.5} />
+                              
+                              {/* Level Pill */}
+                              <div className="absolute -bottom-2 bg-slate-950 border border-slate-700 px-2 py-0.5 rounded-full text-xs font-bold text-white shadow-lg">
+                                  LVL {profile.accountLevel}
+                              </div>
+                          </div>
                       </div>
-                      <div>
-                          <div className="text-[10px] text-indigo-300 uppercase tracking-[0.2em] font-bold mb-1">Account Level</div>
-                          <div className="text-2xl lg:text-3xl font-black text-white leading-none tracking-tight">{profile.accountLevel}</div>
+
+                      {/* Rank Text Details */}
+                      <div className="flex-1 min-w-0">
+                          <div className="text-[10px] text-slate-500 uppercase tracking-[0.2em] font-bold mb-1">Current Rank</div>
+                          <div className={`text-2xl lg:text-3xl font-black ${rank.color} leading-none tracking-tight truncate fantasy-font drop-shadow-sm`}>
+                              {rank.title}
+                          </div>
+                          <div className="text-xs text-slate-400 mt-1 font-medium truncate">
+                              Games Played: <span className="text-slate-200">{profile.gamesPlayed}</span>
+                          </div>
                       </div>
                   </div>
                   
-                  {/* XP Bar */}
-                  <div className="relative pt-2 z-10">
-                      <div className="flex justify-between text-[10px] text-slate-400 mb-1.5 font-mono font-bold">
-                          <span>XP: {Math.floor(xpIntoLevel)}</span>
-                          <span>NEXT: {Math.floor(xpForLevel)}</span>
+                  {/* Detailed XP Bar */}
+                  <div className="relative bg-slate-950/50 border-t border-white/5 p-4">
+                      <div className="flex justify-between text-[10px] text-slate-400 mb-2 font-mono font-bold tracking-wider">
+                          <span>XP PROGRESS</span>
+                          <span>{Math.floor(xpIntoLevel)} / {Math.floor(xpForLevel)}</span>
                       </div>
-                      <div className="h-2 lg:h-2.5 bg-slate-950/80 rounded-full overflow-hidden border border-white/5 shadow-inner">
-                          <div className="h-full bg-gradient-to-r from-indigo-600 to-violet-500 relative shadow-[0_0_10px_rgba(129,140,248,0.4)]" style={{ width: `${xpPercent}%` }}>
-                              <div className="absolute inset-0 bg-white/20 animate-pulse"></div>
-                          </div>
+                      
+                      <div className="h-3 lg:h-4 bg-black rounded-full overflow-hidden border border-slate-800 shadow-[inset_0_2px_4px_rgba(0,0,0,0.8)] relative">
+                           {/* Background Strips */}
+                           <div className="absolute inset-0 opacity-20 bg-[repeating-linear-gradient(45deg,transparent,transparent_5px,#fff_5px,#fff_6px)]"></div>
+                           
+                           {/* Fill */}
+                           <div 
+                                className={`h-full relative shadow-[0_0_15px_rgba(0,0,0,0.5)] transition-all duration-1000 ease-out ${rank.bg}`} 
+                                style={{ width: `${xpPercent}%` }}
+                           >
+                              <div className="absolute inset-0 bg-gradient-to-b from-white/20 to-transparent"></div>
+                              <div className="absolute right-0 top-0 bottom-0 w-[1px] bg-white/50 shadow-[0_0_10px_white]"></div>
+                           </div>
+                      </div>
+                      
+                      {/* Next Reward Hint */}
+                      <div className="mt-2 text-[10px] text-center text-slate-500">
+                          Next Rank: <span className="text-slate-300">Level {Math.ceil((profile.accountLevel + 1) / 10) * 10}</span>
                       </div>
                   </div>
               </div>
@@ -207,6 +247,18 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({ onStart, onContinue,
               </div>
 
           </div>
+        </div>
+
+        {/* Footer */}
+        <div className="mt-8 text-center animate-in fade-in slide-in-from-bottom-8 duration-1000 delay-500">
+            <a 
+                href="https://instagram.com/sp8m8" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="text-xs text-slate-500 hover:text-indigo-400 transition-colors font-mono tracking-widest flex items-center justify-center gap-1 group"
+            >
+                Made with <span className="text-red-500 group-hover:animate-ping">&lt;3</span> by Harry Speight
+            </a>
         </div>
       </div>
     </div>

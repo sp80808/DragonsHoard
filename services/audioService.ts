@@ -6,10 +6,16 @@ class AudioService {
   private sfxGain: GainNode | null = null;
   private enabled: boolean = true;
   private volume: number = 0.4;
-  private musicVolume: number = 0.25;
-  private droneOscillators: OscillatorNode[] = [];
-  private droneLfo: OscillatorNode | null = null;
+  private musicVolume: number = 0.01; 
+  private droneNodes: AudioNode[] = [];
   private noiseBuffer: AudioBuffer | null = null;
+
+  // SACRED FREQUENCIES CONFIG
+  private readonly FREQ_GROUNDING = 174; // Solfeggio: Pain relief, security, foundation
+  private readonly FREQ_LIBERATION = 396; // Solfeggio: Liberating guilt and fear
+  private readonly FREQ_CONNECTION = 963; // Solfeggio: Connection to source (The "God" frequency)
+  private readonly BEAT_ALPHA = 10;       // Brainwave: Relaxed focus, "The Zone"
+  private readonly BEAT_GAMMA = 40;       // Brainwave: High concentration, problem solving
 
   constructor() {
     // Context is initialized on first user interaction via resume/init
@@ -40,7 +46,7 @@ class AudioService {
         this.sfxGain.connect(compressor);
         this.sfxGain.gain.value = this.volume;
 
-        // Music Channel
+        // Music Channel (Drone)
         this.musicGain = this.ctx.createGain();
         this.musicGain.connect(this.masterGain);
         this.musicGain.gain.value = this.musicVolume;
@@ -60,11 +66,11 @@ class AudioService {
     const data = buffer.getChannelData(0);
     let lastOut = 0;
     for (let i = 0; i < bufferSize; i++) {
-        // Brown/Pinkish noise (softer than white noise)
+        // Pink-ish noise (softer than white noise, good for texture)
         const white = Math.random() * 2 - 1;
         data[i] = (lastOut + (0.02 * white)) / 1.02;
         lastOut = data[i];
-        data[i] *= 3.5; // Compensate for gain loss
+        data[i] *= 3.5; 
     }
     this.noiseBuffer = buffer;
   }
@@ -103,97 +109,187 @@ class AudioService {
     this.startDrone();
   }
 
-  // --- Cinematic Drone (Darker & More Textured) ---
+  /**
+   * --- SACRED GEOMETRY DRONE ENGINE ---
+   * Designed to induce "Flow State" using Solfeggio frequencies and Binaural Beats.
+   * Theme: Ancient Sacred Cavern.
+   * Updated to be subtle, resonant, and non-intrusive.
+   */
   private startDrone() {
-    if (!this.ctx || !this.musicGain || this.droneOscillators.length > 0) return;
+    if (!this.ctx || !this.musicGain || this.droneNodes.length > 0) return;
 
     const t = this.ctx.currentTime;
 
-    // Layer 1: The "Abyss" (Sub-bass rumble)
-    // Using two oscillators slightly detuned to create a slow, unnerving "beat" frequency
-    const rumbleFreqs = [38, 42]; 
+    // LAYER 1: THE FOUNDATION (Binaural Alpha)
+    // Frequency: 174 Hz (Solfeggio - Pain Relief / Security)
+    // Effect: Creates a 10Hz Alpha wave beat for "Relaxed Focus".
     
-    // Lowpass filter to remove any harsh digital edges from the oscillators
-    const rumbleFilter = this.ctx.createBiquadFilter();
-    rumbleFilter.type = 'lowpass';
-    rumbleFilter.frequency.value = 80;
-    rumbleFilter.connect(this.musicGain);
+    // Left Oscillator
+    const oscLeft = this.ctx.createOscillator();
+    oscLeft.type = 'sine';
+    oscLeft.frequency.value = this.FREQ_GROUNDING;
+    const panLeft = this.ctx.createStereoPanner();
+    panLeft.pan.value = -1; // Hard Left
+    
+    // Right Oscillator
+    const oscRight = this.ctx.createOscillator();
+    oscRight.type = 'sine';
+    oscRight.frequency.value = this.FREQ_GROUNDING + this.BEAT_ALPHA; // +10Hz difference
+    const panRight = this.ctx.createStereoPanner();
+    panRight.pan.value = 1; // Hard Right
 
-    rumbleFreqs.forEach((f) => {
-        const osc = this.ctx!.createOscillator();
-        osc.type = 'sine'; 
-        osc.frequency.value = f;
-        
-        const oscGain = this.ctx!.createGain();
-        oscGain.gain.value = 0.2; // Slightly reduced
-        
-        // Add a slow LFO to pitch to simulate "breathing" of a cave
-        const lfo = this.ctx!.createOscillator();
-        lfo.type = 'sine';
-        lfo.frequency.value = 0.03; // Slower (~33s cycle)
-        
-        const lfoGain = this.ctx!.createGain();
-        lfoGain.gain.value = 1.0; 
-        
-        lfo.connect(lfoGain);
-        lfoGain.connect(osc.frequency);
-        lfo.start(t);
+    // Warmth Filter (Lowpass) - Lowered cutoff for darker tone
+    const foundationFilter = this.ctx.createBiquadFilter();
+    foundationFilter.type = 'lowpass';
+    foundationFilter.frequency.value = 180; 
 
-        osc.connect(oscGain);
-        oscGain.connect(rumbleFilter);
-        osc.start(t);
-        
-        this.droneOscillators.push(osc);
-        this.droneOscillators.push(lfo); 
-    });
+    // Gain for Foundation (Subtle base)
+    const foundationGain = this.ctx.createGain();
+    foundationGain.gain.value = 0.12; 
 
-    // Layer 2: The "Draft" (Wind texture)
+    oscLeft.connect(panLeft);
+    oscRight.connect(panRight);
+    panLeft.connect(foundationFilter);
+    panRight.connect(foundationFilter);
+    foundationFilter.connect(foundationGain);
+    foundationGain.connect(this.musicGain);
+
+    oscLeft.start(t);
+    oscRight.start(t);
+    this.droneNodes.push(oscLeft, oscRight, panLeft, panRight, foundationFilter, foundationGain);
+
+
+    // LAYER 2: THE ATMOSPHERE (Liberation)
+    // Frequency: 396 Hz (Solfeggio - Liberating Fear)
+    // Switched to Sine for pure resonance, avoiding clashing harmonics.
+    const oscMid = this.ctx.createOscillator();
+    oscMid.type = 'sine';
+    oscMid.frequency.value = this.FREQ_LIBERATION;
+    
+    // Filter to soften it into a "hum"
+    const midFilter = this.ctx.createBiquadFilter();
+    midFilter.type = 'lowpass';
+    midFilter.frequency.value = 350;
+    
+    // Auto-Panner (Slowly drifting L <-> R)
+    const midPanner = this.ctx.createStereoPanner();
+    const midLfo = this.ctx.createOscillator();
+    midLfo.frequency.value = 0.05; // 20 second cycle
+    const midLfoGain = this.ctx.createGain();
+    midLfoGain.gain.value = 0.3; // Pan width
+    midLfo.connect(midLfoGain);
+    midLfoGain.connect(midPanner.pan);
+
+    const midGain = this.ctx.createGain();
+    midGain.gain.value = 0.015; // Very subtle resonance
+
+    oscMid.connect(midFilter);
+    midFilter.connect(midPanner);
+    midPanner.connect(midGain);
+    midGain.connect(this.musicGain);
+
+    oscMid.start(t);
+    midLfo.start(t);
+    this.droneNodes.push(oscMid, midLfo, midPanner, midGain);
+
+
+    // LAYER 3: THE FOCUS (Gamma Noise Texture)
+    // Effect: Pink noise modulated at 40Hz (Gamma).
+    // Reduced gain to be barely perceptible texture.
     if (this.noiseBuffer) {
-        const windSrc = this.ctx.createBufferSource();
-        windSrc.buffer = this.noiseBuffer;
-        windSrc.loop = true;
+        const noiseSrc = this.ctx.createBufferSource();
+        noiseSrc.buffer = this.noiseBuffer;
+        noiseSrc.loop = true;
+        noiseSrc.playbackRate.value = 0.15; // Deep, windy rumble
+
+        // Bandpass to focus on "Wind" frequencies
+        const noiseFilter = this.ctx.createBiquadFilter();
+        noiseFilter.type = 'bandpass';
+        noiseFilter.frequency.value = 150;
+        noiseFilter.Q.value = 1;
+
+        // Amplitude Modulation (Tremolo) at 40Hz
+        const gammaLfo = this.ctx.createOscillator();
+        gammaLfo.frequency.value = this.BEAT_GAMMA; 
+        const gammaGain = this.ctx.createGain();
+        gammaGain.gain.value = 0.2; // Depth of tremolo
         
-        // Playback rate: 0.08 slows it deeply for a cavernous feel
-        windSrc.playbackRate.value = 0.08; 
-
-        // Filter: Bandpass that sweeps slowly to simulate wind gusting through tunnels
-        const windFilter = this.ctx.createBiquadFilter();
-        windFilter.type = 'bandpass';
-        windFilter.Q.value = 1.0; // Softer band
-        windFilter.frequency.value = 180;
-
-        // Wind Gust LFO
-        const gustLfo = this.ctx.createOscillator();
-        gustLfo.frequency.value = 0.02; // Very slow gusts (~50s cycle)
-        const gustGain = this.ctx.createGain();
-        gustGain.gain.value = 100; // Sweep filter range
+        const noiseAmp = this.ctx.createGain();
+        noiseAmp.gain.value = 0.01; // Extremely low level
         
-        gustLfo.connect(gustGain);
-        gustGain.connect(windFilter.frequency);
-        gustLfo.start(t);
+        gammaLfo.connect(gammaGain);
+        gammaGain.connect(noiseAmp.gain);
 
-        const windGain = this.ctx.createGain();
-        windGain.gain.value = 0.04; // Very subtle background texture
-
-        // Stereo Panner to make the dungeon feel wide
-        const panner = this.ctx.createStereoPanner();
-        const panLfo = this.ctx.createOscillator();
-        panLfo.frequency.value = 0.02; // Very slow pan
-        const panAmp = this.ctx.createGain();
-        panAmp.gain.value = 0.5;
-        panLfo.connect(panAmp);
-        panAmp.connect(panner.pan);
-        panLfo.start(t);
-
-        windSrc.connect(windFilter);
-        windFilter.connect(windGain);
-        windGain.connect(panner);
-        panner.connect(this.musicGain);
+        noiseSrc.connect(noiseFilter);
+        noiseFilter.connect(noiseAmp);
+        noiseAmp.connect(this.musicGain);
         
-        windSrc.start(t);
+        noiseSrc.start(t);
+        gammaLfo.start(t);
+        this.droneNodes.push(noiseSrc, gammaLfo, noiseAmp);
+    }
+
+    // LAYER 4: THE DIVINE (963 Hz Connection)
+    // Effect: A very faint, high "shimmer" that fades in and out.
+    const oscHigh = this.ctx.createOscillator();
+    oscHigh.type = 'sine';
+    oscHigh.frequency.value = this.FREQ_CONNECTION; // 963 Hz
+    
+    const highGain = this.ctx.createGain();
+    highGain.gain.value = 0; 
+
+    // Slow swell LFO
+    const swellLfo = this.ctx.createOscillator();
+    swellLfo.frequency.value = 0.03; 
+    const swellGain = this.ctx.createGain();
+    swellGain.gain.value = 0.003; // Barely audible sparkle
+
+    swellLfo.connect(swellGain);
+    swellGain.connect(highGain.gain);
+
+    oscHigh.connect(highGain);
+    highGain.connect(this.musicGain);
+
+    oscHigh.start(t);
+    swellLfo.start(t);
+    this.droneNodes.push(oscHigh, swellLfo, highGain);
+
+    // LAYER 5: THE WASH (White Noise LPF)
+    // Effect: A very subtle white noise wash.
+    // UPDATED: Heavy low-pass to make it deep and soothing.
+    if (this.noiseBuffer) {
+        const washSrc = this.ctx.createBufferSource();
+        washSrc.buffer = this.noiseBuffer;
+        washSrc.loop = true;
+        washSrc.playbackRate.value = 0.7; 
+
+        // Low Pass Filter - drastically lowered for subtlety
+        const washFilter = this.ctx.createBiquadFilter();
+        washFilter.type = 'lowpass';
+        washFilter.frequency.value = 350; // Was 1000, now 350 for warmth
+        washFilter.Q.value = 0.5;
+
+        // Tide LFO (Slower wash)
+        const washLfo = this.ctx.createOscillator();
+        washLfo.type = 'sine';
+        washLfo.frequency.value = 0.04; // ~25 second cycle
         
-        // Track nodes for potential cleanup (though not strictly implemented in toggleMute for now)
-        // In a real app we'd wrap these in a wrapper object to stop() them later.
+        const washGain = this.ctx.createGain();
+        washGain.gain.value = 0.004; // Extremely subtle base
+
+        const washLfoAmp = this.ctx.createGain();
+        washLfoAmp.gain.value = 0.002; // Modulation depth
+
+        washLfo.connect(washLfoAmp);
+        washLfoAmp.connect(washGain.gain);
+        
+        washSrc.connect(washFilter);
+        washFilter.connect(washGain);
+        washGain.connect(this.musicGain);
+        
+        washSrc.start(t);
+        washLfo.start(t);
+        this.droneNodes.push(washSrc, washLfo, washGain, washLfoAmp);
     }
   }
 
@@ -241,15 +337,14 @@ class AudioService {
     if (value >= 32) material = 'METAL';
     if (value >= 512) material = 'MAGIC';
 
-    // 1. IMPACT LAYER (The "Thud")
+    // 1. IMPACT LAYER (The "Thud") - Slightly softened
     const kickOsc = this.ctx.createOscillator();
     kickOsc.type = 'sine';
-    // Pitch drops fast to simulate heavy impact
-    kickOsc.frequency.setValueAtTime(150, t);
+    kickOsc.frequency.setValueAtTime(120, t); // Lower start freq for less "click"
     kickOsc.frequency.exponentialRampToValueAtTime(40, t + 0.1);
     
     const kickGain = this.ctx.createGain();
-    kickGain.gain.setValueAtTime(0.5, t);
+    kickGain.gain.setValueAtTime(0.4, t);
     kickGain.gain.exponentialRampToValueAtTime(0.01, t + 0.15);
     
     kickOsc.connect(kickGain);
@@ -267,23 +362,23 @@ class AudioService {
 
         if (material === 'STONE') {
             noiseFilter.type = 'lowpass';
-            noiseFilter.frequency.value = 600;
-            noiseSrc.playbackRate.value = 0.5;
-            noiseGain.gain.setValueAtTime(0.3, t);
+            noiseFilter.frequency.value = 400; // Lowered from 600
+            noiseSrc.playbackRate.value = 0.4; // Slower
+            noiseGain.gain.setValueAtTime(0.25, t);
             noiseGain.gain.exponentialRampToValueAtTime(0.01, t + 0.2);
         } else if (material === 'METAL') {
             noiseFilter.type = 'bandpass';
-            noiseFilter.frequency.value = 1200; // Metallic ring freq
-            noiseFilter.Q.value = 5;
-            noiseSrc.playbackRate.value = 1.0;
-            noiseGain.gain.setValueAtTime(0.2, t);
-            noiseGain.gain.exponentialRampToValueAtTime(0.01, t + 0.4);
+            noiseFilter.frequency.value = 1000; 
+            noiseFilter.Q.value = 3;
+            noiseSrc.playbackRate.value = 0.8;
+            noiseGain.gain.setValueAtTime(0.15, t);
+            noiseGain.gain.exponentialRampToValueAtTime(0.01, t + 0.3);
         } else {
             noiseFilter.type = 'highpass';
-            noiseFilter.frequency.value = 2000;
-            noiseSrc.playbackRate.value = 1.5;
-            noiseGain.gain.setValueAtTime(0.15, t);
-            noiseGain.gain.exponentialRampToValueAtTime(0.01, t + 0.5);
+            noiseFilter.frequency.value = 1500; // Lowered from 2000
+            noiseSrc.playbackRate.value = 1.2;
+            noiseGain.gain.setValueAtTime(0.1, t);
+            noiseGain.gain.exponentialRampToValueAtTime(0.01, t + 0.4);
         }
 
         noiseSrc.connect(noiseFilter);
@@ -294,16 +389,15 @@ class AudioService {
     }
 
     // 3. TONAL LAYER (The "Resonance") - FM Synthesis for metallic bell sound
-    if (material !== 'STONE') {
+    // Only play for metal/magic or very briefly for stone to add body
+    if (material !== 'STONE' || value >= 8) {
         const carrier = this.ctx.createOscillator();
         const modulator = this.ctx.createOscillator();
         const modGain = this.ctx.createGain();
 
-        // Subtle pitch scaling (not musical scale, just "heavier" or "sharper")
-        // Log2 of value gives us 1, 2, 3, 4...
-        // We add small increments.
         const tier = Math.log2(value);
-        const baseFreq = material === 'METAL' ? 300 + (tier * 20) : 600 + (tier * 50);
+        // Lower base frequencies slightly for warmth
+        const baseFreq = material === 'METAL' ? 250 + (tier * 15) : 500 + (tier * 40);
 
         carrier.frequency.value = baseFreq;
         carrier.type = 'sine';
@@ -312,23 +406,37 @@ class AudioService {
         modulator.frequency.value = baseFreq * 1.41; 
         modulator.type = 'triangle';
         
-        modGain.gain.setValueAtTime(200, t);
-        modGain.gain.exponentialRampToValueAtTime(1, t + 0.3);
+        // Soften the FM modulation amount
+        modGain.gain.setValueAtTime(100, t); // Reduced from 200
+        modGain.gain.exponentialRampToValueAtTime(1, t + 0.4); // Longer decay on modulation
 
         modulator.connect(modGain);
         modGain.connect(carrier.frequency);
 
         const carrierGain = this.ctx.createGain();
-        carrierGain.gain.setValueAtTime(0.15, t);
-        carrierGain.gain.exponentialRampToValueAtTime(0.001, t + (material === 'MAGIC' ? 1.0 : 0.4));
+        
+        // SOFT ATTACK implemented here
+        carrierGain.gain.setValueAtTime(0, t);
+        carrierGain.gain.linearRampToValueAtTime(0.12, t + 0.02); // 20ms attack
+        
+        // LONGER DECAY (Reverb simulation)
+        const duration = material === 'MAGIC' ? 1.5 : 0.8;
+        carrierGain.gain.exponentialRampToValueAtTime(0.001, t + duration);
 
-        carrier.connect(carrierGain);
+        // Lowpass filter to cut harsh FM artifacts
+        const lpf = this.ctx.createBiquadFilter();
+        lpf.type = 'lowpass';
+        lpf.frequency.setValueAtTime(2000, t);
+        lpf.frequency.exponentialRampToValueAtTime(500, t + duration);
+
+        carrier.connect(lpf);
+        lpf.connect(carrierGain);
         carrierGain.connect(this.sfxGain);
         
         carrier.start();
         modulator.start();
-        carrier.stop(t + 1.0);
-        modulator.stop(t + 1.0);
+        carrier.stop(t + duration + 0.1);
+        modulator.stop(t + duration + 0.1);
     }
   }
 
@@ -362,111 +470,124 @@ class AudioService {
       osc.stop(t + 0.3);
   }
 
+  /**
+   * PLAY LEVEL UP - "The Divine Chord"
+   * A Major chord based on 528Hz (Miracle Tone) swelling in with sparkles.
+   * REFINED: Now uses filtered oscillators for a warmer, orchestral texture.
+   */
   playLevelUp() {
     this.initContext();
     if (!this.enabled || !this.ctx || !this.sfxGain) return;
     
     const t = this.ctx.currentTime;
     
-    // Deep Gong / Choir Swell
-    const freqs = [110, 164.8, 220]; // A Majorish
-    freqs.forEach((f, i) => {
+    // The Chord: C5 (528Hz Base), E5 (~665Hz), G5 (~792Hz), C6 (1056Hz)
+    // Using Just Intonation ratios for cleaner "sacred" sound
+    const chordFreqs = [528, 660, 792, 1056];
+    
+    // 1. CHORD SWELL (Pad)
+    chordFreqs.forEach((freq, i) => {
+        // Oscillator 1: Triangle for body
         const osc = this.ctx!.createOscillator();
         osc.type = 'triangle';
-        osc.frequency.value = f;
+        osc.frequency.value = freq;
         
-        const gain = this.ctx!.createGain();
-        gain.gain.setValueAtTime(0, t);
-        gain.gain.linearRampToValueAtTime(0.1, t + 0.5); // Slow swell
-        gain.gain.exponentialRampToValueAtTime(0.001, t + 3.0); // Long tail
-        
-        // Slight detune for chorus effect
-        osc.frequency.linearRampToValueAtTime(f + (Math.random()*2), t + 3);
+        // Oscillator 2: Sine for purity (slightly detuned for chorus)
+        const osc2 = this.ctx!.createOscillator();
+        osc2.type = 'sine';
+        osc2.frequency.value = freq + (Math.random() * 2 - 1); // Detune +/- 1Hz
 
-        osc.connect(gain);
-        gain.connect(this.sfxGain!);
-        osc.start();
-        osc.stop(t + 3.5);
-    });
-  }
-
-  playBossSpawn() {
-    this.initContext();
-    if (!this.enabled || !this.ctx || !this.sfxGain) return;
-    const t = this.ctx.currentTime;
-
-    // War Horn / Alarm
-    const osc = this.ctx.createOscillator();
-    osc.type = 'sawtooth';
-    osc.frequency.setValueAtTime(60, t);
-    osc.frequency.linearRampToValueAtTime(100, t + 0.1); // Attack
-    osc.frequency.linearRampToValueAtTime(50, t + 1.5); // Decay
-
-    const filter = this.ctx.createBiquadFilter();
-    filter.type = 'lowpass';
-    filter.frequency.setValueAtTime(200, t);
-    filter.frequency.linearRampToValueAtTime(800, t + 0.5); // Open filter
-
-    const gain = this.ctx.createGain();
-    gain.gain.setValueAtTime(0.4, t);
-    gain.gain.linearRampToValueAtTime(0, t + 2);
-
-    osc.connect(filter);
-    filter.connect(gain);
-    gain.connect(this.sfxGain);
-
-    osc.start();
-    osc.stop(t + 2);
-  }
-
-  playStageTransition() {
-    this.initContext();
-    if (!this.enabled || !this.ctx || !this.sfxGain) return;
-    const t = this.ctx.currentTime;
-
-    // Wind / Portal Noise
-    if (this.noiseBuffer) {
-        const src = this.ctx.createBufferSource();
-        src.buffer = this.noiseBuffer;
-        src.playbackRate.value = 0.4; // Deep rumbles
-        
-        const filter = this.ctx.createBiquadFilter();
+        // Filter: Start closed and open up (swell effect)
+        const filter = this.ctx!.createBiquadFilter();
         filter.type = 'lowpass';
         filter.frequency.setValueAtTime(100, t);
-        filter.frequency.linearRampToValueAtTime(500, t + 1.5); // Sweep up
-        filter.frequency.linearRampToValueAtTime(100, t + 3);   // Sweep down
+        filter.frequency.exponentialRampToValueAtTime(3000, t + 0.6); // Open up brightness
+        filter.frequency.exponentialRampToValueAtTime(200, t + 4.5); // Close down
 
-        const gain = this.ctx.createGain();
+        const gain = this.ctx!.createGain();
+        
+        // Envelope: Slow Attack, Long Sustain/Release
         gain.gain.setValueAtTime(0, t);
-        gain.gain.linearRampToValueAtTime(0.3, t + 1.5);
-        gain.gain.linearRampToValueAtTime(0, t + 3);
+        gain.gain.linearRampToValueAtTime(0.06, t + 0.6); // Slower attack
+        gain.gain.exponentialRampToValueAtTime(0.001, t + 4.0); // Long fade out
 
-        src.connect(filter);
+        // Pan spread
+        const panner = this.ctx!.createStereoPanner();
+        panner.pan.value = (i % 2 === 0) ? -0.3 : 0.3;
+
+        osc.connect(filter);
+        osc2.connect(filter);
         filter.connect(gain);
-        gain.connect(this.sfxGain);
-        src.start();
-        src.stop(t + 3);
+        gain.connect(panner);
+        panner.connect(this.sfxGain!);
+
+        osc.start(t);
+        osc2.start(t);
+        osc.stop(t + 4.5);
+        osc2.stop(t + 4.5);
+    });
+
+    // 2. BASS FOUNDATION
+    const bassOsc = this.ctx.createOscillator();
+    bassOsc.type = 'triangle'; // Changed to triangle for more warmth
+    bassOsc.frequency.value = 264; // 528 / 2
+    
+    const bassFilter = this.ctx.createBiquadFilter();
+    bassFilter.type = 'lowpass';
+    bassFilter.frequency.value = 200;
+
+    const bassGain = this.ctx.createGain();
+    bassGain.gain.setValueAtTime(0, t);
+    bassGain.gain.linearRampToValueAtTime(0.15, t + 0.5);
+    bassGain.gain.exponentialRampToValueAtTime(0.001, t + 3.0);
+    
+    bassOsc.connect(bassFilter);
+    bassFilter.connect(bassGain);
+    bassGain.connect(this.sfxGain);
+    bassOsc.start(t);
+    bassOsc.stop(t + 3.0);
+
+    // 3. SPARKLES (Arpeggio)
+    // Rapid sequence of high sine blips - like magical dust
+    const sparkleCount = 8;
+    for (let i = 0; i < sparkleCount; i++) {
+        const time = t + 0.1 + (i * 0.12); // Staggered
+        
+        const sparkleOsc = this.ctx.createOscillator();
+        sparkleOsc.type = 'sine';
+        // Random pentatonic notes above the chord
+        const notes = [1056, 1320, 1584, 2112];
+        const note = notes[Math.floor(Math.random() * notes.length)];
+        sparkleOsc.frequency.value = note;
+        
+        const sparkleGain = this.ctx.createGain();
+        sparkleGain.gain.setValueAtTime(0.05, time);
+        sparkleGain.gain.exponentialRampToValueAtTime(0.001, time + 0.3);
+        
+        const sparklePan = this.ctx.createStereoPanner();
+        sparklePan.pan.value = Math.random() * 2 - 1;
+
+        sparkleOsc.connect(sparkleGain);
+        sparkleGain.connect(sparklePan);
+        sparklePan.connect(this.sfxGain);
+        
+        sparkleOsc.start(time);
+        sparkleOsc.stop(time + 0.3);
     }
   }
-
+  
+  // Placeholder for bomb sound if needed by gameLogic
   playBomb() {
-    this.initContext();
-    if (!this.enabled || !this.ctx || !this.sfxGain) return;
-    const t = this.ctx.currentTime;
-
-    const osc = this.ctx.createOscillator();
-    osc.type = 'square';
-    osc.frequency.setValueAtTime(50, t);
-    osc.frequency.exponentialRampToValueAtTime(10, t + 0.4);
-    
-    const gain = this.ctx.createGain();
-    gain.gain.setValueAtTime(0.5, t);
-    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.4);
-    
-    osc.connect(gain);
-    gain.connect(this.sfxGain);
-    osc.start();
-    osc.stop(t + 0.5);
+     this.playMerge(128); // Re-use heavy merge for now
+  }
+  
+  playBossSpawn() {
+      // Re-use logic or implement ominous drone if needed
+      this.playMerge(2048);
+  }
+  
+  playStageTransition() {
+      this.playLevelUp();
   }
 }
 

@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { getXpThreshold } from '../constants';
+import { getXpThreshold, getLevelRank } from '../constants';
 import { Trophy, Star, Store as StoreIcon, Coins, RefreshCw, Menu, Clover, Skull, Zap, Info, HelpCircle, Flame, Hammer } from 'lucide-react';
 import { InventoryItem, Stage, GameMode, InputSettings } from '../types';
 
@@ -64,6 +64,10 @@ export const HUD: React.FC<HUDProps> = ({
   const isCascadeUnlocked = accountLevel >= 10;
   const isCascadeActive = isCascadeUnlocked && !isClassic;
 
+  // Rank Icon for HUD
+  const rank = getLevelRank(level);
+  const RankIcon = rank.icon;
+
   const buffs = [];
   if ((effectCounters['LUCKY_LOOT'] || 0) > 0) buffs.push({ id: 'luck', icon: <Clover size={12} className="text-green-400" />, label: 'LUCK', count: effectCounters['LUCKY_LOOT'], color: 'bg-green-900/40 border-green-500/30' });
   if ((effectCounters['ASCENDANT_SPAWN'] || 0) > 0) buffs.push({ id: 'asc', icon: <Star size={12} className="text-yellow-400" />, label: 'RUNE', count: effectCounters['ASCENDANT_SPAWN'], color: 'bg-yellow-900/40 border-yellow-500/30' });
@@ -81,7 +85,7 @@ export const HUD: React.FC<HUDProps> = ({
       
       const isOpen = activeTooltip === id;
       return (
-          <div className="relative inline-flex items-center ml-1">
+          <div className="relative inline-flex items-center ml-1 z-50">
               <button 
                   onClick={(e) => toggleTooltip(id, e)}
                   className={`p-0.5 rounded-full hover:bg-white/10 transition-colors ${isOpen ? 'text-white bg-white/10' : 'text-slate-500 hover:text-slate-300'}`}
@@ -194,51 +198,63 @@ export const HUD: React.FC<HUDProps> = ({
       {!isClassic && (
       <>
         <div className="flex gap-2 h-10 md:h-14">
-            {/* XP Bar */}
-            <div className={`flex-1 bg-slate-950/80 p-1 md:p-1.5 rounded-lg border border-slate-700 relative flex flex-col justify-center shadow-lg transition-colors duration-500`}>
-                <div className="flex justify-between items-end mb-0.5 md:mb-1 px-1 z-10 relative">
-                    <div className="flex items-center gap-1.5">
-                        <div className={`w-4 h-4 md:w-5 md:h-5 flex items-center justify-center rounded bg-gradient-to-br ${barGradient} text-[9px] md:text-[10px] font-bold text-white shadow-sm`}>
-                            {level}
-                        </div>
-                        <span className={`text-[9px] md:text-[10px] font-bold uppercase tracking-wider ${accentColor} hidden xs:inline`}>Level</span>
-                        
-                        {/* Progression Tooltip */}
-                        <MicroTooltip 
-                            id="progression-help"
-                            icon={<Info size={10} />}
-                            title="Progression & Grid"
-                            content={
-                                <div className="space-y-2">
-                                    <p>Gain XP to Level Up. Leveling heals you and unlocks perks.</p>
-                                    <p className="text-indigo-300 font-bold border-t border-slate-800 pt-1">
-                                        Grid Expands every 5 Levels!
-                                    </p>
-                                    <p className="text-purple-300 font-bold">
-                                        New Stages unlock as you level deeper.
-                                    </p>
-                                </div>
-                            }
-                        />
-                    </div>
-                    <span className={`text-[8px] md:text-[9px] font-mono ${accentColor} opacity-80`}>
-                        {Math.floor(xp)} / {xpThreshold}
-                    </span>
+            {/* XP Bar Container */}
+            <div className={`flex-1 bg-[#0a0c10] p-1 rounded-lg border border-slate-700 relative flex items-center shadow-lg overflow-visible group`}>
+                
+                {/* Level Badge - Hexagonal/Shield style */}
+                <div className="relative -ml-2 z-20 shrink-0">
+                     <div className="w-10 h-10 md:w-12 md:h-12 bg-gradient-to-br from-slate-700 to-slate-900 border-2 border-slate-500 rounded-xl rotate-45 flex items-center justify-center shadow-lg relative group-hover:scale-105 transition-transform">
+                          <div className="absolute inset-0 bg-slate-950/50 rounded-lg"></div>
+                          {/* Inner Content (Counter-rotated) */}
+                          <div className="-rotate-45 flex flex-col items-center justify-center">
+                              <RankIcon size={14} className={`${rank.color} mb-0.5`} />
+                              <span className="text-xs md:text-sm font-black text-white leading-none font-mono">{level}</span>
+                          </div>
+                     </div>
+                     
+                     {/* Rank Title Label below badge */}
+                     <div className={`absolute -bottom-3 left-1/2 -translate-x-1/2 text-[8px] font-bold uppercase tracking-wide bg-black/80 px-1.5 rounded border border-slate-800 ${rank.color} whitespace-nowrap z-30`}>
+                        {rank.title}
+                     </div>
                 </div>
 
-                <div className="w-full h-3 md:h-4 bg-slate-900 rounded bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI0IiBoZWlnaHQ9IjQiPgo8cmVjdCB3aWR0aD0iNCIgaGVpZ2h0PSI0IiBmaWxsPSIjMGUxMTE3Ii8+CjxyZWN0IHdpZHRoPSIxIiBoZWlnaHQ9IjEiIGZpbGw9IiMxZTJmNDUiLz4KPC9zdmc+')] shadow-inner relative overflow-hidden ring-1 ring-white/5">
-                    <div 
-                        className={`h-full bg-gradient-to-r ${barGradient} transition-all duration-500 ease-out relative shadow-[0_0_10px_rgba(0,0,0,0.5)]`}
-                        style={{ width: `${xpPercent}%` }}
-                    >
+                {/* Progress Bar Area */}
+                <div className="flex-1 flex flex-col justify-center pl-3 pr-1 h-full relative">
+                    <div className="flex justify-between items-center mb-0.5 z-10">
+                        <div className="flex items-center gap-1">
+                             <span className={`text-[9px] md:text-[10px] font-bold uppercase tracking-wider text-slate-400`}>Experience</span>
+                             <MicroTooltip 
+                                id="progression-help"
+                                icon={<Info size={10} />}
+                                title="Progression System"
+                                content={
+                                    <div className="space-y-2">
+                                        <p>Level up to heal & unlock perks.</p>
+                                        <p className="text-indigo-300 font-bold border-t border-slate-800 pt-1">
+                                            Grid Expands every 5 Levels!
+                                        </p>
+                                    </div>
+                                }
+                            />
+                        </div>
+                        <span className={`text-[8px] md:text-[9px] font-mono ${accentColor} opacity-90`}>
+                            {Math.floor(xp)} / {xpThreshold}
+                        </span>
+                    </div>
+
+                    <div className="w-full h-3 md:h-4 bg-black/60 rounded-r-md border border-slate-800/50 relative overflow-hidden">
                         <div 
-                            className="absolute inset-0 w-full h-full"
-                            style={{ 
-                                background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.1) 40%, rgba(255,255,255,0.6) 50%, rgba(255,255,255,0.1) 60%, transparent)',
-                                animation: `shimmer ${shimmerDuration} infinite linear`
-                            }}
-                        ></div>
-                        <div className="absolute right-0 top-0 bottom-0 w-[2px] bg-white/80 blur-[2px] shadow-[0_0_8px_white]"></div>
+                            className={`h-full bg-gradient-to-r ${barGradient} transition-all duration-500 ease-out relative shadow-[0_0_10px_rgba(0,0,0,0.3)]`}
+                            style={{ width: `${xpPercent}%` }}
+                        >
+                            <div 
+                                className="absolute inset-0 w-full h-full"
+                                style={{ 
+                                    background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.2) 40%, rgba(255,255,255,0.6) 50%, rgba(255,255,255,0.2) 60%, transparent)',
+                                    animation: `shimmer ${shimmerDuration} infinite linear`
+                                }}
+                            ></div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -246,7 +262,7 @@ export const HUD: React.FC<HUDProps> = ({
             {/* Store Button */}
             <button 
                 onClick={onOpenStore}
-                className="w-12 md:w-14 bg-yellow-900/20 hover:bg-yellow-900/40 border border-yellow-700/50 rounded-lg flex flex-col items-center justify-center text-yellow-500 transition-colors group relative overflow-hidden"
+                className="w-12 md:w-14 bg-yellow-900/20 hover:bg-yellow-900/40 border border-yellow-700/50 rounded-lg flex flex-col items-center justify-center text-yellow-500 transition-colors group relative overflow-hidden shrink-0"
             >
                 <div className="absolute inset-0 bg-yellow-500/10 translate-y-full group-hover:translate-y-0 transition-transform duration-300"></div>
                 <StoreIcon size={16} className="relative z-10" />
@@ -282,7 +298,7 @@ export const HUD: React.FC<HUDProps> = ({
             <button 
                 onClick={canReroll ? onReroll : undefined}
                 disabled={!canReroll}
-                className={`w-12 md:w-14 rounded-lg flex flex-col items-center justify-center border transition-all relative
+                className={`w-12 md:w-14 rounded-lg flex flex-col items-center justify-center border transition-all relative shrink-0
                     ${canReroll 
                         ? 'bg-purple-900/30 hover:bg-purple-800/50 border-purple-500/50 text-purple-300 shadow-[0_0_10px_rgba(168,85,247,0.2)]' 
                         : 'bg-slate-900/30 border-slate-800 text-slate-700 opacity-50 cursor-not-allowed'}

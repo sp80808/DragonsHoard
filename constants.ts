@@ -1,5 +1,7 @@
 
 import { TileType, ItemType, InventoryItem, Stage, CraftingRecipe, Achievement } from './types';
+import { Shield, Scroll, Swords, Star, Crown, Flame, Zap } from 'lucide-react';
+import React from 'react';
 
 export const GRID_SIZE_INITIAL = 4;
 export const WINNING_VALUE = 2048;
@@ -59,6 +61,17 @@ export const getStage = (level: number) => {
 export const getStageBackground = (stageName: string) => {
   const stage = STAGES.find(s => s.name === stageName) || STAGES[0];
   return bgUrl(stage.prompt, stage.name.replace(' ', ''));
+};
+
+// --- LEVEL RANK ICONS ---
+export const getLevelRank = (level: number) => {
+    if (level < 5) return { title: 'Novice', icon: Shield, color: 'text-slate-400', bg: 'bg-slate-500' };
+    if (level < 10) return { title: 'Apprentice', icon: Scroll, color: 'text-blue-400', bg: 'bg-blue-600' };
+    if (level < 20) return { title: 'Warrior', icon: Swords, color: 'text-red-400', bg: 'bg-red-600' };
+    if (level < 30) return { title: 'Champion', icon: Star, color: 'text-yellow-400', bg: 'bg-yellow-600' };
+    if (level < 40) return { title: 'Master', icon: Crown, color: 'text-purple-400', bg: 'bg-purple-600' };
+    if (level < 50) return { title: 'Grandmaster', icon: Zap, color: 'text-cyan-400', bg: 'bg-cyan-600' };
+    return { title: 'Legend', icon: Flame, color: 'text-orange-500', bg: 'bg-orange-600' };
 };
 
 export const PERKS = [
