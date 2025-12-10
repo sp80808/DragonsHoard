@@ -1,5 +1,6 @@
 
 
+
 import { TileType, ItemType, InventoryItem, Stage, CraftingRecipe, Achievement } from './types';
 import { Shield, Scroll, Swords, Star, Crown, Flame, Zap, Eye } from 'lucide-react';
 import React from 'react';
@@ -35,7 +36,10 @@ export const STAGES: Stage[] = [
     { name: 'FungalCaverns', minLevel: 5, backgroundUrl: bgUrl('glowing mushroom cave bioluminescent purple', 5), colorTheme: 'text-purple-300', barColor: 'from-purple-600 to-indigo-500' },
     { name: 'MoltenDepths', minLevel: 10, backgroundUrl: bgUrl('volcanic lava cave magma fire', 10), colorTheme: 'text-orange-300', barColor: 'from-red-600 to-orange-500' },
     { name: 'CrystalSpire', minLevel: 20, backgroundUrl: bgUrl('crystal palace celestial floating islands', 20), colorTheme: 'text-cyan-200', barColor: 'from-cyan-500 to-blue-400' },
-    { name: 'VoidRealm', minLevel: 30, backgroundUrl: bgUrl('cosmic void horror eldritch stars', 30), colorTheme: 'text-fuchsia-300', barColor: 'from-fuchsia-800 to-purple-900' }
+    { name: 'VoidRealm', minLevel: 30, backgroundUrl: bgUrl('cosmic void horror eldritch stars', 30), colorTheme: 'text-fuchsia-300', barColor: 'from-fuchsia-800 to-purple-900' },
+    { name: 'CelestialCitadel', minLevel: 40, backgroundUrl: bgUrl('heavenly golden throne clouds divine light', 40), colorTheme: 'text-yellow-200', barColor: 'from-yellow-600 to-amber-500' },
+    // NEW CONTENT
+    { name: 'AetherSanctum', minLevel: 50, backgroundUrl: bgUrl('pure white arcane energy dimension rune circles', 50), colorTheme: 'text-emerald-200', barColor: 'from-emerald-600 to-teal-400' }
 ];
 
 export const getStage = (level: number): Stage => {
@@ -86,7 +90,10 @@ export const SHOP_ITEMS = [
   { id: ItemType.CHAIN_CATALYST, name: 'Chain Catalyst', price: 600, desc: 'Enable Auto-Cascades (10 turns).', icon: '⚡', category: 'BATTLE' },
   { id: ItemType.MIDAS_POTION, name: 'Midas Brew', price: 450, desc: '2x Gold from merges (50 turns).', icon: '⚱️', category: 'CONSUMABLE' },
   { id: ItemType.VOID_STONE, name: 'Void Stone', price: 800, desc: 'Consumes 1 weak tile every turn (10 turns).', icon: '🌑', category: 'MAGIC' },
-  { id: ItemType.RADIANT_AURA, name: 'Radiant Aura', price: 700, desc: '+50% XP Gain (20 turns).', icon: '☀️', category: 'MAGIC' }
+  { id: ItemType.RADIANT_AURA, name: 'Radiant Aura', price: 700, desc: '+50% XP Gain (20 turns).', icon: '☀️', category: 'MAGIC' },
+
+  // NEW ITEM (Requires ItemType update in types.ts for full safety, but using existing generic ID for now or casting)
+  { id: 'OMEGA_ELIXIR', name: 'Omega Elixir', price: 2000, desc: 'Gain 10,000 XP instantly.', icon: '🧪', category: 'CONSUMABLE' } as any
 ];
 
 export const RECIPES: CraftingRecipe[] = [

@@ -1,9 +1,9 @@
 
-
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { getXpThreshold, getLevelRank } from '../constants';
 import { Trophy, Star, Store as StoreIcon, Coins, RefreshCw, Menu, Clover, Skull, Zap, Info, HelpCircle, Flame, Hammer, Moon, Sun } from 'lucide-react';
 import { InventoryItem, Stage, GameMode, InputSettings } from '../types';
+import { CountUp } from './CountUp';
 
 interface HUDProps {
   score: number;
@@ -22,7 +22,28 @@ interface HUDProps {
   onUseItem: (item: InventoryItem) => void;
   onReroll: () => void;
   onMenu: () => void;
+  onOpenStats: () => void;
 }
+
+const StatDisplay = ({ value, className, prefix = '', suffix = '' }: { value: number, className?: string, prefix?: string, suffix?: string }) => {
+    const [highlight, setHighlight] = useState(false);
+    const prevValue = useRef(value);
+
+    useEffect(() => {
+        if (value !== prevValue.current) {
+            setHighlight(true);
+            const timer = setTimeout(() => setHighlight(false), 200);
+            prevValue.current = value;
+            return () => clearTimeout(timer);
+        }
+    }, [value]);
+
+    return (
+        <span className={`inline-block transition-all duration-200 ${highlight ? 'scale-125 text-yellow-300 brightness-150' : ''} ${className}`}>
+            <CountUp value={value} prefix={prefix} />{suffix}
+        </span>
+    );
+};
 
 export const HUD: React.FC<HUDProps> = ({ 
     score, 
@@ -40,7 +61,8 @@ export const HUD: React.FC<HUDProps> = ({
     onOpenStore, 
     onUseItem, 
     onReroll, 
-    onMenu 
+    onMenu,
+    onOpenStats
 }) => {
   // Generic Tooltip State
   const [activeTooltip, setActiveTooltip] = useState<string | null>(null);
@@ -62,7 +84,7 @@ export const HUD: React.FC<HUDProps> = ({
 
   const shimmerDuration = Math.max(1.0, 3.5 - (level * 0.05)) + 's';
 
-  const isCascadeUnlocked = accountLevel >= 10;
+  const isCascadeUnlocked = accountLevel >= 5;
   const isCascadeActive = isCascadeUnlocked && !isClassic;
 
   // Rank Icon for HUD
@@ -151,8 +173,16 @@ export const HUD: React.FC<HUDProps> = ({
                 </div>
                 
                 <div className="flex items-center gap-3 text-[9px] md:text-xs text-slate-400 mt-0.5 md:mt-1">
-                    <span className="flex items-center gap-1"><Trophy size={10} /> {bestScore}</span>
-                    {!isClassic && <span className="flex items-center gap-1 text-yellow-400 font-bold"><Coins size={10} /> {gold} G</span>}
+                    <span className="flex items-center gap-1">
+                        <Trophy size={10} /> 
+                        <CountUp value={bestScore} />
+                    </span>
+                    {!isClassic && (
+                        <span className="flex items-center gap-1 text-yellow-400 font-bold">
+                            <Coins size={10} /> 
+                            <StatDisplay value={gold} suffix=" G" />
+                        </span>
+                    )}
                     
                     {/* Cascade Indicator */}
                     <div className="relative flex items-center">
@@ -172,7 +202,7 @@ export const HUD: React.FC<HUDProps> = ({
                                         <span>Reward:</span> <span className="text-yellow-400 font-bold">+10% XP/Gold</span>
                                     </div>
                                     <div className="flex justify-between">
-                                        <span>Unlock:</span> <span className={isCascadeUnlocked ? "text-green-400" : "text-red-400"}>Level 10</span>
+                                        <span>Unlock:</span> <span className={isCascadeUnlocked ? "text-green-400" : "text-red-400"}>Level 5</span>
                                     </div>
                                 </div>
                             }
@@ -183,7 +213,9 @@ export const HUD: React.FC<HUDProps> = ({
         </div>
         <div className="text-right pl-2 border-l border-slate-700/50">
           <div className="text-[9px] text-slate-500 uppercase tracking-wider font-bold">Score</div>
-          <div className="text-lg md:text-2xl font-mono font-bold text-white leading-none">{score}</div>
+          <div className="text-lg md:text-2xl font-mono font-bold text-white leading-none">
+             <StatDisplay value={score} />
+          </div>
         </div>
       </div>
 
@@ -205,7 +237,10 @@ export const HUD: React.FC<HUDProps> = ({
       <>
         <div className="flex gap-2 h-9 md:h-14">
             {/* XP Bar Container */}
-            <div className={`flex-1 bg-[#0a0c10] p-1 rounded-lg border border-slate-700 relative flex items-center shadow-lg overflow-visible group pl-4`}>
+            <div 
+                className={`flex-1 bg-[#0a0c10] p-1 rounded-lg border border-slate-700 relative flex items-center shadow-lg overflow-visible group pl-4 cursor-pointer hover:border-slate-500 transition-colors active:scale-[0.99]`}
+                onClick={onOpenStats}
+            >
                 
                 {/* Level Badge - Hexagonal Banner Style */}
                 <div className="absolute -left-1 top-1/2 -translate-y-1/2 z-20 filter drop-shadow-xl hover:scale-105 transition-transform duration-300">
@@ -235,22 +270,10 @@ export const HUD: React.FC<HUDProps> = ({
                     <div className="flex justify-between items-center mb-0.5 z-10">
                         <div className="flex items-center gap-1">
                              <span className={`text-[9px] md:text-[10px] font-bold uppercase tracking-wider text-slate-400`}>XP</span>
-                             <MicroTooltip 
-                                id="progression-help"
-                                icon={<Info size={10} />}
-                                title="Progression System"
-                                content={
-                                    <div className="space-y-2">
-                                        <p>Level up to heal & unlock perks.</p>
-                                        <p className="text-indigo-300 font-bold border-t border-slate-800 pt-1">
-                                            Grid Expands every 5 Levels!
-                                        </p>
-                                    </div>
-                                }
-                            />
+                             <div className="text-[8px] text-slate-600 bg-black/40 px-1 rounded hidden sm:block">Click for Stats</div>
                         </div>
                         <span className={`text-[8px] md:text-[9px] font-mono ${accentColor} opacity-90`}>
-                            {Math.floor(xp)} / {xpThreshold}
+                            <StatDisplay value={Math.floor(xp)} /> / <CountUp value={xpThreshold} />
                         </span>
                     </div>
 

@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Tile, TileType } from '../types';
 import { TILE_STYLES, BOSS_STYLE, FALLBACK_STYLE, RUNE_STYLES } from '../constants';
@@ -18,6 +17,7 @@ export const TileComponent: React.FC<TileProps> = ({ tile, gridSize }) => {
 
   const [imgError, setImgError] = useState(false);
   
+  // Calculate position percentage relative to grid
   const size = 100 / gridSize;
   const xPos = tile.x * 100;
   const yPos = tile.y * 100;
@@ -66,6 +66,13 @@ export const TileComponent: React.FC<TileProps> = ({ tile, gridSize }) => {
   // Slash Effect (Visual flair for high tiers)
   const isSlash = tile.mergedFrom && tile.value >= 32 && tile.mergedFrom[0] !== 'damage' ? 'slash-effect' : '';
   
+  // Boss Health Calculation
+  const healthPercent = tile.maxHealth ? Math.max(0, (tile.health || 0) / tile.maxHealth) * 100 : 0;
+
+  // High Tier Pulsating Glow (Warm Golden + Tile Tint)
+  const isHighTier = tile.value >= 512;
+  const glowColor = style.particleColor || '#fbbf24'; // Fallback to amber
+
   return (
     <div
       className={`absolute transition-transform duration-200 ease-in-out z-10 p-1`}
@@ -86,7 +93,7 @@ export const TileComponent: React.FC<TileProps> = ({ tile, gridSize }) => {
         
         {/* Tier 2: White Shockwave (Quick Ping) */}
         {showShockwave && (
-             <div className="absolute inset-0 z-50 rounded-lg border-2 border-white/60 animate-[ping_0.5s_cubic-bezier(0,0,0.2,1)_1] pointer-events-none"></div>
+             <div className="absolute inset-0 z-50 rounded-lg border-2 border-white/20 animate-[ping_0.3s_cubic-bezier(0,0,0.2,1)_1] pointer-events-none"></div>
         )}
         
         {/* Tier 4: Godwave (Expanding Golden Ring) */}
@@ -97,77 +104,91 @@ export const TileComponent: React.FC<TileProps> = ({ tile, gridSize }) => {
         {/* 
             Animation Wrapper (Inner)
             - Handles Shake/Vibration (Translate/Rotate).
-            - Applied to the inner box so it shakes WHILE scaling from the parent.
         */}
         <div className={`w-full h-full ${shakeClass}`}>
 
             {/* 
                 Content Wrapper 
                 - Handles Image Clipping, Backgrounds, and Borders.
-                - Must mask the image to rounded corners.
             */}
-            <div className={`w-full h-full rounded-lg overflow-hidden shadow-2xl relative ${isCascadeClass} ${isSlash}`}>
+            <div className={`w-full h-full rounded-lg overflow-hidden shadow-2xl relative bg-[#0b0f19] ${isCascadeClass} ${isSlash}`}>
                 
+                {/* HIGH TIER GLOW: Pulsating Border */}
+                {isHighTier && (
+                    <div 
+                        className="absolute inset-0 z-20 pointer-events-none rounded-lg animate-pulse"
+                        style={{
+                            boxShadow: `0 0 15px 1px rgba(251, 191, 36, 0.5), inset 0 0 10px 0px ${glowColor}`
+                        }}
+                    ></div>
+                )}
+
                 {/* Glow Container */}
                 <div className={`absolute inset-0 transition-opacity duration-300 ${style.glow} opacity-0 group-hover:opacity-100`}></div>
 
-                {/* Generative Background Image */}
-                <div className={`absolute inset-0 bg-slate-900 bg-gradient-to-br ${style.color}`}>
-                    {!imgError && (
-                        <img 
-                            src={style.imageUrl} 
-                            alt={style.label}
-                            className="w-full h-full object-cover transition-transform duration-700 ease-out group-hover:scale-110 opacity-80 mix-blend-overlay select-none"
-                            loading="lazy"
-                            onError={() => setImgError(true)}
-                            draggable={false}
-                        />
-                    )}
-                    
-                    {/* Gradient Overlays for Readability */}
-                    <div className="absolute inset-0 bg-gradient-to-b from-transparent via-black/10 to-black/80"></div>
-                    
-                    {/* Shine Effect */}
-                    <div className="absolute inset-0 bg-gradient-to-tr from-white/0 via-white/10 to-white/0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none"></div>
-                </div>
+                {/* Background Gradient Fallback */}
+                <div className={`absolute inset-0 bg-gradient-to-br ${style.color} opacity-80`}></div>
 
-                {/* Content Overlay (Text/Icons) */}
-                <div className="absolute inset-0 flex flex-col items-center justify-center z-10 p-1 select-none">
-                    {/* Value (Hidden for Bosses) */}
-                    <span className={`font-serif font-black text-white drop-shadow-[0_2px_4px_rgba(0,0,0,1)] tracking-tighter
-                        ${gridSize > 5 ? 'text-lg' : 'text-3xl'}
-                        ${tile.value > 1000 ? 'text-yellow-200' : ''}
-                    `}>
-                        {tile.type !== TileType.BOSS && !tile.type.startsWith('RUNE_') ? tile.value : ''}
-                    </span>
-                    
-                    {/* Icon for Special Tiles */}
-                    {tile.type.startsWith('RUNE_') && (
-                        <div className="text-2xl md:text-3xl animate-pulse">{style.icon}</div>
-                    )}
-                    
-                    {/* Label */}
-                    <span className={`text-[8px] sm:text-[10px] uppercase tracking-widest text-slate-200 font-bold mt-0.5 drop-shadow-md opacity-80`}>
-                        {style.label}
-                    </span>
-                </div>
-
-                {/* Boss Health Bar */}
-                {tile.type === TileType.BOSS && tile.health !== undefined && tile.maxHealth !== undefined && (
-                    <div className="absolute bottom-1 left-1 right-1 h-1.5 bg-slate-900 rounded-full overflow-hidden border border-white/20 z-20">
-                        <div 
-                            className="h-full bg-red-600 transition-all duration-300" 
-                            style={{ width: `${(tile.health / tile.maxHealth) * 100}%` }}
-                        />
-                    </div>
+                {/* Background Image */}
+                {!imgError && style.imageUrl && (
+                    <img 
+                        src={style.imageUrl} 
+                        alt={style.label}
+                        className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-300 opacity-60 mix-blend-overlay`}
+                        onError={() => setImgError(true)}
+                    />
                 )}
 
-                {/* Special Indicators */}
-                {tile.type === TileType.BOMB && <div className="absolute top-1 right-1 text-xs z-20 animate-pulse bg-red-500/80 rounded-full w-4 h-4 flex items-center justify-center">💣</div>}
-                {tile.type === TileType.GOLDEN && <div className="absolute top-1 right-1 text-xs z-20 animate-pulse text-yellow-300">✨</div>}
-                
-                {/* Inner Border/Frame */}
-                <div className={`absolute inset-0 border-2 border-white/10 rounded-lg pointer-events-none box-border`}></div>
+                {/* Inner Bevel/Border */}
+                <div className={`absolute inset-0 border-2 ${style.ringColor.replace('ring-', 'border-')} opacity-50 rounded-lg`}></div>
+
+                {/* Tile Content (Classic RPG Look) */}
+                <div className="absolute inset-0 flex flex-col justify-between p-1 z-10">
+                    
+                    {tile.value > 0 ? (
+                        <>
+                            {/* Prominent Number - Centered and HUGE */}
+                            <div className="flex-1 flex items-center justify-center pt-2">
+                                <span className="fantasy-font font-black text-white text-4xl sm:text-5xl lg:text-6xl drop-shadow-[0_4px_4px_rgba(0,0,0,1)] leading-none z-20">
+                                    {tile.value}
+                                </span>
+                            </div>
+                            
+                            {/* Enemy Name - Bottom Anchored */}
+                            <div className="w-full flex justify-center pb-1">
+                                <div className="bg-black/60 border border-white/10 px-2 py-0.5 rounded backdrop-blur-[2px]">
+                                    <span className="block text-[8px] sm:text-[9px] font-serif font-bold text-slate-200 uppercase tracking-widest leading-none">
+                                        {style.label}
+                                    </span>
+                                </div>
+                            </div>
+                        </>
+                    ) : (
+                        // Boss/Rune Logic - Remains centered with icon
+                        <div className="flex-1 flex flex-col items-center justify-center">
+                            <span className="text-3xl sm:text-4xl filter drop-shadow-[0_2px_2px_rgba(0,0,0,0.8)] transform group-hover:scale-110 transition-transform duration-300 mb-1">
+                                {style.icon}
+                            </span>
+                             <span className="text-[8px] sm:text-[10px] font-bold text-white/90 uppercase tracking-widest drop-shadow-md bg-black/30 px-2 rounded">
+                                {style.label}
+                            </span>
+                        </div>
+                    )}
+
+                    {/* Boss Health Bar */}
+                    {tile.type === TileType.BOSS && tile.health !== undefined && (
+                        <div className="absolute bottom-1 left-1 right-1 h-1.5 bg-black/80 rounded-full overflow-hidden border border-red-900/50">
+                            <div 
+                                className="h-full bg-red-600 transition-all duration-300"
+                                style={{ width: `${healthPercent}%` }}
+                            ></div>
+                        </div>
+                    )}
+                </div>
+
+                {/* Gloss Effect */}
+                <div className="absolute inset-0 bg-gradient-to-b from-white/10 to-transparent pointer-events-none"></div>
+
             </div>
         </div>
       </div>

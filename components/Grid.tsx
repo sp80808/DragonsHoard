@@ -1,5 +1,4 @@
 
-
 import React, { useMemo, useEffect, useRef } from 'react';
 import { Tile } from '../types';
 import { TileComponent } from './TileComponent';
@@ -17,6 +16,7 @@ export const Grid: React.FC<GridProps> = ({ grid, size, mergeEvents, lootEvents 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const particlesRef = useRef<any[]>([]);
   const animationFrameRef = useRef<number>();
+  const containerRef = useRef<HTMLDivElement>(null);
 
   // Memoize background cells
   const backgroundCells = useMemo(() => {
@@ -57,32 +57,20 @@ export const Grid: React.FC<GridProps> = ({ grid, size, mergeEvents, lootEvents 
            
            const color = style?.particleColor || '#ffffff';
            
-           // Spawn Sparks on Perimeter (Edges) rather than center
-           for (let i = 0; i < 12; i++) {
-               // Determine random point on perimeter
+           // Reduced particle count (12 -> 8) for less clutter
+           for (let i = 0; i < 8; i++) {
                const side = Math.floor(Math.random() * 4);
                let offsetX = 0, offsetY = 0;
-               const jitter = Math.random() * 8 - 4; // Slight irregularity
+               const jitter = Math.random() * 8 - 4; 
                
-               if (side === 0) { // Top
-                   offsetX = Math.random() * cellSize;
-                   offsetY = jitter;
-               } else if (side === 1) { // Right
-                   offsetX = cellSize + jitter;
-                   offsetY = Math.random() * cellSize;
-               } else if (side === 2) { // Bottom
-                   offsetX = Math.random() * cellSize;
-                   offsetY = cellSize + jitter;
-               } else { // Left
-                   offsetX = jitter;
-                   offsetY = Math.random() * cellSize;
-               }
+               if (side === 0) { offsetX = Math.random() * cellSize; offsetY = jitter; } 
+               else if (side === 1) { offsetX = cellSize + jitter; offsetY = Math.random() * cellSize; } 
+               else if (side === 2) { offsetX = Math.random() * cellSize; offsetY = cellSize + jitter; } 
+               else { offsetX = jitter; offsetY = Math.random() * cellSize; }
 
                const spawnX = (evt.x * cellSize) + offsetX;
                const spawnY = (evt.y * cellSize) + offsetY;
 
-               // Velocity generally outward from center of tile + random drift
-               // Center of tile
                const centerX = (evt.x * cellSize) + (cellSize / 2);
                const centerY = (evt.y * cellSize) + (cellSize / 2);
                
@@ -100,9 +88,11 @@ export const Grid: React.FC<GridProps> = ({ grid, size, mergeEvents, lootEvents 
                    vx: nx * speed,
                    vy: ny * speed,
                    life: 1.0,
-                   decay: Math.random() * 0.03 + 0.02,
+                   // Increased decay for faster fade out (0.02 -> 0.05)
+                   decay: Math.random() * 0.04 + 0.04,
                    color: color,
-                   size: Math.random() * 3 + 2,
+                   // Smaller particles
+                   size: Math.random() * 2 + 1,
                    rotation: Math.random() * Math.PI
                });
            }
@@ -117,7 +107,6 @@ export const Grid: React.FC<GridProps> = ({ grid, size, mergeEvents, lootEvents 
       const ctx = canvas.getContext('2d');
       if (!ctx) return;
 
-      // Handle Resize
       const resize = () => {
           const parent = canvas.parentElement;
           if (parent) {
@@ -132,14 +121,11 @@ export const Grid: React.FC<GridProps> = ({ grid, size, mergeEvents, lootEvents 
           if (!ctx || !canvas) return;
           ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-          // Update and Draw Particles
           for (let i = particlesRef.current.length - 1; i >= 0; i--) {
               const p = particlesRef.current[i];
               p.x += p.vx;
               p.y += p.vy;
               p.life -= p.decay;
-              
-              // Apply Friction (Drag) to keep particles local
               p.vx *= 0.9;
               p.vy *= 0.9;
               
@@ -148,17 +134,15 @@ export const Grid: React.FC<GridProps> = ({ grid, size, mergeEvents, lootEvents 
                   continue;
               }
 
-              ctx.globalAlpha = p.life;
+              // Apply cubic easing to alpha for smoother fade
+              ctx.globalAlpha = p.life * p.life;
               ctx.fillStyle = p.color;
               
-              // Draw Spark / Star Shape
               ctx.save();
               ctx.translate(p.x, p.y);
-              // Slight rotation for visual interest
               ctx.rotate(p.life * 2 + p.rotation); 
               
               ctx.beginPath();
-              // 4-Point Star (Spark)
               const s = p.size;
               ctx.moveTo(0, -s);
               ctx.quadraticCurveTo(s * 0.2, -s * 0.2, s, 0);
@@ -167,10 +151,8 @@ export const Grid: React.FC<GridProps> = ({ grid, size, mergeEvents, lootEvents 
               ctx.quadraticCurveTo(-s * 0.2, -s * 0.2, 0, -s);
               ctx.closePath();
               ctx.fill();
-              
               ctx.restore();
           }
-
           animationFrameRef.current = requestAnimationFrame(render);
       };
 
@@ -183,15 +165,20 @@ export const Grid: React.FC<GridProps> = ({ grid, size, mergeEvents, lootEvents 
   }, []);
 
   return (
-    <div className="relative w-full h-full">
+    <div 
+        ref={containerRef}
+        className="relative w-full h-full group"
+    >
         {/* Ambient Glow behind Grid */}
-        <div className="absolute -inset-1 bg-gradient-to-r from-purple-600/20 to-blue-600/20 rounded-2xl blur-xl animate-pulse"></div>
+        <div className="absolute -inset-4 bg-gradient-to-r from-purple-600/10 to-blue-600/10 rounded-3xl blur-2xl animate-pulse -z-10"></div>
         
+        {/* Grid Container - Stable */}
         <div className="relative w-full h-full bg-black/80 rounded-xl p-1 sm:p-2 border-2 border-slate-700/50 shadow-2xl overflow-hidden backdrop-blur-md">
+            
             {/* Background Grid Layer */}
             {backgroundCells}
 
-            {/* Floating Tiles Layer */}
+            {/* Floating Tiles Layer - Interactivity disabled for container, enabled for tiles if needed, but here purely visual */}
             <div className="absolute inset-0 p-1 sm:p-2 pointer-events-none z-10">
                 <div className="relative w-full h-full">
                     {grid.map((tile) => (

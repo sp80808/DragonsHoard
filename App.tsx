@@ -9,6 +9,7 @@ import { Settings } from './components/Settings';
 import { RunSummary } from './components/RunSummary';
 import { TutorialOverlay } from './components/TutorialOverlay';
 import { HelpScreen } from './components/HelpScreen';
+import { GameStatsModal } from './components/GameStatsModal';
 import { Direction, GameState, TileType, InventoryItem, FloatingText, CraftingRecipe, View, Achievement, ItemType, InputSettings, HeroClass, GameMode, PlayerProfile } from './types';
 import { initializeGame, moveGrid, spawnTile, isGameOver, checkLoot, useInventoryItem, applyMidasTouch, applyChronosShift, applyVoidSingularity, tryAutoMerge, checkAchievements, savePersistentAchievements, executeAutoCascade } from './services/gameLogic';
 import { SHOP_ITEMS, getXpThreshold, getStage, getStageBackground, getItemDefinition, TILE_STYLES } from './constants';
@@ -390,7 +391,8 @@ const reducer = (state: GameState, action: Action): GameState => {
       const gameOver = isGameOver(finalGrid, newGridSize);
       const victory = !state.gameWon && finalGrid.some(t => t.value === 2048);
       const isChainActive = (newEffectCounters['CHAIN_CATALYST'] || 0) > 0;
-      const canCascade = (state.accountLevel >= 10 || isChainActive) && state.gameMode !== 'CLASSIC';
+      // UNLOCK CASCADES AT LEVEL 5 (Confirmed)
+      const canCascade = (state.accountLevel >= 5 || isChainActive) && state.gameMode !== 'CLASSIC';
 
       const nextState: GameState = {
         ...state,
@@ -466,6 +468,7 @@ const App: React.FC = () => {
   const [state, dispatch] = useReducer(reducer, null, () => initializeGame());
   const [view, setView] = useState<View>('SPLASH');
   const [showStore, setShowStore] = useState(false);
+  const [showStats, setShowStats] = useState(false);
   const [activeOverlay, setActiveOverlay] = useState<{type: 'BOSS' | 'LEVEL_UP' | 'STAGE', text: string} | null>(null);
   const [showDebug, setShowDebug] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -952,6 +955,7 @@ const App: React.FC = () => {
             onUseItem={(item) => dispatch({ type: 'USE_ITEM', item })}
             onReroll={() => dispatch({ type: 'REROLL' })}
             onMenu={() => setView('SPLASH')}
+            onOpenStats={() => setShowStats(true)}
           />
         </div>
 
@@ -972,6 +976,14 @@ const App: React.FC = () => {
           onCraft={(recipe) => dispatch({ type: 'CRAFT_ITEM', recipe })}
           onUseItem={(item) => dispatch({ type: 'USE_ITEM', item })}
         />
+      )}
+
+      {showStats && (
+          <GameStatsModal 
+             gameState={state} 
+             onClose={() => setShowStats(false)} 
+             nextLevelXp={getXpThreshold(state.level)} 
+          />
       )}
 
       {showDebug && (
