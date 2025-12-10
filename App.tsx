@@ -16,6 +16,8 @@ import { audioService } from './services/audioService';
 import { loadCriticalAssets, loadBackgroundAssets } from './services/assetLoader';
 import { getPlayerProfile, completeTutorial } from './services/storageService';
 import { Trophy, Star, Skull, Zap, Info, Loader2 } from 'lucide-react';
+import { v4 as uuidv4 } from 'uuid';
+import { motion, useAnimation } from 'framer-motion';
 
 // Actions
 type Action = 
@@ -245,7 +247,8 @@ const reducer = (state: GameState, action: Action): GameState => {
           }
       });
 
-      if (score > 0) audioService.playMerge(score);
+      // Updated Audio Call to include combo
+      if (score > 0) audioService.playMerge(score, combo);
 
       // Decrement Effect Counters
       ['LUCKY_LOOT', 'CHAIN_CATALYST', 'LUCKY_DICE', 'MIDAS_POTION', 'VOID_STONE', 'RADIANT_AURA'].forEach(effect => {
@@ -473,6 +476,15 @@ const App: React.FC = () => {
   
   // Track merge locations for particles
   const [mergeEvents, setMergeEvents] = useState<{ id: string, x: number, y: number, value: number, type: string }[]>([]);
+  
+  // Loot Visual Events
+  const [lootEvents, setLootEvents] = useState<{ id: string, x: number, y: number, type: 'GOLD' | 'ITEM', value?: string | number, icon?: string }[]>([]);
+  const prevGold = useRef(state.gold);
+  const prevInvCount = useRef(state.inventory.length);
+
+  // Background Parallax Controls
+  const bgControls = useAnimation();
+  const prevMerges = useRef(state.runStats.mergesCount);
 
   // Asset Loading
   useEffect(() => {
@@ -510,6 +522,28 @@ const App: React.FC = () => {
           audioService.updateGameplayIntensity(intensity);
       }
   }, [state.grid, state.combo, view]);
+
+  // Dynamic Background Parallax Trigger
+  useEffect(() => {
+      if (state.runStats.mergesCount > prevMerges.current) {
+          // Trigger physics jolt
+          const randomX = (Math.random() - 0.5) * 10;
+          const randomY = (Math.random() - 0.5) * 10;
+          
+          bgControls.start({
+              scale: [1.1, 1.15, 1.1], // Push back/deep
+              x: [0, randomX, 0],
+              y: [0, randomY, 0],
+              transition: { 
+                  type: "spring", 
+                  stiffness: 300, 
+                  damping: 15,
+                  mass: 0.5
+              }
+          });
+      }
+      prevMerges.current = state.runStats.mergesCount;
+  }, [state.runStats.mergesCount, bgControls]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -713,37 +747,48 @@ const App: React.FC = () => {
       };
   }, []);
 
-  // Wrapper to intercept move actions and trigger effects
-  const wrappedDispatch = (action: Action) => {
-      dispatch(action);
-      
-      if (action.type === 'MOVE') {
-          // Detect merges by comparing old grid and new grid... tricky with reducer.
-          // Better approach: Since we can't inspect state immediately after dispatch in functional update easily without a ref or effect,
-          // we use the effect on state.grid or logs to trigger visuals.
-      }
-  };
-
   // Effect to detect merges and trigger shake/particles based on logic in moveGrid return (which we don't have access to here easily)
   // Workaround: We track grid state changes.
   useEffect(() => {
       // Find new merges? The Reducer computes this. 
-      // We can check 'lastSpawnedTile' or something but better to check 'mergedFrom'.
       const newMerges: { id: string, x: number, y: number, value: number, type: string }[] = [];
       let maxMergeValue = 0;
       
       state.grid.forEach(t => {
           if (t.mergedFrom) {
-              // This is a merge that just happened/persists
-              // We need to differentiate "just happened" vs "existing tile".
-              // The reducer clears mergedFrom on next move, so if it's there, it's fresh.
-              // BUT we need to make sure we don't re-trigger. 
-              // Actually, moveGrid clears mergedFrom at start. So if present, it is new.
               newMerges.push({ id: t.id, x: t.x, y: t.y, value: t.value, type: t.type });
               if (t.value > maxMergeValue) maxMergeValue = t.value;
           }
       });
       
+      // Calculate Loot Changes for Visual Pops
+      const goldDiff = state.gold - prevGold.current;
+      const invDiff = state.inventory.length - prevInvCount.current;
+      
+      // Loot Spawn Logic: Use the position of the highest value merge (heuristic)
+      if ((goldDiff > 0 || invDiff > 0) && newMerges.length > 0) {
+          const sourceMerge = newMerges.sort((a,b) => b.value - a.value)[0];
+          const newLoot: typeof lootEvents = [];
+
+          if (goldDiff > 0) {
+              newLoot.push({ id: uuidv4(), x: sourceMerge.x, y: sourceMerge.y, type: 'GOLD', value: goldDiff });
+          }
+          if (invDiff > 0 && state.inventory.length > 0) {
+               const item = state.inventory[state.inventory.length - 1];
+               newLoot.push({ id: uuidv4(), x: sourceMerge.x, y: sourceMerge.y, type: 'ITEM', icon: item.icon });
+          }
+          setLootEvents(prev => [...prev, ...newLoot]);
+          
+          // Cleanup
+          setTimeout(() => {
+              setLootEvents(prev => prev.filter(l => !newLoot.some(nl => nl.id === l.id)));
+          }, 1000);
+      }
+
+      // Update refs
+      prevGold.current = state.gold;
+      prevInvCount.current = state.inventory.length;
+
       if (newMerges.length > 0) {
           setMergeEvents(newMerges);
           // Shake Logic
@@ -800,24 +845,26 @@ const App: React.FC = () => {
   />;
 
   return (
-    <div 
-        className={`min-h-screen w-full flex flex-col items-center justify-center p-2 md:p-4 relative overflow-hidden transition-colors duration-1000 select-none cursor-default touch-none
-            ${shakeIntensity === 1 ? 'animate-shake-sm' : ''}
-            ${shakeIntensity === 2 ? 'animate-shake-md' : ''}
-            ${shakeIntensity === 3 ? 'animate-shake-lg' : ''}
-        `}
-        style={{
-            backgroundImage: `url('${state.currentStage.backgroundUrl}')`,
-            backgroundSize: 'cover',
-            backgroundPosition: 'center',
-            paddingBottom: 'env(safe-area-inset-bottom)'
-        }}
-    >
-      <div className={`absolute inset-0 bg-black/60 ${state.level >= 30 ? 'bg-black/80' : ''}`}></div>
-      <div className={`absolute inset-0 bg-gradient-to-t from-black via-transparent to-black/80`}></div>
-      <div className="scanlines"></div>
-      <div className="vignette"></div>
+    // Fixed Viewport for Gameplay
+    <div className={`fixed inset-0 w-full h-[100dvh] overflow-hidden flex flex-col items-center justify-center p-0 sm:p-2 relative select-none cursor-default touch-none`}>
+      
+      {/* --- PLANE 3: DYNAMIC BACKGROUND PARALLAX --- */}
+      <motion.div 
+         className="fixed inset-0 z-0 bg-cover bg-center"
+         style={{
+             backgroundImage: `url('${state.currentStage.backgroundUrl}')`,
+             scale: 1.1 // Initial scale to allow movement without edges showing
+         }}
+         animate={bgControls}
+      >
+          {/* Overlays on top of the bg image but still part of the parallax plane */}
+          <div className={`absolute inset-0 bg-black/60 ${state.level >= 30 ? 'bg-black/80' : ''}`}></div>
+          <div className={`absolute inset-0 bg-gradient-to-t from-black via-transparent to-black/80`}></div>
+          <div className="scanlines"></div>
+          <div className="vignette"></div>
+      </motion.div>
 
+      {/* --- PLANE 2: UI OVERLAYS (Static relative to camera) --- */}
       {activeOverlay && (
           <div className={`fixed inset-0 z-[80] pointer-events-none flex items-center justify-center
               ${activeOverlay.type === 'BOSS' ? 'animate-boss-pulse bg-red-950/20' : ''}
@@ -850,10 +897,16 @@ const App: React.FC = () => {
           </div>
       )}
 
-      <div className="relative z-10 w-full max-w-md flex flex-col items-center">
+      {/* --- PLANE 1: GAME GRID & HUD (Foreground) --- */}
+      <div className={`relative z-10 w-full max-w-lg h-full min-h-0 flex flex-col items-center justify-center gap-1 md:gap-2 pb-safe
+            ${shakeIntensity === 1 ? 'animate-shake-sm' : ''}
+            ${shakeIntensity === 2 ? 'animate-shake-md' : ''}
+            ${shakeIntensity === 3 ? 'animate-shake-lg' : ''}
+      `}>
         {showTutorial && <TutorialOverlay step={tutorialStep} gridSize={state.gridSize} />}
 
-        <div className="absolute top-[80px] md:top-24 left-0 right-0 pointer-events-none flex flex-col items-center space-y-2 z-50 h-32">
+        {/* Floating Logs - Absolutely positioned to not affect layout */}
+        <div className="absolute top-[10%] left-0 right-0 pointer-events-none flex flex-col items-center space-y-1 z-50 h-0 overflow-visible">
              {state.logs.map((log, i) => {
                  let type = 'INFO';
                  if (log.includes('ACHIEVEMENT')) type = 'ACHIEVEMENT';
@@ -863,44 +916,50 @@ const App: React.FC = () => {
 
                  return (
                     <div key={i} className={`
-                            floating-text text-sm md:text-base font-bold px-4 py-2 rounded-lg border backdrop-blur-md shadow-xl flex items-center gap-2
+                            floating-text text-xs md:text-sm font-bold px-3 py-1.5 rounded-lg border backdrop-blur-md shadow-xl flex items-center gap-2 whitespace-nowrap
                             ${type === 'ACHIEVEMENT' ? 'bg-yellow-900/80 border-yellow-400 text-yellow-100 animate-in slide-in-from-top-4' : ''}
                             ${type === 'LEVEL_UP' ? 'bg-indigo-900/80 border-indigo-400 text-indigo-100 animate-in zoom-in-50' : ''}
                             ${type === 'DANGER' ? 'bg-red-900/80 border-red-500 text-red-100 animate-shake' : ''}
                             ${type === 'LOOT' ? 'bg-green-900/60 border-green-500 text-green-100' : ''}
-                            ${type === 'INFO' ? 'bg-black/40 border-slate-600/50 text-slate-200 text-xs py-1' : ''}
+                            ${type === 'INFO' ? 'bg-black/40 border-slate-600/50 text-slate-200 text-[10px] py-1' : ''}
                     `}>
-                        {type === 'ACHIEVEMENT' && <Trophy size={16} className="text-yellow-400" />}
-                        {type === 'LEVEL_UP' && <Star size={16} className="text-indigo-400" />}
-                        {type === 'DANGER' && <Skull size={16} className="text-red-400" />}
-                        {type === 'LOOT' && <Zap size={14} className="text-green-400" />}
+                        {type === 'ACHIEVEMENT' && <Trophy size={14} className="text-yellow-400" />}
+                        {type === 'LEVEL_UP' && <Star size={14} className="text-indigo-400" />}
+                        {type === 'DANGER' && <Skull size={14} className="text-red-400" />}
+                        {type === 'LOOT' && <Zap size={12} className="text-green-400" />}
                         <span>{log.replace('ACHIEVEMENT UNLOCKED:', '')}</span>
                     </div>
                  );
              })}
         </div>
 
-        <HUD 
-          score={state.score} 
-          bestScore={state.bestScore} 
-          level={state.level} 
-          xp={state.xp} 
-          gold={state.gold} 
-          inventory={state.inventory}
-          rerolls={state.rerolls}
-          effectCounters={state.effectCounters}
-          currentStage={state.currentStage}
-          gameMode={state.gameMode}
-          accountLevel={state.accountLevel}
-          settings={state.settings}
-          onOpenStore={() => setShowStore(true)}
-          onUseItem={(item) => dispatch({ type: 'USE_ITEM', item })}
-          onReroll={() => dispatch({ type: 'REROLL' })}
-          onMenu={() => setView('SPLASH')}
-        />
+        {/* HUD - Shrinkable header */}
+        <div className="w-full shrink-0 relative z-40">
+          <HUD 
+            score={state.score} 
+            bestScore={state.bestScore} 
+            level={state.level} 
+            xp={state.xp} 
+            gold={state.gold} 
+            inventory={state.inventory}
+            rerolls={state.rerolls}
+            effectCounters={state.effectCounters}
+            currentStage={state.currentStage}
+            gameMode={state.gameMode}
+            accountLevel={state.accountLevel}
+            settings={state.settings}
+            onOpenStore={() => setShowStore(true)}
+            onUseItem={(item) => dispatch({ type: 'USE_ITEM', item })}
+            onReroll={() => dispatch({ type: 'REROLL' })}
+            onMenu={() => setView('SPLASH')}
+          />
+        </div>
 
-        <div className="w-full relative touch-none" style={{ touchAction: 'none' }}>
-            <Grid grid={state.grid} size={state.gridSize} mergeEvents={mergeEvents} />
+        {/* Grid - Takes remaining space, but maintains square aspect ratio */}
+        <div className="w-full flex-1 min-h-0 flex items-center justify-center overflow-hidden">
+            <div className="aspect-square h-full max-h-full max-w-full">
+                <Grid grid={state.grid} size={state.gridSize} mergeEvents={mergeEvents} lootEvents={lootEvents} />
+            </div>
         </div>
       </div>
 

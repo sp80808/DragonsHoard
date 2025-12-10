@@ -1,16 +1,19 @@
 
+
 import React, { useMemo, useEffect, useRef } from 'react';
 import { Tile } from '../types';
 import { TileComponent } from './TileComponent';
 import { TILE_STYLES, BOSS_STYLE, RUNE_STYLES, FALLBACK_STYLE } from '../constants';
+import { Coins } from 'lucide-react';
 
 interface GridProps {
   grid: Tile[];
   size: number;
   mergeEvents: { id: string, x: number, y: number, value: number, type: string }[];
+  lootEvents: { id: string, x: number, y: number, type: 'GOLD' | 'ITEM', value?: string | number, icon?: string }[];
 }
 
-export const Grid: React.FC<GridProps> = ({ grid, size, mergeEvents }) => {
+export const Grid: React.FC<GridProps> = ({ grid, size, mergeEvents, lootEvents }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const particlesRef = useRef<any[]>([]);
   const animationFrameRef = useRef<number>();
@@ -180,20 +183,56 @@ export const Grid: React.FC<GridProps> = ({ grid, size, mergeEvents }) => {
   }, []);
 
   return (
-    <div className="relative w-full">
+    <div className="relative w-full h-full">
         {/* Ambient Glow behind Grid */}
         <div className="absolute -inset-1 bg-gradient-to-r from-purple-600/20 to-blue-600/20 rounded-2xl blur-xl animate-pulse"></div>
         
-        <div className="relative w-full aspect-square bg-black/80 rounded-xl p-2 border-2 border-slate-700/50 shadow-2xl overflow-hidden backdrop-blur-md">
+        <div className="relative w-full h-full bg-black/80 rounded-xl p-1 sm:p-2 border-2 border-slate-700/50 shadow-2xl overflow-hidden backdrop-blur-md">
             {/* Background Grid Layer */}
             {backgroundCells}
 
             {/* Floating Tiles Layer */}
-            <div className="absolute inset-0 p-2 pointer-events-none z-10">
+            <div className="absolute inset-0 p-1 sm:p-2 pointer-events-none z-10">
                 <div className="relative w-full h-full">
                     {grid.map((tile) => (
                     <TileComponent key={tile.id} tile={tile} gridSize={size} />
                     ))}
+                </div>
+            </div>
+            
+            {/* Loot Indicators Layer */}
+            <div className="absolute inset-0 p-1 sm:p-2 pointer-events-none z-30 overflow-hidden">
+                <div className="relative w-full h-full">
+                    {lootEvents.map((loot) => {
+                         const tileSize = 100 / size;
+                         const top = loot.y * tileSize;
+                         const left = loot.x * tileSize;
+                         
+                         return (
+                             <div 
+                                key={loot.id}
+                                className="absolute flex flex-col items-center justify-center animate-[floatUp_1s_ease-out_forwards]"
+                                style={{
+                                    width: `${tileSize}%`,
+                                    height: `${tileSize}%`,
+                                    top: `${top}%`,
+                                    left: `${left}%`
+                                }}
+                             >
+                                 <div className={`
+                                     flex items-center gap-1 px-2 py-1 rounded-full border shadow-lg backdrop-blur-md
+                                     ${loot.type === 'GOLD' 
+                                        ? 'bg-yellow-900/80 border-yellow-500 text-yellow-300' 
+                                        : 'bg-indigo-900/80 border-indigo-500 text-indigo-200'}
+                                 `}>
+                                     {loot.type === 'GOLD' ? <Coins size={14} className="text-yellow-400" /> : <span className="text-base">{loot.icon}</span>}
+                                     <span className="text-xs font-bold whitespace-nowrap">
+                                         {loot.type === 'GOLD' ? `+${loot.value} G` : 'Item!'}
+                                     </span>
+                                 </div>
+                             </div>
+                         );
+                    })}
                 </div>
             </div>
 

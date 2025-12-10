@@ -1,4 +1,5 @@
 
+
 import React, { useState } from 'react';
 import { getXpThreshold, getLevelRank } from '../constants';
 import { Trophy, Star, Store as StoreIcon, Coins, RefreshCw, Menu, Clover, Skull, Zap, Info, HelpCircle, Flame, Hammer, Moon, Sun } from 'lucide-react';
@@ -100,8 +101,8 @@ export const HUD: React.FC<HUDProps> = ({
               
               {isOpen && (
                   <>
-                    <div className="fixed inset-0 z-40" onClick={() => setActiveTooltip(null)}></div>
-                    <div className={`absolute top-full ${side === 'left' ? 'left-0' : 'right-0'} mt-2 w-56 bg-slate-900/95 border border-slate-700 rounded-lg p-3 shadow-2xl z-50 backdrop-blur-md text-left animate-in fade-in zoom-in-95 duration-200`}>
+                    <div className="fixed inset-0 z-[90]" onClick={() => setActiveTooltip(null)}></div>
+                    <div className={`absolute top-full ${side === 'left' ? 'left-0' : 'right-0'} mt-2 w-56 bg-slate-900/95 border border-slate-700 rounded-lg p-3 shadow-2xl z-[100] backdrop-blur-md text-left animate-in fade-in zoom-in-95 duration-200`}>
                         <h4 className="text-xs font-bold text-white mb-2 pb-2 border-b border-slate-800 flex items-center gap-2">
                            {title}
                         </h4>
@@ -118,17 +119,17 @@ export const HUD: React.FC<HUDProps> = ({
   };
 
   return (
-    <div className="w-full mb-2 md:mb-4 space-y-1.5 md:space-y-2">
+    <div className="w-full mb-1 md:mb-2 space-y-1 md:space-y-2">
       {/* Top Row: Title & Scores */}
-      <div className="flex flex-wrap justify-between items-center bg-slate-900/90 p-2 md:p-3 rounded-xl border border-slate-700 shadow-xl backdrop-blur-md gap-2">
-        <div className="flex items-center gap-2 md:gap-3 flex-1 min-w-[140px]">
+      <div className="flex flex-wrap justify-between items-center bg-slate-900/90 p-2 rounded-xl border border-slate-700 shadow-xl backdrop-blur-md gap-2">
+        <div className="flex items-center gap-2 md:gap-3 flex-1 min-w-[120px]">
             <button onClick={onMenu} className="p-1.5 md:p-2 -ml-1 md:-ml-2 hover:bg-white/10 rounded-lg transition-colors text-slate-400 hover:text-white">
-                <Menu size={20} />
+                <Menu size={18} className="md:w-5 md:h-5" />
             </button>
             <div>
                 <div className="flex items-center">
-                    <h1 className="text-base sm:text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-yellow-200 via-orange-400 to-red-500 fantasy-font drop-shadow-sm whitespace-nowrap">
-                        {isClassic ? "Classic Mode" : "Dragon's Hoard"}
+                    <h1 className="text-xs sm:text-lg md:text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-yellow-200 via-orange-400 to-red-500 fantasy-font drop-shadow-sm whitespace-nowrap">
+                        {isClassic ? "Classic" : "Dragon's Hoard"}
                     </h1>
                     {/* Monster Evolution Tooltip */}
                     {!isClassic && (
@@ -149,7 +150,7 @@ export const HUD: React.FC<HUDProps> = ({
                     )}
                 </div>
                 
-                <div className="flex items-center gap-3 text-[10px] md:text-xs text-slate-400 mt-0.5 md:mt-1">
+                <div className="flex items-center gap-3 text-[9px] md:text-xs text-slate-400 mt-0.5 md:mt-1">
                     <span className="flex items-center gap-1"><Trophy size={10} /> {bestScore}</span>
                     {!isClassic && <span className="flex items-center gap-1 text-yellow-400 font-bold"><Coins size={10} /> {gold} G</span>}
                     
@@ -181,8 +182,8 @@ export const HUD: React.FC<HUDProps> = ({
             </div>
         </div>
         <div className="text-right pl-2 border-l border-slate-700/50">
-          <div className="text-[10px] text-slate-500 uppercase tracking-wider font-bold">Score</div>
-          <div className="text-xl md:text-2xl font-mono font-bold text-white leading-none">{score}</div>
+          <div className="text-[9px] text-slate-500 uppercase tracking-wider font-bold">Score</div>
+          <div className="text-lg md:text-2xl font-mono font-bold text-white leading-none">{score}</div>
         </div>
       </div>
 
@@ -202,14 +203,14 @@ export const HUD: React.FC<HUDProps> = ({
       {/* RPG Stats & Inventory Row */}
       {!isClassic && (
       <>
-        <div className="flex gap-2 h-10 md:h-14">
+        <div className="flex gap-2 h-9 md:h-14">
             {/* XP Bar Container */}
             <div className={`flex-1 bg-[#0a0c10] p-1 rounded-lg border border-slate-700 relative flex items-center shadow-lg overflow-visible group pl-4`}>
                 
                 {/* Level Badge - Hexagonal Banner Style */}
                 <div className="absolute -left-1 top-1/2 -translate-y-1/2 z-20 filter drop-shadow-xl hover:scale-105 transition-transform duration-300">
                      <div 
-                        className={`w-12 h-14 md:w-14 md:h-16 ${rank.bg} flex items-center justify-center relative`}
+                        className={`w-10 h-12 md:w-14 md:h-16 ${rank.bg} flex items-center justify-center relative`}
                         style={{ clipPath: 'polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%)' }}
                      >
                           {/* Inner Border */}
@@ -220,22 +221,17 @@ export const HUD: React.FC<HUDProps> = ({
                           
                           {/* Rank Icon Content */}
                           <div className="relative z-10 flex flex-col items-center justify-center -mt-1">
-                              <RankIcon size={18} className={`${rank.color} mb-0.5 filter drop-shadow-[0_0_5px_currentColor]`} />
-                              <span className="text-xs md:text-sm font-black text-white leading-none font-mono">{level}</span>
+                              <RankIcon size={14} className={`${rank.color} mb-0.5 filter drop-shadow-[0_0_5px_currentColor] md:w-[18px] md:h-[18px]`} />
+                              <span className="text-[10px] md:text-sm font-black text-white leading-none font-mono">{level}</span>
                           </div>
 
                           {/* Top Shine */}
                           <div className="absolute top-0 left-0 right-0 h-1/2 bg-gradient-to-b from-white/20 to-transparent pointer-events-none z-20" style={{ clipPath: 'polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%)' }}></div>
                      </div>
-                     
-                     {/* Rank Title Label */}
-                     <div className={`absolute -bottom-2 left-1/2 -translate-x-1/2 text-[7px] font-bold uppercase tracking-wide bg-slate-900 border ${rank.border} text-white px-2 py-0.5 rounded-full whitespace-nowrap z-30 shadow-md`}>
-                        {rank.title}
-                     </div>
                 </div>
 
                 {/* Progress Bar Area - Magic Vial Style */}
-                <div className="flex-1 flex flex-col justify-center pl-10 pr-1 h-full relative">
+                <div className="flex-1 flex flex-col justify-center pl-8 md:pl-10 pr-1 h-full relative">
                     <div className="flex justify-between items-center mb-0.5 z-10">
                         <div className="flex items-center gap-1">
                              <span className={`text-[9px] md:text-[10px] font-bold uppercase tracking-wider text-slate-400`}>XP</span>
@@ -258,7 +254,7 @@ export const HUD: React.FC<HUDProps> = ({
                         </span>
                     </div>
 
-                    <div className="w-full h-3 md:h-4 bg-black/80 rounded-full border border-slate-700/80 relative overflow-hidden shadow-[inset_0_2px_4px_rgba(0,0,0,1)]">
+                    <div className="w-full h-2 md:h-4 bg-black/80 rounded-full border border-slate-700/80 relative overflow-hidden shadow-[inset_0_2px_4px_rgba(0,0,0,1)]">
                         {/* Fluid Fill */}
                         <div 
                             className={`h-full bg-gradient-to-r ${barGradient} transition-all duration-700 ease-out relative shadow-[0_0_15px_rgba(255,255,255,0.1)]`}
@@ -283,23 +279,23 @@ export const HUD: React.FC<HUDProps> = ({
             {/* Store Button */}
             <button 
                 onClick={onOpenStore}
-                className="w-12 md:w-14 bg-yellow-900/20 hover:bg-yellow-900/40 border border-yellow-700/50 rounded-lg flex flex-col items-center justify-center text-yellow-500 transition-colors group relative overflow-hidden shrink-0"
+                className="w-10 md:w-14 bg-yellow-900/20 hover:bg-yellow-900/40 border border-yellow-700/50 rounded-lg flex flex-col items-center justify-center text-yellow-500 transition-colors group relative overflow-hidden shrink-0"
             >
                 <div className="absolute inset-0 bg-yellow-500/10 translate-y-full group-hover:translate-y-0 transition-transform duration-300"></div>
-                <StoreIcon size={16} className="relative z-10" />
-                <span className="text-[8px] md:text-[9px] font-bold mt-0.5 md:mt-1 relative z-10">SHOP</span>
+                <StoreIcon size={14} className="relative z-10 md:w-4 md:h-4" />
+                <span className="text-[7px] md:text-[9px] font-bold mt-0.5 md:mt-1 relative z-10">SHOP</span>
             </button>
         </div>
 
         {/* Inventory & Reroll Row */}
-        <div className="flex gap-2 h-10 md:h-12">
+        <div className="flex gap-2 h-9 md:h-12">
             <div className="flex flex-1 gap-2">
                 {[0, 1, 2].map((slotIndex) => {
                     const item = inventory[slotIndex];
                     return (
                         <div key={slotIndex} className="flex-1 bg-slate-900/50 border border-slate-800 rounded-lg relative flex items-center justify-center group overflow-hidden">
                             {/* Hotkey Indicator - Always Visible */}
-                            <div className="absolute top-0 left-0 bg-slate-800/90 px-1.5 py-0.5 rounded-br-md text-[9px] font-mono text-slate-500 border-r border-b border-slate-700/50 z-10">
+                            <div className="absolute top-0 left-0 bg-slate-800/90 px-1 py-0.5 rounded-br-md text-[8px] md:text-[9px] font-mono text-slate-500 border-r border-b border-slate-700/50 z-10">
                                 {slotIndex + 1}
                             </div>
 
@@ -308,7 +304,7 @@ export const HUD: React.FC<HUDProps> = ({
                                     onClick={() => onUseItem(item)}
                                     className="w-full h-full flex items-center justify-center hover:bg-white/5 transition-colors relative"
                                 >
-                                    <span className="text-xl md:text-2xl drop-shadow-md transform group-hover:scale-110 transition-transform">{item.icon}</span>
+                                    <span className="text-lg md:text-2xl drop-shadow-md transform group-hover:scale-110 transition-transform">{item.icon}</span>
                                     <span className="absolute bottom-0 right-1 text-[7px] md:text-[8px] text-slate-400 font-bold tracking-tighter opacity-70">{item.name.split(' ')[0]}</span>
                                 </button>
                             ) : (
@@ -324,13 +320,13 @@ export const HUD: React.FC<HUDProps> = ({
             <button 
                 onClick={canReroll ? onReroll : undefined}
                 disabled={!canReroll}
-                className={`w-12 md:w-14 rounded-lg flex flex-col items-center justify-center border transition-all relative shrink-0
+                className={`w-10 md:w-14 rounded-lg flex flex-col items-center justify-center border transition-all relative shrink-0
                     ${canReroll 
                         ? 'bg-purple-900/30 hover:bg-purple-800/50 border-purple-500/50 text-purple-300 shadow-[0_0_10px_rgba(168,85,247,0.2)]' 
                         : 'bg-slate-900/30 border-slate-800 text-slate-700 opacity-50 cursor-not-allowed'}
                 `}
             >
-                <RefreshCw size={14} className={canReroll ? "" : "opacity-50"} />
+                <RefreshCw size={12} className={canReroll ? "md:w-3.5 md:h-3.5" : "opacity-50"} />
                 <div className="text-[7px] md:text-[8px] font-bold mt-0.5 md:mt-1">
                     {level < 15 ? 'Lvl 15' : (rerolls > 0 ? `Free: ${rerolls}` : '50G')}
                 </div>

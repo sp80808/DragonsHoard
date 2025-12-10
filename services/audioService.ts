@@ -1,5 +1,4 @@
 
-
 class AudioService {
   private ctx: AudioContext | null = null;
   private buffers: Record<string, AudioBuffer> = {};
@@ -43,7 +42,7 @@ class AudioService {
       // --- Setup Reverb (Procedural Hall) ---
       this.reverbNode = this.ctx!.createConvolver();
       this.reverbGain = this.ctx!.createGain();
-      this.reverbGain.gain.value = 0.5; // High reverb for atmosphere
+      this.reverbGain.gain.value = 0.4; // High reverb for atmosphere
 
       // Generate Impulse Response (Dark Hall)
       const duration = 2.5;
@@ -186,7 +185,7 @@ class AudioService {
       // Create Filter for Dynamic Intensity (Muffled -> Clear)
       this.musicFilter = this.ctx.createBiquadFilter();
       this.musicFilter.type = 'lowpass';
-      this.musicFilter.frequency.value = 150; // Start Muffled (Calm)
+      this.musicFilter.frequency.value = 100; // Start Very Muffled
       this.musicFilter.Q.value = 0.5;
 
       const trackGain = this.ctx.createGain();
@@ -212,9 +211,6 @@ class AudioService {
       
       // Map intensity to Filter Opening (100Hz -> 20000Hz)
       // Cubic curve for dramatic opening only when very intense
-      // 0.0 -> 100Hz
-      // 0.5 -> ~2000Hz
-      // 1.0 -> 20000Hz
       const minFreq = 100;
       const maxFreq = 20000;
       const targetFreq = minFreq + (Math.pow(intensity, 3) * (maxFreq - minFreq));
@@ -222,9 +218,162 @@ class AudioService {
       this.musicFilter.frequency.setTargetAtTime(targetFreq, t, 1.0);
   }
 
-  // --- SFX ---
+  // --- SOUND EFFECTS (SYNTHESIS) ---
 
-  playSFX(type: 'MOVE' | 'MERGE' | 'LEVEL_UP' | 'BOMB') {
+  // Helper: Create Noise Buffer for "Crunch/Impact" sounds
+  private createNoiseBuffer(): AudioBuffer | null {
+      if (!this.ctx) return null;
+      const bufferSize = this.ctx.sampleRate * 2; // 2 seconds
+      const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+      const data = buffer.getChannelData(0);
+      for (let i = 0; i < bufferSize; i++) {
+          data[i] = Math.random() * 2 - 1;
+      }
+      return buffer;
+  }
+
+  // Effect: "Whoosh" for movement (Stone sliding)
+  playWhoosh() {
+      if (!this.ctx) return;
+      const t = this.ctx.currentTime;
+      
+      const bufferSize = this.ctx.sampleRate * 0.15; // Short burst
+      const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+      const data = buffer.getChannelData(0);
+      for (let i = 0; i < bufferSize; i++) {
+          data[i] = Math.random() * 2 - 1;
+      }
+
+      const noiseSrc = this.ctx.createBufferSource();
+      noiseSrc.buffer = buffer;
+
+      const filter = this.ctx.createBiquadFilter();
+      filter.type = 'bandpass';
+      filter.frequency.setValueAtTime(300, t);
+      filter.frequency.linearRampToValueAtTime(600, t + 0.15); // Slight upward slide
+
+      const gain = this.ctx.createGain();
+      gain.gain.setValueAtTime(0.08, t);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.15);
+
+      noiseSrc.connect(filter);
+      filter.connect(gain);
+      gain.connect(this.sfxGain!);
+      
+      noiseSrc.start(t);
+  }
+
+  // Effect: "Zap/Magic Discharge" for Combos
+  playZap(combo: number) {
+      if (!this.ctx) return;
+      const t = this.ctx.currentTime;
+      
+      const osc1 = this.ctx.createOscillator();
+      const osc2 = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      
+      // Dual oscillator for rich phasing texture
+      osc1.type = 'sawtooth';
+      osc2.type = 'square';
+      
+      // Pitch scales with combo
+      const baseFreq = 250 + (combo * 100);
+      
+      osc1.frequency.setValueAtTime(baseFreq, t);
+      osc1.frequency.exponentialRampToValueAtTime(baseFreq * 4, t + 0.15);
+      
+      osc2.frequency.setValueAtTime(baseFreq * 1.01, t); // Detuned
+      osc2.frequency.exponentialRampToValueAtTime(baseFreq * 4.04, t + 0.15);
+
+      // Envelope
+      gain.gain.setValueAtTime(0.1, t);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.15);
+
+      // Filter Sweep for "Whoosh/Zap" feel
+      const filter = this.ctx.createBiquadFilter();
+      filter.type = 'lowpass';
+      filter.frequency.setValueAtTime(800, t);
+      filter.frequency.linearRampToValueAtTime(8000, t + 0.15);
+
+      osc1.connect(gain);
+      osc2.connect(gain);
+      gain.connect(filter);
+      filter.connect(this.sfxGain!);
+
+      osc1.start(t);
+      osc2.start(t);
+      osc1.stop(t + 0.15);
+      osc2.stop(t + 0.15);
+  }
+
+  // Effect: "Thud/Crunch" for High Value Tiles
+  playCrunch() {
+      if (!this.ctx) return;
+      const t = this.ctx.currentTime;
+
+      // 1. Heavy Impact (Sub-bass kick)
+      const subOsc = this.ctx.createOscillator();
+      const subGain = this.ctx.createGain();
+      subOsc.type = 'square';
+      subOsc.frequency.setValueAtTime(80, t);
+      subOsc.frequency.exponentialRampToValueAtTime(10, t + 0.4);
+      
+      subGain.gain.setValueAtTime(0.4, t);
+      subGain.gain.exponentialRampToValueAtTime(0.001, t + 0.4);
+      
+      subOsc.connect(subGain);
+      subGain.connect(this.sfxGain!);
+      subOsc.start(t);
+      subOsc.stop(t + 0.4);
+
+      // 2. Bone/Stone Crunch (Textured Noise)
+      const noiseBuffer = this.createNoiseBuffer();
+      if (noiseBuffer) {
+          const noiseSrc = this.ctx.createBufferSource();
+          noiseSrc.buffer = noiseBuffer;
+          
+          const noiseFilter = this.ctx.createBiquadFilter();
+          noiseFilter.type = 'highpass';
+          noiseFilter.frequency.setValueAtTime(800, t); // Cut mud
+
+          const noiseGain = this.ctx.createGain();
+          noiseGain.gain.setValueAtTime(0.2, t);
+          noiseGain.gain.exponentialRampToValueAtTime(0.001, t + 0.25);
+
+          noiseSrc.connect(noiseFilter);
+          noiseFilter.connect(noiseGain);
+          noiseGain.connect(this.sfxGain!);
+          
+          noiseSrc.start(t);
+          noiseSrc.stop(t + 0.25);
+      }
+  }
+
+  // Effect: "Heavenly Chord" for God Tile
+  playGodChord() {
+      if (!this.ctx) return;
+      const t = this.ctx.currentTime;
+      // D Major 9 Chord: D, F#, A, E
+      const freqs = [293.66, 369.99, 440.00, 659.25];
+      
+      freqs.forEach((f, i) => {
+          const osc = this.ctx!.createOscillator();
+          const gain = this.ctx!.createGain();
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(f, t);
+          
+          gain.gain.setValueAtTime(0, t);
+          gain.gain.linearRampToValueAtTime(0.1, t + 0.5); // Slow attack
+          gain.gain.exponentialRampToValueAtTime(0.001, t + 4.0); // Long sustain
+          
+          osc.connect(gain);
+          gain.connect(this.sfxGain!);
+          osc.start(t);
+          osc.stop(t + 4.0);
+      });
+  }
+
+  playSFX(type: 'MOVE' | 'LEVEL_UP' | 'BOMB') {
       if (!this.enabled || !this.ctx) return;
       const t = this.ctx.currentTime;
 
@@ -248,7 +397,7 @@ class AudioService {
               osc.frequency.setValueAtTime(freq, t + (i * 0.1)); 
               
               gain.gain.setValueAtTime(0, t + (i * 0.1));
-              gain.gain.linearRampToValueAtTime(0.05, t + (i * 0.1) + 0.1); // Very Quiet
+              gain.gain.linearRampToValueAtTime(0.05, t + (i * 0.1) + 0.1); 
               gain.gain.exponentialRampToValueAtTime(0.001, t + (i * 0.1) + 2.0); 
 
               osc.start(t + (i * 0.1));
@@ -263,21 +412,8 @@ class AudioService {
       gain.connect(this.sfxGain!);
 
       if (type === 'MOVE') {
-          osc.type = 'triangle';
-          osc.frequency.setValueAtTime(150, t);
-          osc.frequency.exponentialRampToValueAtTime(50, t + 0.1);
-          gain.gain.setValueAtTime(0.05, t);
-          gain.gain.exponentialRampToValueAtTime(0.001, t + 0.1);
-          osc.start();
-          osc.stop(t + 0.1);
-      } else if (type === 'MERGE') {
-          osc.type = 'sine';
-          osc.frequency.setValueAtTime(300, t);
-          osc.frequency.linearRampToValueAtTime(600, t + 0.1);
-          gain.gain.setValueAtTime(0.1, t); // Softer volume
-          gain.gain.exponentialRampToValueAtTime(0.001, t + 0.2);
-          osc.start();
-          osc.stop(t + 0.2);
+          // Replaced simple blip with "Stone Slide" whoosh
+          this.playWhoosh();
       } else if (type === 'BOMB') {
           osc.type = 'sawtooth';
           osc.frequency.setValueAtTime(100, t);
@@ -289,23 +425,40 @@ class AudioService {
       }
   }
 
-  playMerge(value: number) {
+  // Updated Merge Logic: Handles Value-based Impact + Combo Zaps
+  playMerge(value: number, combo: number = 0) {
       if (!this.enabled || !this.ctx) return;
-      const t = this.ctx.currentTime;
-      const osc = this.ctx.createOscillator();
-      const gain = this.ctx.createGain();
-      osc.connect(gain);
-      gain.connect(this.sfxGain!);
       
-      const baseFreq = 220 + (Math.log2(value) * 50);
-      osc.frequency.setValueAtTime(baseFreq, t);
-      osc.frequency.exponentialRampToValueAtTime(baseFreq * 1.5, t + 0.15);
-      
-      gain.gain.setValueAtTime(0.08, t); // Soft volume
-      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.3);
-      
-      osc.start();
-      osc.stop(t + 0.3);
+      // 1. Base Sound based on Value
+      if (value >= 2048) {
+          this.playGodChord();
+      } else if (value >= 512) {
+          this.playCrunch(); // Heavy impact for high tiers
+      } else {
+          // Standard "Bloop" for lower tiers
+          const t = this.ctx.currentTime;
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+          osc.connect(gain);
+          gain.connect(this.sfxGain!);
+          
+          osc.type = 'sine';
+          const baseFreq = 220 + (Math.log2(value) * 50);
+          osc.frequency.setValueAtTime(baseFreq, t);
+          osc.frequency.exponentialRampToValueAtTime(baseFreq * 1.5, t + 0.15);
+          
+          gain.gain.setValueAtTime(0.08, t);
+          gain.gain.exponentialRampToValueAtTime(0.001, t + 0.3);
+          
+          osc.start();
+          osc.stop(t + 0.3);
+      }
+
+      // 2. Combo Layer (Zap!)
+      if (combo > 1) {
+          // Delay slightly so it doesn't mud the transient of the merge
+          setTimeout(() => this.playZap(combo), 50);
+      }
   }
 
   playMove() { this.playSFX('MOVE'); }
@@ -330,7 +483,8 @@ class AudioService {
   playStageTransition() { this.playLevelUp(); }
   playCascade(step: number) { 
        if (!this.enabled || !this.ctx) return;
-       this.playMerge(Math.pow(2, step + 2));
+       // Cascades sound like rapid combos
+       this.playZap(step);
   }
 }
 
