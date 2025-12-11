@@ -68,22 +68,30 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({ onStart, onContinue,
     // ROOT: min-h-[100dvh] allows scrolling if content is too tall. Flex column ensures footer is pushed down.
     <div className="min-h-[100dvh] w-full bg-[#050505] relative overflow-x-hidden flex flex-col font-sans text-slate-200 selection:bg-amber-500/30">
       
-      {/* --- LAYER 1: ATMOSPHERIC BACKGROUND (Fixed) --- */}
-      <div className="fixed inset-0 z-0">
-          <div 
-            className="absolute inset-0 opacity-30 animate-[pulse_12s_ease-in-out_infinite]"
-            style={{
-                backgroundImage: `url('https://image.pollinations.ai/prompt/dark fantasy ancient stone dungeon texture obsidian walls cinematic lighting dramatic shadows?width=1024&height=1024&nologo=true')`,
-                backgroundSize: 'cover',
-                backgroundPosition: 'center',
-                transform: 'scale(1.05)'
-            }}
-          />
-          {/* Noise Texture Overlay */}
-          <div className="absolute inset-0 opacity-[0.03] pointer-events-none" style={{ backgroundImage: `url('https://www.transparenttextures.com/patterns/stardust.png')` }}></div>
+      {/* --- LAYER 1: CINEMATIC ANIMATED BACKGROUND --- */}
+      <div className="fixed inset-0 z-0 overflow-hidden">
+          {/* Base: Deep Smoky Gradient */}
+          <div className="absolute inset-0 bg-gradient-to-b from-[#0f0505] via-[#1a0808] to-[#050505]"></div>
           
-          {/* Deep Vignette & Gradient */}
-          <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-black/80 pointer-events-none" />
+          {/* Layer 2: Moving Fog (CSS Gradient Animation) */}
+          <div className="absolute inset-0 opacity-40 animate-bg-pan bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-amber-900/20 via-transparent to-transparent blur-3xl scale-150"></div>
+          
+          {/* Layer 3: Drifting Embers (CSS Animation) */}
+          {/* We simulate embers with a few carefully placed divs animating up */}
+          <div className="absolute inset-0 overflow-hidden pointer-events-none">
+              <div className="absolute w-2 h-2 bg-orange-500 rounded-full blur-[2px] opacity-0 animate-[floatUp_4s_infinite_ease-in] left-[10%] top-[100%] delay-0"></div>
+              <div className="absolute w-1 h-1 bg-red-500 rounded-full blur-[1px] opacity-0 animate-[floatUp_6s_infinite_ease-in] left-[30%] top-[100%] delay-[1s]"></div>
+              <div className="absolute w-3 h-3 bg-amber-600 rounded-full blur-[4px] opacity-0 animate-[floatUp_8s_infinite_ease-in] left-[60%] top-[100%] delay-[3s]"></div>
+              <div className="absolute w-1.5 h-1.5 bg-yellow-600 rounded-full blur-[2px] opacity-0 animate-[floatUp_5s_infinite_ease-in] left-[80%] top-[100%] delay-[0.5s]"></div>
+          </div>
+
+          {/* Layer 4: Pulse Vignette */}
+          <div className="absolute inset-0 opacity-30 animate-[pulse_8s_ease-in-out_infinite] bg-gradient-to-t from-red-950/30 via-transparent to-transparent"></div>
+
+          {/* Layer 5: Noise Texture */}
+          <div className="absolute inset-0 opacity-[0.06] mix-blend-overlay" style={{ backgroundImage: `url('https://www.transparenttextures.com/patterns/stardust.png')` }}></div>
+          
+          {/* Layer 6: Deep Vignette for focus */}
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_0%,#000000_90%)] pointer-events-none" />
       </div>
 
@@ -93,8 +101,8 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({ onStart, onContinue,
         {/* TOP BAR: Player Badge */}
         <div className="w-full flex justify-between items-start p-4 md:p-8 shrink-0">
             {/* Left: Version / Minimal Brand */}
-            <div className="hidden md:block opacity-30 text-[10px] uppercase tracking-[0.3em]">
-                v2.4.0 <span className="text-amber-500">Early Access</span>
+            <div className="hidden md:block opacity-40 text-[10px] uppercase tracking-[0.3em] font-bold text-slate-500">
+                v2.4.0 <span className="text-amber-600">Early Access</span>
             </div>
 
             {/* Right: Player Badge (Clickable) */}
@@ -131,22 +139,39 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({ onStart, onContinue,
         <div className="flex-1 flex flex-col items-center justify-center px-4">
             
             {/* HERO TITLE */}
-            <div className="text-center mb-6 md:mb-8 relative shrink-0">
-                <div className="absolute -inset-10 bg-amber-500/5 blur-[100px] rounded-full pointer-events-none"></div>
-                <h1 className="text-5xl sm:text-6xl md:text-8xl font-black text-transparent bg-clip-text bg-gradient-to-b from-amber-200 via-amber-500 to-red-700 fantasy-font drop-shadow-[0_5px_5px_rgba(0,0,0,0.8)] tracking-tighter leading-none relative z-10">
+            <div className="text-center mb-6 md:mb-10 relative shrink-0 animate-in fade-in zoom-in duration-1000 group">
+                
+                {/* Ambient Glow */}
+                <div className="absolute -inset-20 bg-amber-600/10 blur-[80px] rounded-full pointer-events-none"></div>
+                
+                {/* DRAGON'S BREATH SMOKE LAYER */}
+                <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[160%] h-[160%] pointer-events-none z-0 mix-blend-screen opacity-80">
+                    {/* Deep Breath Haze */}
+                    <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-3/4 h-1/2 bg-gradient-to-t from-red-900/20 via-orange-900/5 to-transparent blur-3xl animate-pulse"></div>
+                    
+                    {/* Rising Smoke Wisps */}
+                    <div className="absolute bottom-[-10%] left-[20%] w-32 h-32 bg-gray-500/10 rounded-full blur-2xl animate-[floatUp_6s_infinite_ease-in-out]"></div>
+                    <div className="absolute bottom-[-20%] right-[20%] w-40 h-40 bg-slate-500/10 rounded-full blur-3xl animate-[floatUp_7s_infinite_ease-in-out] delay-1000"></div>
+                    <div className="absolute bottom-[-15%] left-[45%] w-24 h-24 bg-orange-500/5 rounded-full blur-xl animate-[floatUp_5s_infinite_ease-in-out] delay-500"></div>
+                    
+                    {/* Ember Particles near Text */}
+                    <div className="absolute bottom-[20%] left-[30%] w-1 h-1 bg-amber-300 rounded-full blur-[1px] animate-[floatUp_4s_infinite_ease-out] opacity-60"></div>
+                    <div className="absolute bottom-[10%] right-[35%] w-1.5 h-1.5 bg-red-400 rounded-full blur-[1px] animate-[floatUp_5s_infinite_ease-out] delay-700 opacity-60"></div>
+                </div>
+
+                <h1 className="text-5xl sm:text-6xl md:text-8xl font-black text-transparent bg-clip-text bg-gradient-to-b from-amber-100 via-amber-500 to-orange-700 fantasy-font drop-shadow-[0_5px_5px_rgba(0,0,0,0.8)] tracking-tighter leading-none relative z-10 text-flicker">
                     DRAGON'S<br/>HOARD
                 </h1>
-                <div className="h-px w-24 md:w-32 bg-gradient-to-r from-transparent via-amber-700 to-transparent mx-auto mt-2 md:mt-4"></div>
+                <div className="h-px w-24 md:w-48 bg-gradient-to-r from-transparent via-amber-700/50 to-transparent mx-auto mt-4 md:mt-6 relative z-10"></div>
+                <p className="text-amber-200/40 text-[10px] md:text-xs uppercase tracking-[0.6em] mt-2 font-light relative z-10">Merge . Evolve . Survive</p>
             </div>
 
             {/* CLASS SELECTOR CAROUSEL */}
-            <div className="relative w-full max-w-lg mb-4 flex items-center justify-center gap-2 md:gap-4 shrink-0">
+            <div className="relative w-full max-w-lg mb-4 flex items-center justify-center gap-2 md:gap-4 shrink-0 animate-in slide-in-from-bottom-8 duration-700 delay-200">
                 <button onClick={prevClass} className="p-2 md:p-3 rounded-full hover:bg-white/5 text-slate-600 hover:text-amber-400 transition-colors"><ChevronLeft size={24} /></button>
                 
                 {/* 
                     Card Container 
-                    - Auto height to fit content (top icon to bottom text)
-                    - Reduced padding and aspect ratio constraints
                 */}
                 <div className={`
                     relative w-48 sm:w-64 md:w-72 
@@ -182,7 +207,7 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({ onStart, onContinue,
         </div>
 
         {/* RIGHT SIDE: Floating Quest Log (Desktop Only) */}
-        <div className="hidden lg:block absolute top-1/2 -translate-y-1/2 right-8 w-64 perspective-[1000px]">
+        <div className="hidden lg:block absolute top-1/2 -translate-y-1/2 right-8 w-64 perspective-[1000px] animate-in fade-in slide-in-from-right-8 duration-1000 delay-500">
              <div className="bg-black/40 backdrop-blur-md border border-white/5 rounded-xl p-5 transform rotate-y-[-5deg] hover:rotate-y-0 transition-transform duration-500 shadow-2xl">
                 <div className="flex items-center gap-2 mb-4 pb-2 border-b border-white/5">
                     <Scroll size={16} className="text-amber-500" />
@@ -213,7 +238,7 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({ onStart, onContinue,
       </div>
 
       {/* --- LAYER 3: STATIC FOOTER (MOBILE/DESKTOP ACTIONS) --- */}
-      <div className="w-full z-50 p-4 shrink-0 bg-gradient-to-t from-black via-black/95 to-transparent mt-auto">
+      <div className="w-full z-50 p-4 shrink-0 bg-gradient-to-t from-black via-black/95 to-transparent mt-auto animate-in slide-in-from-bottom-4 duration-500">
           <div className="max-w-xs mx-auto w-full flex flex-col gap-3">
               
               {/* PRIMARY CTA */}

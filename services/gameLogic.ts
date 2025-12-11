@@ -1,6 +1,6 @@
 
-import { Direction, GameState, Tile, TileType, MoveResult, LootResult, ItemType, InventoryItem, Stage, LeaderboardEntry, GameStats, Achievement, InputSettings, RunStats, HeroClass, GameMode, PlayerProfile } from '../types';
-import { GRID_SIZE_INITIAL, SHOP_ITEMS, getXpThreshold, getStage, getStageBackground, ACHIEVEMENTS, TILE_STYLES, FALLBACK_STYLE, getItemDefinition } from '../constants';
+import { Direction, GameState, Tile, TileType, MoveResult, LootResult, ItemType, InventoryItem, Stage, LeaderboardEntry, GameStats, Achievement, InputSettings, RunStats, HeroClass, GameMode, PlayerProfile, ShopState } from '../types';
+import { GRID_SIZE_INITIAL, SHOP_ITEMS, getXpThreshold, getStage, getStageBackground, ACHIEVEMENTS, TILE_STYLES, FALLBACK_STYLE, getItemDefinition, BOSS_DEFINITIONS, SHOP_CONFIG } from '../constants';
 import { v4 as uuidv4 } from 'uuid';
 
 const createId = () => uuidv4();
@@ -38,6 +38,7 @@ export const spawnTile = (grid: Tile[], size: number, level: number, options?: S
   let type = TileType.NORMAL;
   let health = undefined;
   let maxHealth = undefined;
+  let bossThemeId = undefined;
 
   // Options handling
   let opts: SpawnOptions = {};
@@ -63,10 +64,20 @@ export const spawnTile = (grid: Tile[], size: number, level: number, options?: S
 
   // Boss Logic
   if (type === TileType.BOSS) {
-      value = 0; 
-      const bossScale = opts.bossLevel || 1;
-      maxHealth = 20 * Math.pow(1.5, bossScale); 
-      health = maxHealth;
+      // Prevent multiple bosses
+      if (grid.some(t => t.type === TileType.BOSS)) {
+          type = TileType.NORMAL; // Revert to normal if boss exists
+          value = 2;
+      } else {
+          value = 0; 
+          const stage = getStage(level);
+          const bossDef = BOSS_DEFINITIONS[stage.themeId] || BOSS_DEFINITIONS['DEFAULT'];
+          const bossScale = opts.bossLevel || 1;
+          
+          maxHealth = Math.floor(bossDef.baseHealth * Math.pow(1.5, bossScale)); 
+          health = maxHealth;
+          bossThemeId = stage.themeId;
+      }
   }
 
   const newTile: Tile = {
@@ -77,10 +88,24 @@ export const spawnTile = (grid: Tile[], size: number, level: number, options?: S
     type,
     isNew: true,
     health,
-    maxHealth
+    maxHealth,
+    bossThemeId
   };
 
   return [...grid, newTile];
+};
+
+const getInitialShopState = (): ShopState => {
+    const items: Record<string, { stock: number; priceMultiplier: number }> = {};
+    SHOP_ITEMS.forEach(item => {
+        const cat = item.category as keyof typeof SHOP_CONFIG.STOCK_LIMITS;
+        const limit = SHOP_CONFIG.STOCK_LIMITS[cat] || 3;
+        items[item.id] = { stock: limit, priceMultiplier: 1.0 };
+    });
+    return {
+        items,
+        turnsUntilRestock: SHOP_CONFIG.RESTOCK_INTERVAL
+    };
 };
 
 export const initializeGame = (restart = false, heroClass: HeroClass = HeroClass.ADVENTURER, mode: GameMode = 'RPG'): GameState => {
@@ -92,6 +117,13 @@ export const initializeGame = (restart = false, heroClass: HeroClass = HeroClass
             // Migration for older saves if needed
             if (!parsed.effectCounters) parsed.effectCounters = {};
             if (!parsed.gameMode) parsed.gameMode = 'RPG';
+            if (!parsed.settings.slideSpeed) parsed.settings.slideSpeed = 150;
+            if (parsed.justLeveledUp === undefined) parsed.justLeveledUp = false;
+            if (parsed.settings.lowPerformanceMode === undefined) parsed.settings.lowPerformanceMode = false;
+            
+            // Migration for Shop State
+            if (!parsed.shop) parsed.shop = getInitialShopState();
+
             return parsed;
         } catch (e) { console.error("Save corrupted", e); }
     }
@@ -103,7 +135,8 @@ export const initializeGame = (restart = false, heroClass: HeroClass = HeroClass
       minLevel: stage.minLevel,
       backgroundUrl: getStageBackground(stage.name),
       colorTheme: stage.colorTheme,
-      barColor: stage.barColor
+      barColor: stage.barColor,
+      themeId: stage.themeId
   };
 
   // Class Starting Bonuses
@@ -161,10 +194,22 @@ export const initializeGame = (restart = false, heroClass: HeroClass = HeroClass
     stats,
     runStats,
     achievements,
-    settings: { enableKeyboard: true, enableSwipe: true, enableScroll: true, invertSwipe: false, invertScroll: false, sensitivity: 5, enableTooltips: true },
+    settings: { 
+        enableKeyboard: true, 
+        enableSwipe: true, 
+        enableScroll: true, 
+        invertSwipe: false, 
+        invertScroll: false, 
+        sensitivity: 5, 
+        enableTooltips: true, 
+        slideSpeed: 150,
+        lowPerformanceMode: false
+    },
     selectedClass: heroClass,
     gameMode: mode,
-    accountLevel: profile.accountLevel
+    accountLevel: profile.accountLevel,
+    justLeveledUp: false,
+    shop: getInitialShopState()
   };
 };
 
@@ -235,8 +280,11 @@ export const moveGrid = (
         // 1. Boss Collision (Damage)
         if (nextTile.type === TileType.BOSS) {
             // Hit the boss!
-            const baseDmg = 1;
+            const projectileValue = tile.value;
             const siegeMultiplier = (effectCounters['SIEGE_BREAKER'] || 0) > 0 ? 3 : 1;
+            
+            // Damage scales with the value of the tile hitting the boss
+            const baseDmg = Math.max(1, Math.floor(projectileValue / 2));
             const damage = baseDmg * siegeMultiplier;
             
             nextTile.health = Math.max(0, (nextTile.health || 0) - damage);
@@ -264,7 +312,7 @@ export const moveGrid = (
 
         if (isTileRune || isNextRune) {
             const runeType = isTileRune ? tile.type : nextTile.type;
-            powerUpTriggered = runeType;
+            powerUpTriggered = runeType as TileType;
             
             if (isTileRune) {
                 newGrid = newGrid.filter(t => t.id !== tile.id);
@@ -532,6 +580,7 @@ export const useInventoryItem = (state: GameState, item: InventoryItem): Partial
     let newEffectCounters = { ...state.effectCounters };
     let activeEffects = [...state.activeEffects];
     let logs = [...state.logs];
+    let isCascading = state.isCascading;
 
     switch (item.type) {
         case ItemType.XP_POTION:
@@ -543,12 +592,24 @@ export const useInventoryItem = (state: GameState, item: InventoryItem): Partial
             newXp += 2500;
             logs.push("Greater Potion: +2500 XP");
             break;
+            
+        case ItemType.GRANDMASTER_BREW:
+            newXp += 5000;
+            newEffectCounters['FLOW_STATE'] = (newEffectCounters['FLOW_STATE'] || 0) + 50;
+            logs.push("Grandmaster: +5000XP & Flow State!");
+            break;
 
         case ItemType.BOMB_SCROLL:
             // Remove 3 lowest tiles
             const lowest = [...newGrid].filter(t => t.type !== TileType.BOSS).sort((a,b) => a.value - b.value).slice(0, 3);
             newGrid = newGrid.filter(t => !lowest.includes(t));
             logs.push("Bomb Scroll: Cleared 3 tiles");
+            break;
+            
+        case ItemType.THUNDER_SCROLL:
+            // Immediate Cascade trigger
+            isCascading = true;
+            logs.push("Storm Scroll: Cascade triggered!");
             break;
             
         case ItemType.CATACLYSM_SCROLL:
@@ -606,6 +667,16 @@ export const useInventoryItem = (state: GameState, item: InventoryItem): Partial
             newEffectCounters['RADIANT_AURA'] = (newEffectCounters['RADIANT_AURA'] || 0) + 20;
             logs.push("Radiant Aura: +50% XP (20 turns).");
             break;
+            
+        case ItemType.FLOW_ELIXIR:
+            newEffectCounters['FLOW_STATE'] = (newEffectCounters['FLOW_STATE'] || 0) + 30;
+            logs.push("Flow State: Cascade multipliers doubled!");
+            break;
+            
+        case ItemType.HARMONIC_CRYSTAL:
+            newEffectCounters['HARMONIC_RESONANCE'] = (newEffectCounters['HARMONIC_RESONANCE'] || 0) + 10;
+            logs.push("Harmonic Resonance: Cascades spawn tiles!");
+            break;
 
         default:
             return null;
@@ -623,7 +694,8 @@ export const useInventoryItem = (state: GameState, item: InventoryItem): Partial
         effectCounters: newEffectCounters,
         activeEffects,
         logs,
-        inventory: newInventory
+        inventory: newInventory,
+        isCascading // Updated for Thunder Scroll
     };
 };
 
@@ -649,7 +721,7 @@ export const tryAutoMerge = (grid: Tile[]) => {
     return { success: false, grid, value: 0 };
 };
 
-export const executeAutoCascade = (grid: Tile[], size: number, cascadeStep: number) => {
+export const executeAutoCascade = (grid: Tile[], size: number, cascadeStep: number, effectCounters?: Record<string, number>) => {
     // Simulate gravity/falling if we want, OR just trigger merges that exist but weren't moved
     // In 2048, tiles don't "fall". Cascade here implies: "After move, if new merges are possible without moving, do them."
     // OR: Random matches pop? 
@@ -678,11 +750,16 @@ export const executeAutoCascade = (grid: Tile[], size: number, cascadeStep: numb
         if (target) {
             occurred = true;
             const newVal = t1.value * 2;
-            // Reward Multiplier based on step
-            const mult = 1 + (cascadeStep * 0.2);
             
-            xp += Math.floor(newVal * mult);
-            gold += Math.floor((newVal / 5) * mult);
+            // Multiplier Logic
+            let stepMult = 1 + (cascadeStep * 0.2);
+            // Flow State Elixir Doubles the step multiplier
+            if (effectCounters && effectCounters['FLOW_STATE'] > 0) {
+                stepMult = 1 + (cascadeStep * 0.5); 
+            }
+
+            xp += Math.floor(newVal * stepMult);
+            gold += Math.floor((newVal / 5) * stepMult);
             
             const mergedTile: Tile = {
                 ...target,
@@ -698,6 +775,25 @@ export const executeAutoCascade = (grid: Tile[], size: number, cascadeStep: numb
             
             newGrid = newGrid.filter(t => t.id !== t1.id && t.id !== target.id);
             newGrid.push(mergedTile);
+        }
+    }
+
+    // Harmonic Resonance Logic: Spawn a new low-tier tile to fuel cascades
+    if (occurred && effectCounters && effectCounters['HARMONIC_RESONANCE'] > 0) {
+        // Chance to spawn tile in empty spot
+        // We use the existing spawnTile logic but simplified
+        const emptyCells = getEmptyCells(newGrid, size);
+        if (emptyCells.length > 0) {
+             const { x, y } = emptyCells[Math.floor(Math.random() * emptyCells.length)];
+             const value = Math.random() < 0.8 ? 2 : 4; 
+             const newTile: Tile = {
+                id: createId(),
+                x, y, value,
+                type: TileType.NORMAL,
+                isNew: true,
+                isCascade: true // Use cascade visual for spawn too
+             };
+             newGrid.push(newTile);
         }
     }
     

@@ -10,9 +10,10 @@ import { RunSummary } from './components/RunSummary';
 import { TutorialOverlay } from './components/TutorialOverlay';
 import { HelpScreen } from './components/HelpScreen';
 import { GameStatsModal } from './components/GameStatsModal';
+import { AmbientBackground } from './components/AmbientBackground';
 import { Direction, GameState, TileType, InventoryItem, FloatingText, CraftingRecipe, View, Achievement, ItemType, InputSettings, HeroClass, GameMode, PlayerProfile } from './types';
 import { initializeGame, moveGrid, spawnTile, isGameOver, checkLoot, useInventoryItem, applyMidasTouch, applyChronosShift, applyVoidSingularity, tryAutoMerge, checkAchievements, savePersistentAchievements, executeAutoCascade } from './services/gameLogic';
-import { SHOP_ITEMS, getXpThreshold, getStage, getStageBackground, getItemDefinition, TILE_STYLES } from './constants';
+import { SHOP_ITEMS, getXpThreshold, getStage, getStageBackground, getItemDefinition, TILE_STYLES, SHOP_CONFIG } from './constants';
 import { audioService } from './services/audioService';
 import { loadCriticalAssets, loadBackgroundAssets } from './services/assetLoader';
 import { getPlayerProfile, completeTutorial } from './services/storageService';
@@ -79,7 +80,13 @@ const reducer = (state: GameState, action: Action): GameState => {
         };
 
     case 'BUY_ITEM': {
-      if (state.gold < action.item.price) return state;
+      const shopState = state.shop || { items: {}, turnsUntilRestock: 50 };
+      // Fallback for missing shop item state
+      const itemState = shopState.items[action.item.id] || { stock: 1, priceMultiplier: 1.0 };
+      const currentPrice = Math.floor(action.item.price * itemState.priceMultiplier);
+
+      if (state.gold < currentPrice) return { ...state, logs: [...state.logs, "Not enough gold!"] };
+      if (itemState.stock <= 0) return { ...state, logs: [...state.logs, "Item sold out!"] };
       if (state.inventory.length >= 3) return { ...state, logs: [...state.logs, "Inventory Full!"] };
       
       const newItem: InventoryItem = {
@@ -90,11 +97,19 @@ const reducer = (state: GameState, action: Action): GameState => {
           icon: action.item.icon
       };
 
+      // Update Shop State (Reduce stock, Increase Inflation)
+      const newShopState = { ...shopState, items: { ...shopState.items } };
+      newShopState.items[action.item.id] = {
+          stock: itemState.stock - 1,
+          priceMultiplier: itemState.priceMultiplier + (SHOP_CONFIG.INFLATION_RATE || 0.15)
+      };
+
       const newState = {
           ...state,
-          gold: state.gold - action.item.price,
+          gold: state.gold - currentPrice,
           inventory: [...state.inventory, newItem],
-          logs: [...state.logs, `Bought ${action.item.name}`]
+          shop: newShopState,
+          logs: [...state.logs, `Bought ${action.item.name} for ${currentPrice}G`]
       };
       
       localStorage.setItem('2048_rpg_state_v3', JSON.stringify(newState));
@@ -200,7 +215,7 @@ const reducer = (state: GameState, action: Action): GameState => {
     case 'MOVE': {
       if (state.gameOver || (state.victory && !state.gameWon) || state.powerUpEffect || state.isCascading) return state;
 
-      const { grid: movedGrid, score, xpGained, goldGained, itemsFound, moved, mergedIds, powerUpTriggered, combo, comboMultiplier, logs: moveLogs } = moveGrid(state.grid, action.direction, state.gridSize, state.gameMode, state.effectCounters);
+      const { grid: movedGrid, score, xpGained, goldGained, itemsFound, moved, mergedIds, powerUpTriggered, combo, comboMultiplier, logs: moveLogs, bossDefeated } = moveGrid(state.grid, action.direction, state.gridSize, state.gameMode, state.effectCounters);
 
       if (!moved) return state;
 
@@ -219,6 +234,29 @@ const reducer = (state: GameState, action: Action): GameState => {
       let activeEffects = state.activeEffects || [];
       let nextPowerUpEffect = undefined;
       let newRerolls = state.rerolls;
+      
+      // Shop State Logic
+      let newShopState = state.shop ? { ...state.shop, items: { ...state.shop.items } } : { items: {}, turnsUntilRestock: 50 };
+      newShopState.turnsUntilRestock = Math.max(0, newShopState.turnsUntilRestock - 1);
+      
+      // Restock Trigger: Timer hit 0 OR Boss Defeated
+      if (newShopState.turnsUntilRestock === 0 || bossDefeated) {
+          newLogs.push("Merchant Restocked!");
+          newShopState.turnsUntilRestock = SHOP_CONFIG.RESTOCK_INTERVAL;
+          
+          // Reset Stock & Calm Inflation slightly
+          SHOP_ITEMS.forEach(item => {
+               const currentState = newShopState.items[item.id] || { stock: 0, priceMultiplier: 1.0 };
+               const cat = item.category as keyof typeof SHOP_CONFIG.STOCK_LIMITS;
+               const maxStock = SHOP_CONFIG.STOCK_LIMITS[cat] || 3;
+               
+               newShopState.items[item.id] = {
+                   stock: maxStock,
+                   // Decay inflation by 0.1 (market correction), but keep it above 1.0
+                   priceMultiplier: Math.max(1.0, currentState.priceMultiplier - 0.1)
+               };
+          });
+      }
 
       // Stats Update
       let newStats = { ...state.stats };
@@ -238,6 +276,11 @@ const reducer = (state: GameState, action: Action): GameState => {
           highestMonster: TILE_STYLES[newStats.highestTile]?.label || 'Monster',
           mergesCount: state.runStats.mergesCount + mergedIds.length
       };
+      
+      if (bossDefeated) {
+          newRunStats.bossesDefeated += 1;
+          newStats.bossesDefeated += 1;
+      }
 
       const mergedTiles = newGrid.filter(t => mergedIds.includes(t.id));
       mergedTiles.forEach(t => {
@@ -252,7 +295,7 @@ const reducer = (state: GameState, action: Action): GameState => {
       if (score > 0) audioService.playMerge(score, combo);
 
       // Decrement Effect Counters
-      ['LUCKY_LOOT', 'CHAIN_CATALYST', 'LUCKY_DICE', 'MIDAS_POTION', 'VOID_STONE', 'RADIANT_AURA'].forEach(effect => {
+      ['LUCKY_LOOT', 'CHAIN_CATALYST', 'LUCKY_DICE', 'MIDAS_POTION', 'VOID_STONE', 'RADIANT_AURA', 'FLOW_STATE', 'HARMONIC_RESONANCE'].forEach(effect => {
            if (newEffectCounters[effect] > 0) {
                newEffectCounters[effect]--;
                if (newEffectCounters[effect] === 0) newLogs.push(`${effect.replace('_', ' ')} expired.`);
@@ -323,7 +366,8 @@ const reducer = (state: GameState, action: Action): GameState => {
                     minLevel: stageConfig.minLevel,
                     backgroundUrl: getStageBackground(stageConfig.name),
                     colorTheme: stageConfig.colorTheme,
-                    barColor: stageConfig.barColor
+                    barColor: stageConfig.barColor,
+                    themeId: stageConfig.themeId
                 };
                 newLogs.push(`ENTERING STAGE: ${currentStage.name}`);
             }
@@ -419,7 +463,8 @@ const reducer = (state: GameState, action: Action): GameState => {
         isCascading: canCascade, 
         cascadeStep: 0,
         justLeveledUp: state.justLeveledUp || justLeveledUp,
-        unlockedPerk: unlockedPerk || state.unlockedPerk
+        unlockedPerk: unlockedPerk || state.unlockedPerk,
+        shop: newShopState
       };
 
       localStorage.setItem('2048_rpg_state_v3', JSON.stringify(nextState));
@@ -429,7 +474,6 @@ const reducer = (state: GameState, action: Action): GameState => {
     case 'CASCADE_STEP': {
         const { grid, rewards } = action.payload;
         const newStep = (state.cascadeStep || 0) + 1;
-        const multiplier = Math.pow(1.1, newStep).toFixed(1);
         
         audioService.playCascade(newStep);
 
@@ -439,6 +483,12 @@ const reducer = (state: GameState, action: Action): GameState => {
             goldEarned: state.runStats.goldEarned + rewards.gold
         };
 
+        // Determine logs based on multipliers
+        let multiplier = Math.pow(1.1, newStep).toFixed(1);
+        if (state.effectCounters['FLOW_STATE'] > 0) {
+             multiplier = Math.pow(1.1 + (0.5 * 0.2), newStep).toFixed(1); // Approximation for display
+        }
+
         return {
             ...state,
             grid,
@@ -446,7 +496,7 @@ const reducer = (state: GameState, action: Action): GameState => {
             gold: state.gold + rewards.gold,
             cascadeStep: newStep,
             runStats: updatedRunStats,
-            logs: [...state.logs, `Cascade x${newStep}! (${multiplier}x Rewards)`].slice(-4),
+            logs: [...state.logs, `Cascade x${newStep}! (${multiplier}x)`].slice(-4),
             isCascading: true 
         };
     }
@@ -489,15 +539,21 @@ const App: React.FC = () => {
   const bgControls = useAnimation();
   const prevMerges = useRef(state.runStats.mergesCount);
 
+  // Tutorial State
+  const [showTutorial, setShowTutorial] = useState(false);
+  const [tutorialStep, setTutorialStep] = useState(0);
+  const [showBossTutorial, setShowBossTutorial] = useState(false);
+
   // Asset Loading
   useEffect(() => {
       const load = async () => {
           // 1. Load critical assets (images + splash music + 1st gameplay track)
-          await loadCriticalAssets((p) => setLoadingProgress(p));
+          // Pass the current stage's themeId to ensure its specific assets are loaded immediately
+          await loadCriticalAssets((p) => setLoadingProgress(p), state.currentStage.themeId);
           setIsLoading(false);
           audioService.playSplashTheme();
           
-          // 2. Trigger background loading for remaining 7 gameplay tracks + death music
+          // 2. Trigger background loading for remaining 7 gameplay tracks + death music + ALL THEME ASSETS
           // We do not await this, it happens while user plays
           loadBackgroundAssets();
       };
@@ -526,8 +582,10 @@ const App: React.FC = () => {
       }
   }, [state.grid, state.combo, view]);
 
-  // Dynamic Background Parallax Trigger
+  // Dynamic Background Parallax Trigger - Disable in Low Perf Mode
   useEffect(() => {
+      if (state.settings.lowPerformanceMode) return;
+
       if (state.runStats.mergesCount > prevMerges.current) {
           // Trigger physics jolt
           const randomX = (Math.random() - 0.5) * 10;
@@ -546,7 +604,7 @@ const App: React.FC = () => {
           });
       }
       prevMerges.current = state.runStats.mergesCount;
-  }, [state.runStats.mergesCount, bgControls]);
+  }, [state.runStats.mergesCount, bgControls, state.settings.lowPerformanceMode]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -557,9 +615,6 @@ const App: React.FC = () => {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
-
-  const [showTutorial, setShowTutorial] = useState(false);
-  const [tutorialStep, setTutorialStep] = useState(0);
 
   useEffect(() => {
       const profile = getPlayerProfile();
@@ -576,6 +631,14 @@ const App: React.FC = () => {
         setActiveOverlay({ type: 'BOSS', text: 'BOSS APPROACHES' });
         audioService.playBossSpawn();
         setShakeIntensity(3);
+        
+        // Trigger Boss Tutorial if needed
+        const profile = getPlayerProfile();
+        // Check local state so we don't spam it during current session before profile updates
+        if (!profile.bossTutorialCompleted) {
+            setTimeout(() => setShowBossTutorial(true), 2000);
+        }
+
         setTimeout(() => { setActiveOverlay(null); setShakeIntensity(0); }, 2500);
     } 
     else if (lastLog.includes("ENTERING STAGE:")) {
@@ -590,34 +653,48 @@ const App: React.FC = () => {
       if (state.justLeveledUp) {
           setActiveOverlay({ type: 'LEVEL_UP', text: state.unlockedPerk || 'LEVEL UP!' });
           audioService.playLevelUp();
-          setTimeout(() => {
+          
+          // Auto-close failsafe after 3s (slightly longer to allow reading if idle)
+          const timer = setTimeout(() => {
               setActiveOverlay(null);
               dispatch({ type: 'ACK_LEVEL_UP' });
-          }, 2000);
+          }, 3000);
+          return () => clearTimeout(timer);
       }
   }, [state.justLeveledUp, state.unlockedPerk]);
 
+  // Tutorial Step Logic
   useEffect(() => {
       if (!showTutorial) return;
-      if (state.stats.totalMoves >= 4) {
-          completeTutorial();
-          setShowTutorial(false);
-          return;
-      }
+      
+      // Step 0 -> 1: Triggered by user successfully moving (stats.totalMoves increments)
       if (tutorialStep === 0 && state.stats.totalMoves > 0) {
           setTutorialStep(1);
       }
-      else if (tutorialStep === 1 && state.score > 0) {
-          setTutorialStep(2);
-          setTimeout(() => {
-              setTutorialStep(3);
-              setTimeout(() => {
-                  completeTutorial();
-                  setShowTutorial(false);
-              }, 3000);
-          }, 3000);
+      
+      // Auto-close failsafe if user somehow progresses deep into game
+      if (state.stats.totalMoves >= 10) {
+          completeTutorial();
+          setShowTutorial(false);
       }
-  }, [state.stats.totalMoves, state.score, showTutorial, tutorialStep]);
+  }, [state.stats.totalMoves, showTutorial, tutorialStep]);
+
+  // Boss Tutorial Dismiss Logic
+  const handleBossTutorialDismiss = () => {
+      setShowBossTutorial(false);
+      const profile = getPlayerProfile();
+      profile.bossTutorialCompleted = true;
+      localStorage.setItem('dragons_hoard_profile', JSON.stringify(profile));
+  };
+
+  const advanceTutorial = () => {
+      if (tutorialStep === 1) {
+          setTutorialStep(2);
+      } else if (tutorialStep >= 2) {
+          completeTutorial();
+          setShowTutorial(false);
+      }
+  };
 
   useEffect(() => {
       if (state.powerUpEffect) {
@@ -640,23 +717,24 @@ const App: React.FC = () => {
 
   useEffect(() => {
       if (state.isCascading) {
+          // SPEED UP: Reduced from 300 to 120ms
           const timer = setTimeout(() => {
               if ((state.cascadeStep || 0) >= 8) {
                   dispatch({ type: 'CASCADE_COMPLETE' });
                   return;
               }
-              const result = executeAutoCascade(state.grid, state.gridSize, (state.cascadeStep || 0) + 1);
+              const result = executeAutoCascade(state.grid, state.gridSize, (state.cascadeStep || 0) + 1, state.effectCounters);
               if (result.occurred) {
                   dispatch({ type: 'CASCADE_STEP', payload: result });
                   setShakeIntensity(1);
-                  setTimeout(() => setShakeIntensity(0), 200);
+                  setTimeout(() => setShakeIntensity(0), 100); // Shorter shake
               } else {
                   dispatch({ type: 'CASCADE_COMPLETE' });
               }
-          }, 300);
+          }, 120);
           return () => clearTimeout(timer);
       }
-  }, [state.isCascading, state.grid, state.cascadeStep, state.gridSize]);
+  }, [state.isCascading, state.grid, state.cascadeStep, state.gridSize, state.effectCounters]);
 
   useEffect(() => {
       const unlocked = checkAchievements(state);
@@ -668,7 +746,33 @@ const App: React.FC = () => {
   useEffect(() => {
     if (!state.settings.enableKeyboard) return;
     const handleKeyDown = (e: KeyboardEvent) => {
+      // 1. Boss Tutorial Blocking
+      if (showBossTutorial) {
+          e.preventDefault();
+          handleBossTutorialDismiss();
+          return;
+      }
+
+      // 2. Main Tutorial Blocking (Step 1+)
+      if (showTutorial && tutorialStep > 0) {
+          e.preventDefault();
+          if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'w', 'a', 's', 'd', 'Enter', ' '].includes(e.key)) {
+              advanceTutorial();
+          }
+          return;
+      }
+
+      // 3. Level Up Dismissal (New Feature)
+      if (activeOverlay?.type === 'LEVEL_UP') {
+          // Allow any movement key to dismiss immediately and proceed
+          setActiveOverlay(null);
+          dispatch({ type: 'ACK_LEVEL_UP' });
+          // Note: We don't return here, so the key press ALSO moves the grid (eats the first swipe but applies move)
+          // or we can return to block the move. "Close quicker" implies fluidity. Let's process the move.
+      }
+
       if (view !== 'GAME' || showStore || state.gameOver || state.isCascading) return;
+      
       switch (e.key) {
         case 'ArrowUp': case 'w': case 'W': e.preventDefault(); dispatch({ type: 'MOVE', direction: Direction.UP }); break;
         case 'ArrowDown': case 's': case 'S': e.preventDefault(); dispatch({ type: 'MOVE', direction: Direction.DOWN }); break;
@@ -681,25 +785,50 @@ const App: React.FC = () => {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [state.settings.enableKeyboard, view, showStore, state.gameOver, state.isCascading, state.inventory]);
+  }, [state.settings.enableKeyboard, view, showStore, state.gameOver, state.isCascading, state.inventory, showBossTutorial, showTutorial, tutorialStep, activeOverlay]);
 
   const touchStart = useRef<{x: number, y: number} | null>(null);
 
   useEffect(() => {
       if (!state.settings.enableSwipe) return;
       const handleStart = (x: number, y: number) => {
+          // Block regular touch start actions if tutorials are active?
+          // We allow touch start, but handleEnd decides logic
           if (view !== 'GAME' || showStore || state.gameOver || state.isCascading) return;
           touchStart.current = { x, y };
       };
       const handleEnd = (x: number, y: number) => {
+          // 1. Boss Tutorial
+          if (showBossTutorial) {
+              handleBossTutorialDismiss();
+              touchStart.current = null;
+              return;
+          }
+
+          // 2. Main Tutorial (Step 1+)
+          if (showTutorial && tutorialStep > 0) {
+              advanceTutorial();
+              touchStart.current = null;
+              return;
+          }
+
+          // 3. Level Up Dismissal
+          if (activeOverlay?.type === 'LEVEL_UP') {
+              setActiveOverlay(null);
+              dispatch({ type: 'ACK_LEVEL_UP' });
+              // Continue to process swipe
+          }
+
           if (!touchStart.current || view !== 'GAME' || showStore || state.gameOver || state.isCascading) return;
           const deltaX = x - touchStart.current.x;
           const deltaY = y - touchStart.current.y;
           const absX = Math.abs(deltaX);
           const absY = Math.abs(deltaY);
+          // Slightly more sensitive for tutorial progression if we wanted, but let's keep consistency
           const threshold = 90 - (state.settings.sensitivity * 7); 
 
           if (Math.max(absX, absY) > threshold) {
+              // Valid Swipe Logic
               let dir: Direction | null = null;
               if (absX > absY) dir = deltaX > 0 ? Direction.RIGHT : Direction.LEFT;
               else dir = deltaY > 0 ? Direction.DOWN : Direction.UP;
@@ -716,6 +845,7 @@ const App: React.FC = () => {
           }
           touchStart.current = null;
       };
+      
       const handleCancel = () => { touchStart.current = null; };
       const onTouchStart = (e: TouchEvent) => handleStart(e.touches[0].clientX, e.touches[0].clientY);
       const onTouchEnd = (e: TouchEvent) => handleEnd(e.changedTouches[0].clientX, e.changedTouches[0].clientY);
@@ -736,7 +866,7 @@ const App: React.FC = () => {
           window.removeEventListener('mouseup', onMouseUp);
           window.removeEventListener('mouseleave', onMouseLeave);
       };
-  }, [state.settings.enableSwipe, state.settings.invertSwipe, state.settings.sensitivity, view, showStore, state.gameOver, state.isCascading]);
+  }, [state.settings.enableSwipe, state.settings.invertSwipe, state.settings.sensitivity, view, showStore, state.gameOver, state.isCascading, showBossTutorial, showTutorial, tutorialStep, activeOverlay]);
 
   useEffect(() => {
       const resumeAudio = () => audioService.resume();
@@ -756,11 +886,15 @@ const App: React.FC = () => {
       // Find new merges? The Reducer computes this. 
       const newMerges: { id: string, x: number, y: number, value: number, type: string }[] = [];
       let maxMergeValue = 0;
+      let hitBoss = false;
       
       state.grid.forEach(t => {
           if (t.mergedFrom) {
-              newMerges.push({ id: t.id, x: t.x, y: t.y, value: t.value, type: t.type });
-              if (t.value > maxMergeValue) maxMergeValue = t.value;
+              if (t.mergedFrom[0] === 'damage') hitBoss = true;
+              else {
+                  newMerges.push({ id: t.id, x: t.x, y: t.y, value: t.value, type: t.type });
+                  if (t.value > maxMergeValue) maxMergeValue = t.value;
+              }
           }
       });
       
@@ -792,7 +926,12 @@ const App: React.FC = () => {
       prevGold.current = state.gold;
       prevInvCount.current = state.inventory.length;
 
-      if (newMerges.length > 0) {
+      if (hitBoss) {
+          setShakeIntensity(2); // Boss Hit Shake
+          // Wait slightly longer for heavy hits
+          setTimeout(() => setShakeIntensity(0), 200);
+      }
+      else if (newMerges.length > 0) {
           setMergeEvents(newMerges);
           // Shake Logic
           if (maxMergeValue >= 128) {
@@ -800,7 +939,7 @@ const App: React.FC = () => {
           } else if (maxMergeValue >= 32 || state.combo > 1) {
               setShakeIntensity(1);
           }
-          if (shakeIntensity > 0) setTimeout(() => setShakeIntensity(0), 300);
+          if (shakeIntensity > 0) setTimeout(() => setShakeIntensity(0), 150); // Faster reset
       }
   }, [state.grid, state.stats.totalMoves]); // Dep on totalMoves ensures it runs on move
 
@@ -854,18 +993,33 @@ const App: React.FC = () => {
       {/* --- PLANE 3: DYNAMIC BACKGROUND PARALLAX --- */}
       <motion.div 
          className="fixed inset-0 z-0 bg-cover bg-center"
+         // KEY forces re-mount on stage change for clean transition
+         key={state.currentStage.name}
+         initial={{ opacity: 0 }}
+         animate={{ opacity: 1, scale: 1.1 }}
+         transition={{ duration: 1.5 }}
          style={{
              backgroundImage: `url('${state.currentStage.backgroundUrl}')`,
-             scale: 1.1 // Initial scale to allow movement without edges showing
          }}
-         animate={bgControls}
       >
           {/* Overlays on top of the bg image but still part of the parallax plane */}
           <div className={`absolute inset-0 bg-black/60 ${state.level >= 30 ? 'bg-black/80' : ''}`}></div>
           <div className={`absolute inset-0 bg-gradient-to-t from-black via-transparent to-black/80`}></div>
-          <div className="scanlines"></div>
+          
+          {/* Fog Layer */}
+          {!state.settings.lowPerformanceMode && (
+              <div className="fog-wrapper">
+                  <div className="fog-piece"></div>
+                  <div className="fog-piece"></div>
+              </div>
+          )}
+
+          {!state.settings.lowPerformanceMode && <div className="scanlines"></div>}
           <div className="vignette"></div>
       </motion.div>
+
+      {/* --- AMBIENT PARTICLES (Behind Grid) --- */}
+      <AmbientBackground lowPerformanceMode={state.settings.lowPerformanceMode} />
 
       {/* --- PLANE 2: UI OVERLAYS (Static relative to camera) --- */}
       {activeOverlay && (
@@ -883,9 +1037,9 @@ const App: React.FC = () => {
               )}
               {activeOverlay.type === 'LEVEL_UP' && (
                    <div className="text-center animate-in zoom-in-50 duration-500 flex flex-col items-center">
-                        <div className="text-6xl md:text-9xl font-black text-transparent bg-clip-text bg-gradient-to-b from-yellow-200 to-amber-500 fantasy-font drop-shadow-[0_0_40px_rgba(251,191,36,0.8)]">LEVEL UP!</div>
+                        <div className="text-6xl md:text-9xl font-black text-transparent bg-clip-text bg-gradient-to-b from-yellow-200 to-amber-500 fantasy-font drop-shadow-[0_0_40px_rgba(251,191,36,0.8)] filter drop-shadow-lg">LEVEL UP!</div>
                         {activeOverlay.text !== 'LEVEL UP!' && (
-                            <div className="mt-4 text-xl md:text-2xl font-bold text-white bg-black/60 px-6 py-2 rounded-full border border-yellow-500/50 animate-in slide-in-from-bottom-4">
+                            <div className="mt-4 text-xl md:text-2xl font-bold text-white bg-black/80 px-8 py-4 rounded-xl border-2 border-yellow-500/50 animate-in slide-in-from-bottom-4 shadow-[0_20px_50px_rgba(0,0,0,0.9)]">
                                 <span className="text-yellow-400">UNLOCKED:</span> {activeOverlay.text}
                             </div>
                         )}
@@ -904,9 +1058,19 @@ const App: React.FC = () => {
       <div className={`relative z-10 w-full max-w-lg h-full min-h-0 flex flex-col items-center justify-center gap-1 md:gap-2 pb-safe
             ${shakeIntensity === 1 ? 'animate-shake-sm' : ''}
             ${shakeIntensity === 2 ? 'animate-shake-md' : ''}
-            ${shakeIntensity === 3 ? 'animate-shake-lg' : ''}
+            ${shakeIntensity === 3 ? 'animate-shake-lg chromatic-shake' : ''}
       `}>
         {showTutorial && <TutorialOverlay step={tutorialStep} gridSize={state.gridSize} />}
+        
+        {/* Boss Tutorial Overlay */}
+        {showBossTutorial && (
+            <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in" onClick={handleBossTutorialDismiss}>
+                <TutorialOverlay step={4} gridSize={state.gridSize} />
+                <div className="absolute bottom-10 z-[110] animate-bounce pointer-events-none">
+                    <span className="text-white font-bold bg-black/50 px-4 py-2 rounded-full border border-white/20">Tap / Swipe / Key to Continue</span>
+                </div>
+            </div>
+        )}
 
         {/* Floating Logs - Absolutely positioned to not affect layout */}
         <div className="absolute top-[10%] left-0 right-0 pointer-events-none flex flex-col items-center space-y-1 z-50 h-0 overflow-visible">
@@ -915,11 +1079,11 @@ const App: React.FC = () => {
                  if (log.includes('ACHIEVEMENT')) type = 'ACHIEVEMENT';
                  if (log.includes('LEVEL UP')) type = 'LEVEL_UP';
                  if (log.includes('BOSS') || log.includes('Curse')) type = 'DANGER';
-                 if (log.includes('Loot') || log.includes('Gold Rush') || log.includes('Mana Storm') || log.includes('Pouch')) type = 'LOOT';
+                 if (log.includes('Loot') || log.includes('Gold Rush') || log.includes('Mana Storm') || log.includes('Pouch') || log.includes('Cascade') || log.includes('Flow') || log.includes('Harmonic')) type = 'LOOT';
 
                  return (
                     <div key={i} className={`
-                            floating-text text-xs md:text-sm font-bold px-3 py-1.5 rounded-lg border backdrop-blur-md shadow-xl flex items-center gap-2 whitespace-nowrap
+                            floating-text text-xs md:text-sm font-bold px-3 py-1.5 rounded-lg border shadow-xl flex items-center gap-2 whitespace-nowrap ${state.settings.lowPerformanceMode ? 'bg-slate-900 border-slate-700' : 'backdrop-blur-md'}
                             ${type === 'ACHIEVEMENT' ? 'bg-yellow-900/80 border-yellow-400 text-yellow-100 animate-in slide-in-from-top-4' : ''}
                             ${type === 'LEVEL_UP' ? 'bg-indigo-900/80 border-indigo-400 text-indigo-100 animate-in zoom-in-50' : ''}
                             ${type === 'DANGER' ? 'bg-red-900/80 border-red-500 text-red-100 animate-shake' : ''}
@@ -951,6 +1115,7 @@ const App: React.FC = () => {
             gameMode={state.gameMode}
             accountLevel={state.accountLevel}
             settings={state.settings}
+            combo={state.combo} // Pass combo here
             onOpenStore={() => setShowStore(true)}
             onUseItem={(item) => dispatch({ type: 'USE_ITEM', item })}
             onReroll={() => dispatch({ type: 'REROLL' })}
@@ -959,10 +1124,19 @@ const App: React.FC = () => {
           />
         </div>
 
-        {/* Grid - Takes remaining space, but maintains square aspect ratio */}
-        <div className="w-full flex-1 min-h-0 flex items-center justify-center overflow-hidden">
-            <div className="aspect-square h-full max-h-full max-w-full">
-                <Grid grid={state.grid} size={state.gridSize} mergeEvents={mergeEvents} lootEvents={lootEvents} />
+        {/* Grid - Fixed Aspect Ratio Container */}
+        {/* We center this within the available flexible space */}
+        <div className="w-full flex-1 min-h-0 flex items-center justify-center overflow-hidden p-2">
+            <div className="relative aspect-square w-full h-full max-w-full max-h-full mx-auto shadow-2xl rounded-xl">
+                <Grid 
+                    grid={state.grid} 
+                    size={state.gridSize} 
+                    mergeEvents={mergeEvents} 
+                    lootEvents={lootEvents} 
+                    slideSpeed={state.settings.slideSpeed || 150}
+                    themeId={state.currentStage.themeId}
+                    lowPerformanceMode={state.settings.lowPerformanceMode}
+                />
             </div>
         </div>
       </div>
@@ -975,6 +1149,7 @@ const App: React.FC = () => {
           onBuy={(item) => dispatch({ type: 'BUY_ITEM', item })}
           onCraft={(recipe) => dispatch({ type: 'CRAFT_ITEM', recipe })}
           onUseItem={(item) => dispatch({ type: 'USE_ITEM', item })}
+          shopState={state.shop}
         />
       )}
 

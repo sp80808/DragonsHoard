@@ -32,11 +32,17 @@ export enum ItemType {
   // New Additions
   VOID_STONE = 'VOID_STONE', // Consumes 1 weak tile/turn
   RADIANT_AURA = 'RADIANT_AURA', // +50% XP
+  THUNDER_SCROLL = 'THUNDER_SCROLL', // Trigger Cascade
+  
+  // Cascade Synergy Items
+  FLOW_ELIXIR = 'FLOW_ELIXIR', // Double cascade multipliers
+  HARMONIC_CRYSTAL = 'HARMONIC_CRYSTAL', // Spawns tiles during cascades to extend them
   
   // Crafted Items
   GREATER_XP_POTION = 'GREATER_XP_POTION',
   CATACLYSM_SCROLL = 'CATACLYSM_SCROLL',
-  ASCENDANT_RUNE = 'ASCENDANT_RUNE' 
+  ASCENDANT_RUNE = 'ASCENDANT_RUNE',
+  GRANDMASTER_BREW = 'GRANDMASTER_BREW' // Massive XP + Flow State
 }
 
 export enum HeroClass {
@@ -48,6 +54,8 @@ export enum HeroClass {
 }
 
 export type GameMode = 'RPG' | 'CLASSIC';
+
+export type View = 'SPLASH' | 'GAME' | 'LEADERBOARD' | 'SETTINGS' | 'HELP';
 
 export interface InventoryItem {
   id: string;
@@ -79,6 +87,7 @@ export interface Tile {
   isCascade?: boolean; // Visual cue for cascade merges
   health?: number;
   maxHealth?: number;
+  bossThemeId?: string; // To render unique boss images
 }
 
 export interface Stage {
@@ -88,6 +97,7 @@ export interface Stage {
   colorTheme: string;
   barColor: string; // CSS gradient class for XP bar
   prompt?: string;
+  themeId?: string; // For tile sets
 }
 
 export interface FloatingText {
@@ -148,6 +158,7 @@ export interface PlayerProfile {
   lastBountyDate: string; // YYYY-MM-DD
   lastPlayed: string;
   tutorialCompleted: boolean;
+  bossTutorialCompleted: boolean;
 }
 
 export interface Achievement {
@@ -168,6 +179,18 @@ export interface InputSettings {
   invertScroll: boolean;
   sensitivity: number; // 1-10 (For scroll/swipe threshold)
   enableTooltips: boolean;
+  slideSpeed: number; // ms duration for tile movement
+  lowPerformanceMode: boolean; // Disables expensive CSS and particles
+}
+
+export interface ShopItemState {
+    stock: number;
+    priceMultiplier: number;
+}
+
+export interface ShopState {
+    items: Record<string, ShopItemState>;
+    turnsUntilRestock: number;
 }
 
 export interface GameState {
@@ -199,8 +222,9 @@ export interface GameState {
   selectedClass: HeroClass; // Track current run class
   gameMode: GameMode; // RPG or CLASSIC
   accountLevel: number; // Used for gating cascades
-  justLeveledUp?: boolean;
+  justLeveledUp: boolean;
   unlockedPerk?: string;
+  shop: ShopState;
 }
 
 export interface MoveResult {
@@ -208,29 +232,25 @@ export interface MoveResult {
   score: number;
   xpGained: number;
   goldGained: number;
-  itemsFound: InventoryItem[]; // New loot field
+  itemsFound: InventoryItem[];
   moved: boolean;
   mergedIds: string[];
-  lastSpawnedTileId?: string;
-  powerUpTriggered?: TileType;
   combo: number;
   comboMultiplier: number;
   logs: string[];
-  bossDefeated?: boolean;
+  powerUpTriggered?: TileType;
+  bossDefeated: boolean;
 }
 
 export interface LootResult {
-  message: string;
-  item?: InventoryItem;
-  gold?: number;
-  xp?: number;
+    message: string;
+    gold?: number;
+    item?: InventoryItem;
 }
 
 export interface LeaderboardEntry {
-  date: number;
-  score: number;
-  level: number;
-  gold: number;
+    score: number;
+    level: number;
+    gold: number;
+    date: number;
 }
-
-export type View = 'SPLASH' | 'GAME' | 'LEADERBOARD' | 'SETTINGS' | 'HELP';

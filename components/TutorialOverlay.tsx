@@ -1,8 +1,9 @@
+
 import React, { useEffect, useState } from 'react';
-import { Hand } from 'lucide-react';
+import { Hand, Skull, Zap } from 'lucide-react';
 
 interface TutorialOverlayProps {
-  step: number; // 0: Move, 1: Merge, 2: XP/Level, 3: Done
+  step: number; // 0: Move, 1: Merge, 2: XP/Level, 3: Done, 4: BOSS
   gridSize: number;
 }
 
@@ -34,7 +35,7 @@ export const TutorialOverlay: React.FC<TutorialOverlayProps> = ({ step, gridSize
       }
   };
 
-  if (step > 2) return null;
+  if (step === 3) return null; // Step 3 is "Done" waiting for cleanup, handled by parent usually
 
   return (
     <div className="absolute inset-0 z-[60] pointer-events-none flex flex-col items-center justify-center">
@@ -85,15 +86,44 @@ export const TutorialOverlay: React.FC<TutorialOverlayProps> = ({ step, gridSize
                         <div className="mt-2 text-indigo-300 font-bold text-sm tracking-widest uppercase">XP Gain</div>
                     </div>
                 )}
+
+                {step === 4 && (
+                    <div className="flex flex-col items-center">
+                        <div className="relative mb-4">
+                            {/* Mock Grid */}
+                            <div className="flex gap-2 items-center">
+                                <div className="w-20 h-20 bg-red-900/50 border-4 border-red-500 rounded-xl flex items-center justify-center relative animate-pulse shadow-[0_0_40px_rgba(239,68,68,0.5)]">
+                                    <Skull size={40} className="text-red-500" />
+                                    <div className="absolute -top-3 -right-3 text-2xl">💢</div>
+                                </div>
+                                <div className="text-white text-3xl font-black">←</div>
+                                <div className="w-20 h-20 bg-blue-900 border-2 border-blue-400 rounded-xl flex items-center justify-center relative">
+                                    <span className="text-4xl font-black text-white">32</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div className="flex items-center gap-2 bg-black/80 px-4 py-2 rounded-full border border-yellow-500/50 text-yellow-300 text-xs font-bold uppercase tracking-wider">
+                            <Zap size={14} /> Critical Hit Strategy
+                        </div>
+                    </div>
+                )}
             </div>
 
             {/* Text Label */}
-            <div className="bg-slate-900/90 border border-slate-700 px-6 py-3 rounded-full backdrop-blur-md shadow-2xl">
-                <h2 className="text-xl md:text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-yellow-200 to-amber-500 fantasy-font text-center">
+            <div className="bg-slate-900/90 border border-slate-700 px-6 py-4 rounded-xl backdrop-blur-md shadow-2xl max-w-xs text-center">
+                <h2 className="text-xl md:text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-yellow-200 to-amber-500 fantasy-font mb-2">
                     {step === 0 && "USE ARROWS OR SWIPE"}
                     {step === 1 && "MERGE TO EVOLVE"}
-                    {step === 2 && "LEVEL UP & TRY TO SURVIVE"}
+                    {step === 2 && "LEVEL UP & SURVIVE"}
+                    {step === 4 && "BOSS BATTLE!"}
                 </h2>
+                {step === 4 && (
+                    <p className="text-sm text-slate-300 leading-relaxed">
+                        Bosses block your path. Throw high-value tiles at them to deal massive damage!
+                        <br/>
+                        <span className="text-yellow-400 font-bold text-xs mt-2 block">Tip: Higher Tile Value = More Damage</span>
+                    </p>
+                )}
             </div>
 
         </div>

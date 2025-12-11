@@ -1,4 +1,3 @@
-
 import React, { useMemo, useEffect, useRef } from 'react';
 import { Tile } from '../types';
 import { TileComponent } from './TileComponent';
@@ -10,12 +9,15 @@ interface GridProps {
   size: number;
   mergeEvents: { id: string, x: number, y: number, value: number, type: string }[];
   lootEvents: { id: string, x: number, y: number, type: 'GOLD' | 'ITEM', value?: string | number, icon?: string }[];
+  slideSpeed: number;
+  themeId?: string;
+  lowPerformanceMode?: boolean;
 }
 
-export const Grid: React.FC<GridProps> = ({ grid, size, mergeEvents, lootEvents }) => {
+export const Grid = React.memo(({ grid, size, mergeEvents, lootEvents, slideSpeed, themeId, lowPerformanceMode }: GridProps) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const particlesRef = useRef<any[]>([]);
-  const animationFrameRef = useRef<number>();
+  const animationFrameRef = useRef<number>(0);
   const containerRef = useRef<HTMLDivElement>(null);
 
   // Memoize background cells
@@ -23,7 +25,7 @@ export const Grid: React.FC<GridProps> = ({ grid, size, mergeEvents, lootEvents 
       const cells = Array.from({ length: size * size });
       return (
         <div 
-            className="w-full h-full grid gap-1 sm:gap-2"
+            className="w-full h-full grid gap-1 sm:gap-2 relative z-10"
             style={{
             gridTemplateColumns: `repeat(${size}, minmax(0, 1fr))`,
             gridTemplateRows: `repeat(${size}, minmax(0, 1fr))`,
@@ -31,7 +33,7 @@ export const Grid: React.FC<GridProps> = ({ grid, size, mergeEvents, lootEvents 
         >
             {cells.map((_, i) => (
             <div key={i} className="w-full h-full">
-                <div className="w-full h-full bg-[#151921] rounded-lg border border-white/5 shadow-[inset_0_2px_4px_rgba(0,0,0,0.6)] flex items-center justify-center">
+                <div className="w-full h-full bg-[#151921]/80 rounded-lg border border-white/5 shadow-[inset_0_2px_4px_rgba(0,0,0,0.6)] flex items-center justify-center">
                     <div className="w-2 h-2 rounded-full bg-slate-800/30"></div>
                 </div>
             </div>
@@ -42,7 +44,8 @@ export const Grid: React.FC<GridProps> = ({ grid, size, mergeEvents, lootEvents 
 
   // Particle System Logic
   useEffect(() => {
-      if (mergeEvents.length === 0) return;
+      // If Low Performance Mode is on, skip particle generation entirely
+      if (lowPerformanceMode || mergeEvents.length === 0) return;
 
       const canvas = canvasRef.current;
       if (!canvas) return;
@@ -57,8 +60,11 @@ export const Grid: React.FC<GridProps> = ({ grid, size, mergeEvents, lootEvents 
            
            const color = style?.particleColor || '#ffffff';
            
-           // Reduced particle count (12 -> 8) for less clutter
-           for (let i = 0; i < 8; i++) {
+           // Reduce particle count significantly if we wanted, but logic above disables it.
+           // Let's allow minimal particles if we wanted, but for now we skip.
+           const particleCount = 8;
+
+           for (let i = 0; i < particleCount; i++) {
                const side = Math.floor(Math.random() * 4);
                let offsetX = 0, offsetY = 0;
                const jitter = Math.random() * 8 - 4; 
@@ -88,20 +94,21 @@ export const Grid: React.FC<GridProps> = ({ grid, size, mergeEvents, lootEvents 
                    vx: nx * speed,
                    vy: ny * speed,
                    life: 1.0,
-                   // Increased decay for faster fade out (0.02 -> 0.05)
-                   decay: Math.random() * 0.04 + 0.04,
+                   decay: Math.random() * 0.06 + 0.06,
                    color: color,
-                   // Smaller particles
                    size: Math.random() * 2 + 1,
                    rotation: Math.random() * Math.PI
                });
            }
       });
 
-  }, [mergeEvents, size]);
+  }, [mergeEvents, size, lowPerformanceMode]);
 
   // Animation Loop
   useEffect(() => {
+      // If Low Perf, don't run loop
+      if (lowPerformanceMode) return;
+
       const canvas = canvasRef.current;
       if (!canvas) return;
       const ctx = canvas.getContext('2d');
@@ -121,6 +128,11 @@ export const Grid: React.FC<GridProps> = ({ grid, size, mergeEvents, lootEvents 
           if (!ctx || !canvas) return;
           ctx.clearRect(0, 0, canvas.width, canvas.height);
 
+          if (particlesRef.current.length === 0) {
+              animationFrameRef.current = requestAnimationFrame(render);
+              return;
+          }
+
           for (let i = particlesRef.current.length - 1; i >= 0; i--) {
               const p = particlesRef.current[i];
               p.x += p.vx;
@@ -134,7 +146,6 @@ export const Grid: React.FC<GridProps> = ({ grid, size, mergeEvents, lootEvents 
                   continue;
               }
 
-              // Apply cubic easing to alpha for smoother fade
               ctx.globalAlpha = p.life * p.life;
               ctx.fillStyle = p.color;
               
@@ -162,27 +173,44 @@ export const Grid: React.FC<GridProps> = ({ grid, size, mergeEvents, lootEvents 
           window.removeEventListener('resize', resize);
           if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
       };
-  }, []);
+  }, [lowPerformanceMode]);
 
   return (
     <div 
         ref={containerRef}
         className="relative w-full h-full group"
     >
-        {/* Ambient Glow behind Grid */}
-        <div className="absolute -inset-4 bg-gradient-to-r from-purple-600/10 to-blue-600/10 rounded-3xl blur-2xl animate-pulse -z-10"></div>
+        {/* Ambient Glow - Disable in Low Perf */}
+        {!lowPerformanceMode && (
+            <div className="absolute -inset-4 bg-gradient-to-r from-purple-600/10 to-blue-600/10 rounded-3xl blur-2xl animate-pulse -z-10"></div>
+        )}
         
-        {/* Grid Container - Stable */}
-        <div className="relative w-full h-full bg-black/80 rounded-xl p-1 sm:p-2 border-2 border-slate-700/50 shadow-2xl overflow-hidden backdrop-blur-md">
+        {/* Grid Container */}
+        <div className={`relative w-full h-full bg-black/80 rounded-xl p-1 sm:p-2 border-2 border-slate-700/50 shadow-2xl overflow-hidden ${lowPerformanceMode ? '' : 'backdrop-blur-md'}`}>
             
+            {/* Subtle Grid Pattern Background */}
+            <div className="absolute inset-0 opacity-20 pointer-events-none" 
+                 style={{ 
+                     backgroundImage: 'radial-gradient(circle at 50% 50%, rgba(255,255,255,0.1) 1px, transparent 1px)',
+                     backgroundSize: '20px 20px' 
+                 }}>
+            </div>
+
             {/* Background Grid Layer */}
             {backgroundCells}
 
-            {/* Floating Tiles Layer - Interactivity disabled for container, enabled for tiles if needed, but here purely visual */}
+            {/* Floating Tiles Layer */}
             <div className="absolute inset-0 p-1 sm:p-2 pointer-events-none z-10">
                 <div className="relative w-full h-full">
                     {grid.map((tile) => (
-                    <TileComponent key={tile.id} tile={tile} gridSize={size} />
+                    <TileComponent 
+                        key={tile.id} 
+                        tile={tile} 
+                        gridSize={size} 
+                        slideSpeed={slideSpeed} 
+                        themeId={themeId} 
+                        lowPerformanceMode={lowPerformanceMode}
+                    />
                     ))}
                 </div>
             </div>
@@ -207,7 +235,7 @@ export const Grid: React.FC<GridProps> = ({ grid, size, mergeEvents, lootEvents 
                                 }}
                              >
                                  <div className={`
-                                     flex items-center gap-1 px-2 py-1 rounded-full border shadow-lg backdrop-blur-md
+                                     flex items-center gap-1 px-2 py-1 rounded-full border shadow-lg ${lowPerformanceMode ? '' : 'backdrop-blur-md'}
                                      ${loot.type === 'GOLD' 
                                         ? 'bg-yellow-900/80 border-yellow-500 text-yellow-300' 
                                         : 'bg-indigo-900/80 border-indigo-500 text-indigo-200'}
@@ -223,9 +251,11 @@ export const Grid: React.FC<GridProps> = ({ grid, size, mergeEvents, lootEvents 
                 </div>
             </div>
 
-            {/* Particle Overlay */}
-            <canvas ref={canvasRef} className="absolute inset-0 z-20 pointer-events-none w-full h-full"></canvas>
+            {/* Particle Overlay - Only if not low performance */}
+            {!lowPerformanceMode && (
+                <canvas ref={canvasRef} className="absolute inset-0 z-20 pointer-events-none w-full h-full"></canvas>
+            )}
         </div>
     </div>
   );
-};
+});

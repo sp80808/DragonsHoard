@@ -1,12 +1,17 @@
 
 import React from 'react';
-import { ArrowLeft, Zap, Skull, Swords, Scroll, Coins, Trophy, Sparkles } from 'lucide-react';
+import { ArrowLeft, Zap, Skull, Swords, Scroll, Coins, Trophy, Sparkles, Package, Sparkles as MagicIcon, Sword } from 'lucide-react';
+import { SHOP_ITEMS } from '../constants';
 
 interface HelpScreenProps {
   onBack: () => void;
 }
 
 export const HelpScreen: React.FC<HelpScreenProps> = ({ onBack }) => {
+  const battleItems = SHOP_ITEMS.filter(i => i.category === 'BATTLE');
+  const magicItems = SHOP_ITEMS.filter(i => i.category === 'MAGIC');
+  const consumables = SHOP_ITEMS.filter(i => i.category === 'CONSUMABLE');
+
   return (
     <div className="absolute inset-0 z-50 flex flex-col items-center bg-slate-950 text-slate-200 p-4 overflow-hidden">
       <div className="w-full max-w-3xl flex flex-col h-full bg-slate-900/50 rounded-xl border border-slate-800 shadow-2xl overflow-hidden backdrop-blur-md">
@@ -100,27 +105,63 @@ export const HelpScreen: React.FC<HelpScreenProps> = ({ onBack }) => {
              </div>
           </section>
 
-          {/* Section 4: Items */}
-          <section className="space-y-4">
-             <h3 className="text-xl font-bold text-white flex items-center gap-2">
-                 <Scroll size={20} className="text-emerald-400" /> Items & Crafting
+          {/* Section 4: Item Encyclopedia */}
+          <section className="space-y-6">
+             <h3 className="text-xl font-bold text-white flex items-center gap-2 border-b border-slate-700 pb-2">
+                 <Scroll size={20} className="text-emerald-400" /> Shop Encyclopedia
              </h3>
-             <div className="grid grid-cols-2 gap-2 text-xs">
-                 <div className="bg-slate-950 p-2 rounded border border-slate-800 flex items-center gap-2">
-                     <span className="text-xl">🧪</span> 
-                     <div><div className="font-bold text-slate-200">XP Potion</div><div className="text-slate-500">Instant Level progress</div></div>
+             
+             {/* Battle Items */}
+             <div className="space-y-2">
+                 <h4 className="text-xs font-bold text-red-400 uppercase tracking-widest flex items-center gap-2">
+                    <Sword size={14}/> Battle Gear
+                 </h4>
+                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                     {battleItems.map(item => (
+                         <div key={item.id} className="bg-slate-900/60 p-2 rounded-lg border border-slate-800 flex items-start gap-3 hover:border-red-900/50 transition-colors">
+                             <div className="text-2xl mt-0.5">{item.icon}</div>
+                             <div>
+                                 <div className="font-bold text-slate-200 text-xs">{item.name}</div>
+                                 <div className="text-[10px] text-slate-500 leading-tight mt-0.5">{item.desc}</div>
+                             </div>
+                         </div>
+                     ))}
                  </div>
-                 <div className="bg-slate-950 p-2 rounded border border-slate-800 flex items-center gap-2">
-                     <span className="text-xl">📜</span> 
-                     <div><div className="font-bold text-slate-200">Purge Scroll</div><div className="text-slate-500">Destroys 3 weak tiles</div></div>
+             </div>
+
+             {/* Magic Items */}
+             <div className="space-y-2">
+                 <h4 className="text-xs font-bold text-purple-400 uppercase tracking-widest flex items-center gap-2">
+                    <MagicIcon size={14}/> Arcane Magic
+                 </h4>
+                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                     {magicItems.map(item => (
+                         <div key={item.id} className="bg-slate-900/60 p-2 rounded-lg border border-slate-800 flex items-start gap-3 hover:border-purple-900/50 transition-colors">
+                             <div className="text-2xl mt-0.5">{item.icon}</div>
+                             <div>
+                                 <div className="font-bold text-slate-200 text-xs">{item.name}</div>
+                                 <div className="text-[10px] text-slate-500 leading-tight mt-0.5">{item.desc}</div>
+                             </div>
+                         </div>
+                     ))}
                  </div>
-                 <div className="bg-slate-950 p-2 rounded border border-slate-800 flex items-center gap-2">
-                     <span className="text-xl">🔄</span> 
-                     <div><div className="font-bold text-slate-200">Reroll Token</div><div className="text-slate-500">Reset the board (Keep progression)</div></div>
-                 </div>
-                 <div className="bg-slate-950 p-2 rounded border border-slate-800 flex items-center gap-2">
-                     <span className="text-xl">🌟</span> 
-                     <div><div className="font-bold text-slate-200">Golden Rune</div><div className="text-slate-500">Next spawn is Tier 3+</div></div>
+             </div>
+
+             {/* Consumables */}
+             <div className="space-y-2">
+                 <h4 className="text-xs font-bold text-blue-400 uppercase tracking-widest flex items-center gap-2">
+                    <Package size={14}/> Consumables
+                 </h4>
+                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                     {consumables.map(item => (
+                         <div key={item.id} className="bg-slate-900/60 p-2 rounded-lg border border-slate-800 flex items-start gap-3 hover:border-blue-900/50 transition-colors">
+                             <div className="text-2xl mt-0.5">{item.icon}</div>
+                             <div>
+                                 <div className="font-bold text-slate-200 text-xs">{item.name}</div>
+                                 <div className="text-[10px] text-slate-500 leading-tight mt-0.5">{item.desc}</div>
+                             </div>
+                         </div>
+                     ))}
                  </div>
              </div>
           </section>

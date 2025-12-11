@@ -1,6 +1,5 @@
 
-
-import { TILE_STYLES, BOSS_STYLE, RUNE_STYLES, MUSIC_PATHS, STAGES, getStageBackground } from '../constants';
+import { TILE_STYLES, BOSS_STYLE, RUNE_STYLES, MUSIC_PATHS, STAGES, getStageBackground, THEME_STYLES } from '../constants';
 import { audioService } from './audioService';
 
 // In-memory cache to prevent redundant fetches
@@ -52,7 +51,7 @@ const loadAudio = (key: string, url: string): Promise<void> => {
 };
 
 // Loads essential assets needed for the Splash Screen and immediate Gameplay start
-export const loadCriticalAssets = async (onProgress: (percent: number) => void) => {
+export const loadCriticalAssets = async (onProgress: (percent: number) => void, startThemeId: string = 'DEFAULT') => {
     let loadedCount = 0;
     
     // 1. Collect Image URLs (Visuals are critical)
@@ -62,6 +61,12 @@ export const loadCriticalAssets = async (onProgress: (percent: number) => void) 
         ...Object.values(RUNE_STYLES).map(s => s.imageUrl),
         ...STAGES.map(s => getStageBackground(s.name)).filter(url => !!url)
     ].filter(Boolean);
+
+    // If starting in a specific theme, ensure those assets are loaded critically
+    if (startThemeId !== 'DEFAULT' && THEME_STYLES[startThemeId]) {
+        const themeAssets = Object.values(THEME_STYLES[startThemeId]).map((s: any) => s.imageUrl).filter(Boolean);
+        imagesToLoad.push(...themeAssets);
+    }
 
     // 2. Collect Critical Audio (Splash + First Gameplay Track)
     const audioToLoad = [
@@ -101,8 +106,9 @@ export const loadCriticalAssets = async (onProgress: (percent: number) => void) 
     onProgress(100);
 };
 
-// Loads remaining audio tracks in the background
+// Loads remaining audio tracks and ALL theme assets in the background
 export const loadBackgroundAssets = async () => {
+    // 1. Audio
     const audioToLoad = [
         { key: 'DEATH', url: MUSIC_PATHS.DEATH }
     ];
@@ -114,10 +120,17 @@ export const loadBackgroundAssets = async () => {
         }
     }
 
+    // 2. Visuals: Preload ALL themes so levels don't pop-in
+    const allThemeImages = Object.values(THEME_STYLES).flatMap(theme => 
+        Object.values(theme).map((s: any) => s.imageUrl).filter(Boolean)
+    );
+
+    const visualPromises = allThemeImages.map(url => retryOperation(() => loadImage(url)));
+
     const audioPromises = audioToLoad.map(track => 
         retryOperation(() => loadAudio(track.key, track.url))
     );
 
-    await Promise.allSettled(audioPromises);
-    console.log("Background assets loaded.");
+    await Promise.allSettled([...visualPromises, ...audioPromises]);
+    console.log("Background assets (Audio & Themes) loaded.");
 };

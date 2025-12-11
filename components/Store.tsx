@@ -1,8 +1,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { SHOP_ITEMS, RECIPES } from '../constants';
-import { ItemType, CraftingRecipe, InventoryItem } from '../types';
-import { Coins, X, Hammer, ShoppingBag, AlertCircle, Sparkles, Sword, Package, Check, Lock } from 'lucide-react';
+import { ItemType, CraftingRecipe, InventoryItem, ShopState } from '../types';
+import { Coins, X, Hammer, ShoppingBag, AlertCircle, Sparkles, Sword, Package, Check, Lock, RefreshCcw } from 'lucide-react';
 
 interface StoreProps {
   gold: number;
@@ -11,11 +11,12 @@ interface StoreProps {
   onBuy: (item: typeof SHOP_ITEMS[0]) => void;
   onCraft: (recipe: CraftingRecipe) => void;
   onUseItem: (item: InventoryItem) => void;
+  shopState: ShopState;
 }
 
 type TabType = 'ESSENTIALS' | 'MAGIC' | 'BATTLE' | 'FORGE';
 
-export const Store: React.FC<StoreProps> = ({ gold, inventory, onClose, onBuy, onCraft, onUseItem }) => {
+export const Store: React.FC<StoreProps> = ({ gold, inventory, onClose, onBuy, onCraft, onUseItem, shopState }) => {
   const [tab, setTab] = useState<TabType>('ESSENTIALS');
   const [showFullModal, setShowFullModal] = useState(false);
 
@@ -29,8 +30,8 @@ export const Store: React.FC<StoreProps> = ({ gold, inventory, onClose, onBuy, o
       }
   };
 
-  const handleBuyAttempt = (item: typeof SHOP_ITEMS[0], onSuccess: () => void, onError: () => void) => {
-      if (gold < item.price) {
+  const handleBuyAttempt = (item: typeof SHOP_ITEMS[0], currentPrice: number, stock: number, onSuccess: () => void, onError: () => void) => {
+      if (gold < currentPrice || stock <= 0) {
           onError();
           return;
       }
@@ -61,6 +62,11 @@ export const Store: React.FC<StoreProps> = ({ gold, inventory, onClose, onBuy, o
       onSuccess();
   };
 
+  const getStockInfo = (itemId: string) => {
+      // Default to 1 in stock and 1.0 multiplier if not found (fallback)
+      return shopState?.items[itemId] || { stock: 1, priceMultiplier: 1.0 };
+  };
+
   return (
     <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/95 backdrop-blur-xl p-2 md:p-4 animate-in fade-in zoom-in duration-300">
       <div className="bg-[#0b0f19] w-full max-w-4xl h-[90vh] md:h-[80vh] rounded-2xl border border-yellow-900/40 shadow-2xl flex flex-col md:flex-row relative overflow-hidden group">
@@ -73,7 +79,9 @@ export const Store: React.FC<StoreProps> = ({ gold, inventory, onClose, onBuy, o
                     <h2 className="text-xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-yellow-300 to-amber-600 flex items-center gap-2 fantasy-font drop-shadow-sm">
                         <ShoppingBag size={20} className="text-amber-500" /> MARKET
                     </h2>
-                    <div className="text-[10px] text-slate-500 font-mono mt-1 tracking-widest uppercase">The Dragon's Trade</div>
+                    <div className="text-[10px] text-slate-500 font-mono mt-1 tracking-widest uppercase flex items-center gap-1">
+                        <RefreshCcw size={10} /> Restock: {shopState.turnsUntilRestock}
+                    </div>
                 </div>
                 <button onClick={onClose} className="md:hidden text-slate-400 hover:text-white p-2">
                     <X size={24} />
@@ -135,14 +143,21 @@ export const Store: React.FC<StoreProps> = ({ gold, inventory, onClose, onBuy, o
 
                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                         {/* SHOP ITEMS RENDER */}
-                        {tab !== 'FORGE' && getItemsForTab().map((item) => (
-                             <StoreCard 
-                                key={item.id}
-                                item={item}
-                                canAfford={gold >= item.price}
-                                onAttemptBuy={(onSuccess, onError) => handleBuyAttempt(item, onSuccess, onError)}
-                             />
-                        ))}
+                        {tab !== 'FORGE' && getItemsForTab().map((item) => {
+                             const { stock, priceMultiplier } = getStockInfo(item.id);
+                             const currentPrice = Math.floor(item.price * priceMultiplier);
+                             
+                             return (
+                                 <StoreCard 
+                                    key={item.id}
+                                    item={item}
+                                    price={currentPrice}
+                                    stock={stock}
+                                    canAfford={gold >= currentPrice && stock > 0}
+                                    onAttemptBuy={(onSuccess, onError) => handleBuyAttempt(item, currentPrice, stock, onSuccess, onError)}
+                                 />
+                             );
+                        })}
 
                         {/* CRAFTING ITEMS RENDER */}
                         {tab === 'FORGE' && RECIPES.map((recipe) => {
@@ -160,6 +175,8 @@ export const Store: React.FC<StoreProps> = ({ gold, inventory, onClose, onBuy, o
                                     inventoryCounts={counts}
                                     onAttemptBuy={(onSuccess, onError) => handleCraftAttempt(recipe, onSuccess, onError)}
                                     isCrafting
+                                    stock={999} // Crafting technically unlimited if you have mats
+                                    price={recipe.goldCost}
                                  />
                              );
                         })}
@@ -232,19 +249,21 @@ interface StoreCardProps {
     canAfford: boolean;
     onAttemptBuy: (onSuccess: () => void, onError: () => void) => void;
     isCrafting?: boolean;
+    stock?: number;
+    price?: number;
 }
 
-const StoreCard: React.FC<StoreCardProps> = ({ item, recipe, inventoryCounts, canAfford, onAttemptBuy, isCrafting }) => {
+const StoreCard: React.FC<StoreCardProps> = ({ item, recipe, inventoryCounts, canAfford, onAttemptBuy, isCrafting, stock = 99, price = 0 }) => {
     const [state, setState] = useState<'IDLE' | 'SHAKE' | 'SUCCESS'>('IDLE');
     
     // Derived data
     const data = isCrafting && recipe ? {
         id: recipe.id,
         name: recipe.name,
-        price: recipe.goldCost,
+        price: price, // For crafting, we usually just pass goldCost, but the prop is overridden
         icon: recipe.icon,
         desc: recipe.description
-    } : item!;
+    } : { ...item!, price: price };
 
     const handleClick = () => {
         if (state !== 'IDLE') return;
@@ -303,6 +322,16 @@ const StoreCard: React.FC<StoreCardProps> = ({ item, recipe, inventoryCounts, ca
                         `}>
                             {data.price} G
                         </div>
+                        {stock <= 0 && (
+                            <div className="text-[10px] font-bold text-red-500 mt-1 uppercase tracking-widest bg-red-950 px-2 py-0.5 rounded">
+                                Sold Out
+                            </div>
+                        )}
+                        {stock > 0 && !isCrafting && (
+                             <div className="text-[10px] font-bold text-slate-500 mt-1">
+                                Stock: {stock}
+                             </div>
+                        )}
                     </div>
                 </div>
 

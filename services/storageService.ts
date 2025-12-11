@@ -1,4 +1,3 @@
-
 import { PlayerProfile, GameState, RunStats, HeroClass, DailyBounty } from '../types';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -46,6 +45,7 @@ export const getPlayerProfile = (): PlayerProfile => {
         if (!profile.unlockedClasses) profile.unlockedClasses = [HeroClass.ADVENTURER];
         if (!profile.activeBounties) profile.activeBounties = [];
         if (profile.tutorialCompleted === undefined) profile.tutorialCompleted = false;
+        if (profile.bossTutorialCompleted === undefined) profile.bossTutorialCompleted = false;
         
         // Check Daily Reset
         const today = new Date().toISOString().split('T')[0];
@@ -73,7 +73,8 @@ export const getPlayerProfile = (): PlayerProfile => {
     activeBounties: generateDailyBounties(),
     lastBountyDate: new Date().toISOString().split('T')[0],
     lastPlayed: new Date().toISOString(),
-    tutorialCompleted: false
+    tutorialCompleted: false,
+    bossTutorialCompleted: false
   };
   saveProfile(newProfile);
   return newProfile;
