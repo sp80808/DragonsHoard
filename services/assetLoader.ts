@@ -5,38 +5,57 @@ import { audioService } from './audioService';
 // In-memory cache to prevent redundant fetches
 const assetCache = new Map<string, Promise<void>>();
 
-const retryOperation = async (operation: () => Promise<void>, maxRetries: number = 2): Promise<void> => {
-    for (let i = 0; i < maxRetries; i++) {
+// Wrapper to timeout a promise
+const timeoutPromise = <T>(promise: Promise<T>, ms: number, label: string): Promise<T> => {
+    return new Promise((resolve, reject) => {
+        const timer = setTimeout(() => {
+            reject(new Error(`Timeout loading ${label} after ${ms}ms`));
+        }, ms);
+
+        promise
+            .then(value => {
+                clearTimeout(timer);
+                resolve(value);
+            })
+            .catch(err => {
+                clearTimeout(timer);
+                reject(err);
+            });
+    });
+};
+
+const retryOperation = async (operation: () => Promise<void>, label: string, maxRetries: number = 1): Promise<void> => {
+    for (let i = 0; i <= maxRetries; i++) {
         try {
             await operation();
             return;
         } catch (err: any) {
-            // Optimization: If the resource is missing (404), don't retry.
             if (err && err.message && err.message.includes('404')) {
-                console.warn(`Resource missing (404), skipping retry: ${err.message}`);
+                console.warn(`Resource missing (404), skipping: ${label}`);
                 return;
             }
-
-            // Only log if it's not the last attempt
-            if (i < maxRetries - 1) {
-                console.warn(`Asset load failed (Attempt ${i + 1}/${maxRetries}), retrying...`, err);
-                await new Promise(r => setTimeout(r, 300 * (i + 1))); // Exponential backoff
+            if (i < maxRetries) {
+                console.warn(`Retrying ${label} (${i + 1}/${maxRetries})...`);
+                await new Promise(r => setTimeout(r, 500)); // Wait before retry
+            } else {
+                console.warn(`Failed to load ${label} after retries. Continuing without it.`);
             }
         }
     }
-    // Final failure is silent here to allow app to proceed without that asset
 };
 
 const loadImage = (url: string): Promise<void> => {
     if (assetCache.has(url)) return assetCache.get(url)!;
 
-    const promise = new Promise<void>((resolve, reject) => {
+    const loadOp = new Promise<void>((resolve, reject) => {
         const img = new Image();
         img.src = url;
         img.onload = () => resolve();
         img.onerror = () => reject(new Error(`Failed to load image: ${url}`));
     });
 
+    // Timeout images after 3s to prevent hanging the whole app
+    const promise = timeoutPromise(loadOp, 3000, url);
     assetCache.set(url, promise);
     return promise;
 };
@@ -73,7 +92,6 @@ export const loadCriticalAssets = async (onProgress: (percent: number) => void, 
         { key: 'SPLASH', url: MUSIC_PATHS.SPLASH }
     ];
 
-    // Load first gameplay track if available
     if (MUSIC_PATHS.GAMEPLAY && MUSIC_PATHS.GAMEPLAY.length > 0) {
         audioToLoad.push({ key: 'GAMEPLAY_0', url: MUSIC_PATHS.GAMEPLAY[0] });
     }
@@ -89,48 +107,45 @@ export const loadCriticalAssets = async (onProgress: (percent: number) => void, 
         onProgress(Math.min(100, Math.floor((loadedCount / totalAssets) * 100)));
     };
 
-    // 3. Execute Loads concurrently
+    // 3. Execute Loads concurrently with fail-safety
     const imagePromises = imagesToLoad.map(url => 
-        retryOperation(() => loadImage(url))
+        retryOperation(() => loadImage(url), 'image')
         .then(updateProgress)
     );
 
     const audioPromises = audioToLoad.map(track => 
-        retryOperation(() => loadAudio(track.key, track.url))
+        retryOperation(() => loadAudio(track.key, track.url), 'audio')
         .then(updateProgress)
     );
 
     await Promise.allSettled([...imagePromises, ...audioPromises]);
     
-    // Ensure 100% at end
+    // Ensure 100% at end regardless of failures
     onProgress(100);
 };
 
 // Loads remaining audio tracks and ALL theme assets in the background
 export const loadBackgroundAssets = async () => {
-    // 1. Audio
     const audioToLoad = [
         { key: 'DEATH', url: MUSIC_PATHS.DEATH }
     ];
 
-    // Load remaining gameplay tracks
     if (MUSIC_PATHS.GAMEPLAY && MUSIC_PATHS.GAMEPLAY.length > 1) {
         for (let i = 1; i < MUSIC_PATHS.GAMEPLAY.length; i++) {
             audioToLoad.push({ key: `GAMEPLAY_${i}`, url: MUSIC_PATHS.GAMEPLAY[i] });
         }
     }
 
-    // 2. Visuals: Preload ALL themes so levels don't pop-in
     const allThemeImages = Object.values(THEME_STYLES).flatMap(theme => 
         Object.values(theme).map((s: any) => s.imageUrl).filter(Boolean)
     );
 
-    const visualPromises = allThemeImages.map(url => retryOperation(() => loadImage(url)));
+    const visualPromises = allThemeImages.map(url => retryOperation(() => loadImage(url), 'theme_asset'));
 
     const audioPromises = audioToLoad.map(track => 
-        retryOperation(() => loadAudio(track.key, track.url))
+        retryOperation(() => loadAudio(track.key, track.url), 'bg_audio')
     );
 
     await Promise.allSettled([...visualPromises, ...audioPromises]);
-    console.log("Background assets (Audio & Themes) loaded.");
+    console.log("Background assets loaded.");
 };

@@ -1,3 +1,4 @@
+
 import { PlayerProfile, GameState, RunStats, HeroClass, DailyBounty } from '../types';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -43,9 +44,11 @@ export const getPlayerProfile = (): PlayerProfile => {
         
         // Data Migration: Ensure new fields exist
         if (!profile.unlockedClasses) profile.unlockedClasses = [HeroClass.ADVENTURER];
+        if (!profile.unlockedFeatures) profile.unlockedFeatures = [];
         if (!profile.activeBounties) profile.activeBounties = [];
         if (profile.tutorialCompleted === undefined) profile.tutorialCompleted = false;
         if (profile.bossTutorialCompleted === undefined) profile.bossTutorialCompleted = false;
+        if (!profile.seenHints) profile.seenHints = [];
         
         // Check Daily Reset
         const today = new Date().toISOString().split('T')[0];
@@ -74,7 +77,8 @@ export const getPlayerProfile = (): PlayerProfile => {
     lastBountyDate: new Date().toISOString().split('T')[0],
     lastPlayed: new Date().toISOString(),
     tutorialCompleted: false,
-    bossTutorialCompleted: false
+    bossTutorialCompleted: false,
+    seenHints: []
   };
   saveProfile(newProfile);
   return newProfile;
@@ -84,6 +88,14 @@ export const completeTutorial = () => {
     const profile = getPlayerProfile();
     profile.tutorialCompleted = true;
     saveProfile(profile);
+};
+
+export const markHintSeen = (hintId: string) => {
+    const profile = getPlayerProfile();
+    if (!profile.seenHints.includes(hintId)) {
+        profile.seenHints.push(hintId);
+        saveProfile(profile);
+    }
 };
 
 export const finalizeRun = (finalState: GameState): { profile: PlayerProfile, leveledUp: boolean, xpGained: number, bountiesCompleted: number } => {
@@ -137,11 +149,6 @@ export const finalizeRun = (finalState: GameState): { profile: PlayerProfile, le
         profile.accountLevel += 1;
         leveledUp = true;
         
-        // Unlock Features
-        if (profile.accountLevel === 5 && !profile.unlockedFeatures.includes('NG+')) {
-            profile.unlockedFeatures.push('NG+');
-        }
-        
         // Unlock Classes
         if (profile.accountLevel >= 3 && !profile.unlockedClasses.includes(HeroClass.WARRIOR)) {
             profile.unlockedClasses.push(HeroClass.WARRIOR);
@@ -154,6 +161,20 @@ export const finalizeRun = (finalState: GameState): { profile: PlayerProfile, le
         }
          if (profile.accountLevel >= 20 && !profile.unlockedClasses.includes(HeroClass.PALADIN)) {
             profile.unlockedClasses.push(HeroClass.PALADIN);
+        }
+
+        // Unlock Features
+        // Level 5: Hard Mode
+        if (profile.accountLevel >= 5 && !profile.unlockedFeatures.includes('HARD_MODE')) {
+            profile.unlockedFeatures.push('HARD_MODE');
+        }
+        // Level 8: Undead Tileset
+        if (profile.accountLevel >= 8 && !profile.unlockedFeatures.includes('TILESET_UNDEAD')) {
+            profile.unlockedFeatures.push('TILESET_UNDEAD');
+        }
+        // Level 12: Boss Rush Mode
+        if (profile.accountLevel >= 12 && !profile.unlockedFeatures.includes('MODE_BOSS_RUSH')) {
+            profile.unlockedFeatures.push('MODE_BOSS_RUSH');
         }
 
     } else {

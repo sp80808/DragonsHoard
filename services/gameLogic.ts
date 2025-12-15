@@ -1,7 +1,8 @@
 
-import { Direction, GameState, Tile, TileType, MoveResult, LootResult, ItemType, InventoryItem, Stage, LeaderboardEntry, GameStats, Achievement, InputSettings, RunStats, HeroClass, GameMode, PlayerProfile, ShopState } from '../types';
-import { GRID_SIZE_INITIAL, SHOP_ITEMS, getXpThreshold, getStage, getStageBackground, ACHIEVEMENTS, TILE_STYLES, FALLBACK_STYLE, getItemDefinition, BOSS_DEFINITIONS, SHOP_CONFIG } from '../constants';
+import { Direction, GameState, Tile, TileType, MoveResult, LootResult, ItemType, InventoryItem, Stage, LeaderboardEntry, GameStats, Achievement, InputSettings, RunStats, HeroClass, GameMode, PlayerProfile, ShopState, DailyModifier, Difficulty } from '../types';
+import { GRID_SIZE_INITIAL, SHOP_ITEMS, getXpThreshold, getStage, getStageBackground, ACHIEVEMENTS, TILE_STYLES, FALLBACK_STYLE, getItemDefinition, BOSS_DEFINITIONS, SHOP_CONFIG, DAILY_MODIFIERS } from '../constants';
 import { v4 as uuidv4 } from 'uuid';
+import { rng } from '../utils/rng';
 
 const createId = () => uuidv4();
 const LEADERBOARD_KEY = 'dragon_hoard_leaderboard';
@@ -26,15 +27,20 @@ interface SpawnOptions {
   bossLevel?: number;
   isClassic?: boolean;
   powerUpChanceBonus?: number; // Added for Lucky Dice
+  modifiers?: DailyModifier[];
+  difficulty?: Difficulty;
 }
+
+// --- MODIFIER UTILS ---
+const hasMod = (mods: DailyModifier[] | undefined, id: string) => mods ? mods.some(m => m.id === id) : false;
 
 export const spawnTile = (grid: Tile[], size: number, level: number, options?: SpawnOptions | number): Tile[] => {
   const emptyCells = getEmptyCells(grid, size);
   if (emptyCells.length === 0) return grid;
 
-  const { x, y } = emptyCells[Math.floor(Math.random() * emptyCells.length)];
+  const { x, y } = emptyCells[Math.floor(rng.next() * emptyCells.length)];
   
-  let value = Math.random() < 0.9 ? 2 : 4;
+  let value = rng.next() < 0.9 ? 2 : 4;
   let type = TileType.NORMAL;
   let health = undefined;
   let maxHealth = undefined;
@@ -53,9 +59,14 @@ export const spawnTile = (grid: Tile[], size: number, level: number, options?: S
 
   // Rune Spawning Logic
   // Base chance 1%, + bonus from Lucky Dice
-  const runeChance = 0.01 + (opts.powerUpChanceBonus || 0);
-  if (!opts.forcedValue && !opts.type && !opts.isClassic && Math.random() < runeChance) {
-      const roll = Math.random();
+  let runeChance = 0.01 + (opts.powerUpChanceBonus || 0);
+  
+  if (hasMod(opts.modifiers, 'CHAOS_THEORY')) {
+      runeChance *= 3;
+  }
+
+  if (!opts.forcedValue && !opts.type && !opts.isClassic && rng.next() < runeChance) {
+      const roll = rng.next();
       if (roll < 0.4) type = TileType.RUNE_MIDAS;
       else if (roll < 0.7) type = TileType.RUNE_CHRONOS;
       else type = TileType.RUNE_VOID;
@@ -74,7 +85,11 @@ export const spawnTile = (grid: Tile[], size: number, level: number, options?: S
           const bossDef = BOSS_DEFINITIONS[stage.themeId] || BOSS_DEFINITIONS['DEFAULT'];
           const bossScale = opts.bossLevel || 1;
           
-          maxHealth = Math.floor(bossDef.baseHealth * Math.pow(1.5, bossScale)); 
+          let hpMult = 1.0;
+          if (hasMod(opts.modifiers, 'GOLD_RUSH')) hpMult = 1.5;
+          if (opts.difficulty === 'HARD') hpMult *= 1.5; // Hard Mode: 50% more HP
+
+          maxHealth = Math.floor(bossDef.baseHealth * Math.pow(1.5, bossScale) * hpMult); 
           health = maxHealth;
           bossThemeId = stage.themeId;
       }
@@ -95,12 +110,17 @@ export const spawnTile = (grid: Tile[], size: number, level: number, options?: S
   return [...grid, newTile];
 };
 
-const getInitialShopState = (): ShopState => {
+const getInitialShopState = (modifiers?: DailyModifier[]): ShopState => {
     const items: Record<string, { stock: number; priceMultiplier: number }> = {};
     SHOP_ITEMS.forEach(item => {
         const cat = item.category as keyof typeof SHOP_CONFIG.STOCK_LIMITS;
         const limit = SHOP_CONFIG.STOCK_LIMITS[cat] || 3;
-        items[item.id] = { stock: limit, priceMultiplier: 1.0 };
+        
+        let priceMult = 1.0;
+        if (hasMod(modifiers, 'MANA_DROUGHT')) priceMult += 0.5;
+        if (hasMod(modifiers, 'VOLATILE_ALCHEMY') && item.category === 'CONSUMABLE') priceMult -= 0.5;
+
+        items[item.id] = { stock: limit, priceMultiplier: priceMult };
     });
     return {
         items,
@@ -108,21 +128,46 @@ const getInitialShopState = (): ShopState => {
     };
 };
 
-export const initializeGame = (restart = false, heroClass: HeroClass = HeroClass.ADVENTURER, mode: GameMode = 'RPG'): GameState => {
-  if (!restart) {
+export const generateDailyModifiers = (seed: number): DailyModifier[] => {
+    // Deterministically pick 2 random modifiers
+    const dayRng = new (rng.constructor as any)(); // Create fresh RNG
+    dayRng.setSeed(seed);
+    
+    const shuffled = [...DAILY_MODIFIERS];
+    // Fisher-Yates with custom RNG
+    for (let i = shuffled.length - 1; i > 0; i--) {
+        const j = Math.floor(dayRng.next() * (i + 1));
+        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    
+    return shuffled.slice(0, 2);
+};
+
+export const initializeGame = (restart = false, heroClass: HeroClass = HeroClass.ADVENTURER, mode: GameMode = 'RPG', seed?: number, difficulty: Difficulty = 'NORMAL', tilesetId: string = 'DEFAULT'): GameState => {
+  
+  if (mode === 'DAILY' && seed) {
+      rng.setSeed(seed);
+  } else {
+      rng.disableSeeded();
+  }
+
+  if (!restart && mode !== 'DAILY') { // Don't load save for DAILY
     const saved = localStorage.getItem('2048_rpg_state_v3');
     if (saved) {
         try {
             const parsed = JSON.parse(saved);
-            // Migration for older saves if needed
+            // Migration for older saves
             if (!parsed.effectCounters) parsed.effectCounters = {};
             if (!parsed.gameMode) parsed.gameMode = 'RPG';
+            if (!parsed.difficulty) parsed.difficulty = 'NORMAL';
+            if (!parsed.tilesetId) parsed.tilesetId = 'DEFAULT';
             if (!parsed.settings.slideSpeed) parsed.settings.slideSpeed = 150;
             if (parsed.justLeveledUp === undefined) parsed.justLeveledUp = false;
             if (parsed.settings.lowPerformanceMode === undefined) parsed.settings.lowPerformanceMode = false;
             
             // Migration for Shop State
             if (!parsed.shop) parsed.shop = getInitialShopState();
+            if (!parsed.activeModifiers) parsed.activeModifiers = [];
 
             return parsed;
         } catch (e) { console.error("Save corrupted", e); }
@@ -170,23 +215,38 @@ export const initializeGame = (restart = false, heroClass: HeroClass = HeroClass
   const profileStr = localStorage.getItem(PROFILE_STORAGE_KEY);
   const profile = profileStr ? JSON.parse(profileStr) : { accountLevel: 1 };
 
-  let initialGrid = spawnTile([], GRID_SIZE_INITIAL, 1, { isClassic: mode === 'CLASSIC' });
-  initialGrid = spawnTile(initialGrid, GRID_SIZE_INITIAL, 1, { isClassic: mode === 'CLASSIC' });
+  // Generate Modifiers if Daily
+  let activeModifiers: DailyModifier[] = [];
+  if (mode === 'DAILY' && seed) {
+      activeModifiers = generateDailyModifiers(seed);
+  }
+
+  // Boss Rush: Start at high level with some gold
+  let startLevel = 1;
+  let startGold = mode === 'CLASSIC' ? 0 : 0;
+  
+  if (mode === 'BOSS_RUSH') {
+      startLevel = 5; // Start closer to first boss
+      startGold = 500;
+  }
+
+  let initialGrid = spawnTile([], GRID_SIZE_INITIAL, startLevel, { isClassic: mode === 'CLASSIC', modifiers: activeModifiers, difficulty });
+  initialGrid = spawnTile(initialGrid, GRID_SIZE_INITIAL, startLevel, { isClassic: mode === 'CLASSIC', modifiers: activeModifiers, difficulty });
 
   return {
     grid: initialGrid,
     score: 0,
     bestScore: 0,
     xp: 0,
-    level: 1,
-    gold: mode === 'CLASSIC' ? 0 : 0, // Start with 0 gold usually
+    level: startLevel,
+    gold: startGold,
     inventory,
     gridSize: GRID_SIZE_INITIAL,
     gameOver: false,
     victory: false,
     gameWon: false,
     combo: 0,
-    logs: ['Welcome, hero.', mode === 'CLASSIC' ? 'Classic Mode Active.' : `Class: ${heroClass}`],
+    logs: ['Welcome, hero.', mode === 'CLASSIC' ? 'Classic Mode Active.' : mode === 'DAILY' ? 'Daily Challenge Started!' : `Class: ${heroClass}`, difficulty === 'HARD' ? 'Hard Mode Active!' : ''],
     activeEffects: [],
     effectCounters: {},
     currentStage: initialStage,
@@ -207,9 +267,12 @@ export const initializeGame = (restart = false, heroClass: HeroClass = HeroClass
     },
     selectedClass: heroClass,
     gameMode: mode,
+    difficulty,
+    tilesetId,
     accountLevel: profile.accountLevel,
     justLeveledUp: false,
-    shop: getInitialShopState()
+    shop: getInitialShopState(activeModifiers),
+    activeModifiers
   };
 };
 
@@ -220,7 +283,9 @@ export const moveGrid = (
     direction: Direction, 
     size: number, 
     mode: GameMode, 
-    effectCounters: Record<string, number>
+    effectCounters: Record<string, number>,
+    modifiers?: DailyModifier[],
+    difficulty: Difficulty = 'NORMAL'
 ): MoveResult => {
   // Optimization: Shallow copy grid elements instead of deep JSON clone
   let newGrid = grid.map(t => ({...t}));
@@ -281,8 +346,10 @@ export const moveGrid = (
         if (nextTile.type === TileType.BOSS) {
             // Hit the boss!
             const projectileValue = tile.value;
-            const siegeMultiplier = (effectCounters['SIEGE_BREAKER'] || 0) > 0 ? 3 : 1;
+            let siegeMultiplier = (effectCounters['SIEGE_BREAKER'] || 0) > 0 ? 3 : 1;
             
+            if (hasMod(modifiers, 'GLASS_CANNON')) siegeMultiplier *= 2;
+
             // Damage scales with the value of the tile hitting the boss
             const baseDmg = Math.max(1, Math.floor(projectileValue / 2));
             const damage = baseDmg * siegeMultiplier;
@@ -298,6 +365,12 @@ export const moveGrid = (
                 xpGained += 2000;
                 goldGained += 100;
                 bossDefeated = true;
+                
+                // Bonus for Boss Rush
+                if (mode === 'BOSS_RUSH') {
+                    xpGained += 5000;
+                    goldGained += 300;
+                }
             }
             
             // The projectile tile is destroyed on impact
@@ -356,31 +429,30 @@ export const moveGrid = (
           goldGained += Math.floor((mergedValue / 10) * goldMult);
 
           // === LOOT LOGIC ===
-          if (mode === 'RPG') {
+          if (mode === 'RPG' || mode === 'DAILY' || mode === 'BOSS_RUSH') {
               // Modifiers
               const luckBuff = (effectCounters['LUCKY_LOOT'] || 0) > 0 ? 0.05 : 0;
               const diceBuff = (effectCounters['LUCKY_DICE'] || 0) > 0 ? 0.05 : 0;
+              let difficultyNerf = difficulty === 'HARD' ? 0.5 : 1.0;
               
-              // Base Chance scales with Tile Value (Higher value = higher loot chance)
-              // 4 -> ~1%
-              // 32 -> ~2%
-              // 512 -> ~10%
+              // Base Chance scales with Tile Value
               const baseChance = Math.min(0.1, (Math.log2(mergedValue) * 0.005) + 0.005);
-              const totalChance = baseChance + luckBuff + diceBuff;
+              const totalChance = (baseChance + luckBuff + diceBuff) * difficultyNerf;
 
-              if (Math.random() < totalChance) {
-                  const roll = Math.random();
+              if (rng.next() < totalChance) {
+                  const roll = rng.next();
                   
                   // 80% chance for Gold Pouch (if loot triggers)
                   if (roll < 0.8) {
-                      const goldAmount = Math.floor(mergedValue * 0.5) + 10;
+                      let goldAmount = Math.floor(mergedValue * 0.5) + 10;
+                      if (hasMod(modifiers, 'GOLD_RUSH')) goldAmount *= 2;
                       goldGained += goldAmount;
                       logs.push(`Found Pouch: ${goldAmount} G`);
                   } 
                   // 20% chance for Item
                   else {
                       const availableItems = SHOP_ITEMS.filter(i => i.category !== 'BATTLE'); // Don't drop heavy battle items randomly
-                      const itemDef = availableItems[Math.floor(Math.random() * availableItems.length)];
+                      const itemDef = availableItems[Math.floor(rng.next() * availableItems.length)];
                       
                       const item: InventoryItem = {
                           id: createId(),
@@ -420,6 +492,10 @@ export const moveGrid = (
   if ((effectCounters['RADIANT_AURA'] || 0) > 0) {
       xpGained = Math.floor(xpGained * 1.5);
   }
+  
+  if (hasMod(modifiers, 'MANA_DROUGHT')) {
+      xpGained = Math.floor(xpGained * 1.5);
+  }
 
   // Calculate Combo Multiplier for XP
   const comboMultiplier = 1 + (combo * 0.1);
@@ -429,7 +505,7 @@ export const moveGrid = (
   if ((effectCounters['VOID_STONE'] || 0) > 0 && moved) {
      const lowTiles = newGrid.filter(t => t.value <= 4 && t.type !== TileType.BOSS);
      if (lowTiles.length > 0) {
-         const target = lowTiles[Math.floor(Math.random() * lowTiles.length)];
+         const target = lowTiles[Math.floor(rng.next() * lowTiles.length)];
          newGrid = newGrid.filter(t => t.id !== target.id);
          // Silent effect, no log to avoid spam
      }
@@ -438,6 +514,7 @@ export const moveGrid = (
   return { grid: newGrid, score, xpGained, goldGained, itemsFound, moved, mergedIds, combo, comboMultiplier, logs, powerUpTriggered, bossDefeated };
 };
 
+// ... keep existing isGameOver, checkLoot, applyMidasTouch etc ... 
 export const isGameOver = (grid: Tile[], size: number) => {
   if (getEmptyCells(grid, size).length > 0) return false;
 
@@ -477,18 +554,18 @@ export const checkLoot = (level: number, mergedIds: string[], hasLuckyCharm: boo
     // Base Chance: 1% per move independent of specific tile values (fallback event)
     const chance = 0.01 + (hasLuckyCharm ? 0.05 : 0);
     
-    if (Math.random() < chance) {
-        const roll = Math.random();
+    if (rng.next() < chance) {
+        const roll = rng.next();
         
         // Gold Drop
         if (roll < 0.6) {
-            const amount = Math.floor(Math.random() * 50) + 10 * level;
+            const amount = Math.floor(rng.next() * 50) + 10 * level;
             return { message: `Found Pouch: ${amount} Gold`, gold: amount };
         } 
         
         // Item Drop
         const items = Object.values(ItemType).filter(t => !t.startsWith('CRAFT')); // Exclude craft only items if we had them
-        const itemType = items[Math.floor(Math.random() * items.length)];
+        const itemType = items[Math.floor(rng.next() * items.length)];
         const def = getItemDefinition(itemType);
         
         const item: InventoryItem = {
@@ -511,7 +588,7 @@ export const applyMidasTouch = (grid: Tile[]) => {
     const count = Math.max(3, Math.floor(validTiles.length * 0.2));
     
     // Shuffle
-    const targets = validTiles.sort(() => 0.5 - Math.random()).slice(0, count);
+    const targets = validTiles.sort(() => 0.5 - rng.next()).slice(0, count);
     
     let bonusScore = 0;
     const newGrid = grid.filter(t => {
@@ -581,6 +658,18 @@ export const useInventoryItem = (state: GameState, item: InventoryItem): Partial
     let activeEffects = [...state.activeEffects];
     let logs = [...state.logs];
     let isCascading = state.isCascading;
+
+    // Daily Modifiers check
+    if (hasMod(state.activeModifiers, 'VOLATILE_ALCHEMY') && item.category === 'CONSUMABLE') {
+        if (rng.next() < 0.1) {
+            logs.push("Potion Fizzled! (Volatile Alchemy)");
+            // Remove used item even if failed
+            const invIndex = state.inventory.findIndex(i => i.id === item.id);
+            const newInventory = [...state.inventory];
+            if (invIndex > -1) newInventory.splice(invIndex, 1);
+            return { inventory: newInventory, logs };
+        }
+    }
 
     switch (item.type) {
         case ItemType.XP_POTION:
@@ -699,12 +788,10 @@ export const useInventoryItem = (state: GameState, item: InventoryItem): Partial
     };
 };
 
-// --- PERKS & AUTOMATION ---
-
 export const tryAutoMerge = (grid: Tile[]) => {
     // Find one mergeable pair and merge it automatically
     // This is a "Perk" effect
-    if (Math.random() > 0.15) return { success: false, grid, value: 0 }; // 15% chance only
+    if (rng.next() > 0.15) return { success: false, grid, value: 0 }; // 15% chance only
 
     // Simple horizontal scan
     for(let i=0; i<grid.length; i++) {
@@ -784,8 +871,8 @@ export const executeAutoCascade = (grid: Tile[], size: number, cascadeStep: numb
         // We use the existing spawnTile logic but simplified
         const emptyCells = getEmptyCells(newGrid, size);
         if (emptyCells.length > 0) {
-             const { x, y } = emptyCells[Math.floor(Math.random() * emptyCells.length)];
-             const value = Math.random() < 0.8 ? 2 : 4; 
+             const { x, y } = emptyCells[Math.floor(rng.next() * emptyCells.length)];
+             const value = rng.next() < 0.8 ? 2 : 4; 
              const newTile: Tile = {
                 id: createId(),
                 x, y, value,

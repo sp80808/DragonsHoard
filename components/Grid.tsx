@@ -1,7 +1,8 @@
+
 import React, { useMemo, useEffect, useRef } from 'react';
 import { Tile } from '../types';
 import { TileComponent } from './TileComponent';
-import { TILE_STYLES, BOSS_STYLE, RUNE_STYLES, FALLBACK_STYLE } from '../constants';
+import { TILE_STYLES, BOSS_STYLE, RUNE_STYLES, FALLBACK_STYLE, STONE_STYLE } from '../constants';
 import { Coins } from 'lucide-react';
 
 interface GridProps {
@@ -12,13 +13,24 @@ interface GridProps {
   slideSpeed: number;
   themeId?: string;
   lowPerformanceMode?: boolean;
+  combo: number;
+  tilesetId?: string;
 }
 
-export const Grid = React.memo(({ grid, size, mergeEvents, lootEvents, slideSpeed, themeId, lowPerformanceMode }: GridProps) => {
+export const Grid = React.memo(({ grid, size, mergeEvents, lootEvents, slideSpeed, themeId, lowPerformanceMode, combo, tilesetId = 'DEFAULT' }: GridProps) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const particlesRef = useRef<any[]>([]);
   const animationFrameRef = useRef<number>(0);
   const containerRef = useRef<HTMLDivElement>(null);
+
+  // Dynamic Background Style based on Combo
+  const ambientGlowClass = useMemo(() => {
+      if (combo >= 10) return "from-fuchsia-600/30 via-cyan-500/30 to-white/10 animate-pulse duration-75";
+      if (combo >= 5) return "from-red-600/20 via-orange-600/20 to-yellow-600/10 animate-pulse duration-150";
+      if (combo >= 2) return "from-yellow-600/15 via-orange-600/15 to-transparent animate-pulse duration-300";
+      // Default: Static, dark, subtle. No blue pulse.
+      return "from-slate-900/40 to-slate-800/40";
+  }, [combo]);
 
   // Memoize background cells
   const backgroundCells = useMemo(() => {
@@ -32,9 +44,9 @@ export const Grid = React.memo(({ grid, size, mergeEvents, lootEvents, slideSpee
             }}
         >
             {cells.map((_, i) => (
-            <div key={i} className="w-full h-full">
-                <div className="w-full h-full bg-[#151921]/80 rounded-lg border border-white/5 shadow-[inset_0_2px_4px_rgba(0,0,0,0.6)] flex items-center justify-center">
-                    <div className="w-2 h-2 rounded-full bg-slate-800/30"></div>
+            <div key={i} className="w-full h-full aspect-square">
+                <div className="w-full h-full bg-[#080a0f] rounded-lg border border-white/5 shadow-[inset_0_4px_8px_rgba(0,0,0,0.8)] flex items-center justify-center">
+                    <div className="w-2 h-2 rounded-full bg-slate-800/20"></div>
                 </div>
             </div>
             ))}
@@ -56,13 +68,14 @@ export const Grid = React.memo(({ grid, size, mergeEvents, lootEvents, slideSpee
       mergeEvents.forEach(evt => {
            let style: any = TILE_STYLES[evt.value] || FALLBACK_STYLE;
            if (evt.type === 'BOSS') style = BOSS_STYLE;
+           else if (evt.type === 'STONE') style = STONE_STYLE;
            else if (evt.type.startsWith('RUNE')) style = RUNE_STYLES[evt.type];
            
            const color = style?.particleColor || '#ffffff';
            
-           // Reduce particle count significantly if we wanted, but logic above disables it.
-           // Let's allow minimal particles if we wanted, but for now we skip.
-           const particleCount = 8;
+           // Boost particle count based on combo
+           const comboMultiplier = Math.min(3, 1 + (combo * 0.2));
+           const particleCount = Math.floor(10 * comboMultiplier); // Increased count
 
            for (let i = 0; i < particleCount; i++) {
                const side = Math.floor(Math.random() * 4);
@@ -86,7 +99,7 @@ export const Grid = React.memo(({ grid, size, mergeEvents, lootEvents, slideSpee
                const nx = dx / len;
                const ny = dy / len;
 
-               const speed = Math.random() * 1.5 + 0.5;
+               const speed = (Math.random() * 1.5 + 0.5) * comboMultiplier;
 
                particlesRef.current.push({
                    x: spawnX,
@@ -94,7 +107,7 @@ export const Grid = React.memo(({ grid, size, mergeEvents, lootEvents, slideSpee
                    vx: nx * speed,
                    vy: ny * speed,
                    life: 1.0,
-                   decay: Math.random() * 0.06 + 0.06,
+                   decay: Math.random() * 0.04 + 0.04,
                    color: color,
                    size: Math.random() * 2 + 1,
                    rotation: Math.random() * Math.PI
@@ -102,7 +115,7 @@ export const Grid = React.memo(({ grid, size, mergeEvents, lootEvents, slideSpee
            }
       });
 
-  }, [mergeEvents, size, lowPerformanceMode]);
+  }, [mergeEvents, size, lowPerformanceMode, combo]);
 
   // Animation Loop
   useEffect(() => {
@@ -128,6 +141,9 @@ export const Grid = React.memo(({ grid, size, mergeEvents, lootEvents, slideSpee
           if (!ctx || !canvas) return;
           ctx.clearRect(0, 0, canvas.width, canvas.height);
 
+          // Additive blending makes overlapping particles glow
+          ctx.globalCompositeOperation = 'lighter';
+
           if (particlesRef.current.length === 0) {
               animationFrameRef.current = requestAnimationFrame(render);
               return;
@@ -138,15 +154,17 @@ export const Grid = React.memo(({ grid, size, mergeEvents, lootEvents, slideSpee
               p.x += p.vx;
               p.y += p.vy;
               p.life -= p.decay;
-              p.vx *= 0.9;
-              p.vy *= 0.9;
+              p.vx *= 0.92;
+              p.vy *= 0.92;
               
               if (p.life <= 0) {
                   particlesRef.current.splice(i, 1);
                   continue;
               }
 
-              ctx.globalAlpha = p.life * p.life;
+              // Twinkle effect
+              const flicker = Math.random() > 0.8 ? 1.5 : 1.0;
+              ctx.globalAlpha = Math.min(1, p.life * p.life * flicker);
               ctx.fillStyle = p.color;
               
               ctx.save();
@@ -164,6 +182,8 @@ export const Grid = React.memo(({ grid, size, mergeEvents, lootEvents, slideSpee
               ctx.fill();
               ctx.restore();
           }
+          // Reset composite operation if needed for other draws (though we only draw particles here)
+          ctx.globalCompositeOperation = 'source-over';
           animationFrameRef.current = requestAnimationFrame(render);
       };
 
@@ -178,15 +198,15 @@ export const Grid = React.memo(({ grid, size, mergeEvents, lootEvents, slideSpee
   return (
     <div 
         ref={containerRef}
-        className="relative w-full h-full group"
+        className="relative w-full aspect-square group mx-auto"
     >
         {/* Ambient Glow - Disable in Low Perf */}
         {!lowPerformanceMode && (
-            <div className="absolute -inset-4 bg-gradient-to-r from-purple-600/10 to-blue-600/10 rounded-3xl blur-2xl animate-pulse -z-10"></div>
+            <div className={`absolute -inset-4 bg-gradient-to-r ${ambientGlowClass} rounded-3xl blur-2xl -z-10 transition-colors duration-500`}></div>
         )}
         
         {/* Grid Container */}
-        <div className={`relative w-full h-full bg-black/80 rounded-xl p-1 sm:p-2 border-2 border-slate-700/50 shadow-2xl overflow-hidden ${lowPerformanceMode ? '' : 'backdrop-blur-md'}`}>
+        <div className={`relative w-full h-full bg-black/90 rounded-xl p-1 sm:p-2 border-2 border-slate-700/50 shadow-2xl overflow-hidden ${lowPerformanceMode ? '' : 'backdrop-blur-md'}`}>
             
             {/* Subtle Grid Pattern Background */}
             <div className="absolute inset-0 opacity-20 pointer-events-none" 
@@ -210,6 +230,7 @@ export const Grid = React.memo(({ grid, size, mergeEvents, lootEvents, slideSpee
                         slideSpeed={slideSpeed} 
                         themeId={themeId} 
                         lowPerformanceMode={lowPerformanceMode}
+                        tilesetId={tilesetId}
                     />
                     ))}
                 </div>
@@ -259,3 +280,4 @@ export const Grid = React.memo(({ grid, size, mergeEvents, lootEvents, slideSpee
     </div>
   );
 });
+    

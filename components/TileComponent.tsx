@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { Tile, TileType } from '../types';
-import { getTileStyle, BOSS_STYLE, FALLBACK_STYLE, RUNE_STYLES, BOSS_DEFINITIONS } from '../constants';
+import { getTileStyle, BOSS_STYLE, FALLBACK_STYLE, RUNE_STYLES, BOSS_DEFINITIONS, STONE_STYLE } from '../constants';
 
 interface TileProps {
   tile: Tile;
@@ -9,12 +9,12 @@ interface TileProps {
   slideSpeed: number;
   themeId?: string;
   lowPerformanceMode?: boolean;
+  tilesetId?: string;
 }
 
-export const TileComponent = React.memo(({ tile, gridSize, slideSpeed, themeId, lowPerformanceMode }: TileProps) => {
-  // Memoize style calculation to prevent re-computation on every render
+export const TileComponent = React.memo(({ tile, gridSize, slideSpeed, themeId, lowPerformanceMode, tilesetId = 'DEFAULT' }: TileProps) => {
   const style = useMemo(() => {
-      let s = getTileStyle(tile.value, themeId);
+      let s = getTileStyle(tile.value, themeId, tilesetId);
       
       if (tile.type === TileType.BOSS) {
           if (tile.bossThemeId && BOSS_DEFINITIONS[tile.bossThemeId]) {
@@ -24,9 +24,11 @@ export const TileComponent = React.memo(({ tile, gridSize, slideSpeed, themeId, 
           }
       } else if (tile.type.startsWith('RUNE_')) {
           s = RUNE_STYLES[tile.type] || FALLBACK_STYLE;
+      } else if (tile.type === TileType.STONE) {
+          s = STONE_STYLE;
       }
       return s;
-  }, [tile.value, tile.type, tile.bossThemeId, themeId]);
+  }, [tile.value, tile.type, tile.bossThemeId, themeId, tilesetId]);
 
   const [imgError, setImgError] = useState(false);
   
@@ -34,7 +36,6 @@ export const TileComponent = React.memo(({ tile, gridSize, slideSpeed, themeId, 
   const xPos = tile.x * 100;
   const yPos = tile.y * 100;
 
-  // Reduced animations in low performance mode
   const isNewClass = !lowPerformanceMode && tile.isNew ? 'tile-animation-enter' : '';
   
   let mergeClass = '';
@@ -47,67 +48,79 @@ export const TileComponent = React.memo(({ tile, gridSize, slideSpeed, themeId, 
           mergeClass = 'hit-flash'; 
           shakeClass = !lowPerformanceMode ? 'animate-shake-md' : '';
       } else {
-          mergeClass = !lowPerformanceMode ? 'tile-animation-merge' : '';
-          // Only show complex flash overlays if performance allows
-          if (!lowPerformanceMode) mergeClass += ' upgrade-flash';
-          
-          if (!lowPerformanceMode) shakeClass = 'animate-shake-sm';
+          // Tiered Merge Animations
+          if (!lowPerformanceMode) {
+              if (tile.value < 32) {
+                  // Low tier pop
+                  mergeClass = 'tile-animation-pop-small';
+                  shakeClass = 'animate-shake-sm';
+              } else {
+                  // Standard/High tier pulse
+                  mergeClass = 'tile-animation-merge';
+                  shakeClass = 'animate-shake-sm';
 
-          if (tile.value >= 32 && !lowPerformanceMode) {
-              showShockwave = true;
-              shakeClass = 'animate-shake-md';
-          }
+                  if (tile.value >= 32) {
+                      showShockwave = true;
+                      shakeClass = 'animate-shake-md';
+                  }
 
-          if (tile.value >= 512 && !lowPerformanceMode) {
-              showGodwave = true;
-              shakeClass = 'animate-shake-lg';
+                  if (tile.value >= 512) {
+                      showGodwave = true;
+                      shakeClass = 'animate-shake-lg';
+                  }
+              }
           }
       }
   }
 
   const ringColorClass = style.ringColor || 'ring-cyan-400';
-  // Pulse animation is CSS heavy, disable in low perf
-  // Intensified cascade marker: ring-4 instead of ring-2
   const isCascadeClass = tile.isCascade 
-    ? `ring-4 ${ringColorClass} ring-offset-2 ring-offset-black ${lowPerformanceMode ? '' : 'animate-pulse'}` 
+    ? `ring-2 ${ringColorClass} ring-offset-1 ring-offset-black ${lowPerformanceMode ? '' : 'animate-pulse'}` 
     : '';
 
   const isSlash = tile.mergedFrom && tile.value >= 32 && tile.mergedFrom[0] !== 'damage' ? 'slash-effect' : '';
   const healthPercent = tile.maxHealth ? Math.max(0, (tile.health || 0) / tile.maxHealth) * 100 : 0;
   const isHighTier = tile.value >= 512 && !lowPerformanceMode;
+  const isGodTier = tile.value >= 2048 && !lowPerformanceMode;
+  const isMetallic = tile.value >= 128; // Add gradient text for 128+
 
-  // Dynamic Shadow Calculation
   const shadowColor = style.particleColor || '#000000';
-  // Deep base shadow + Subtle colored ambient shadow (Reduced opacity from 50 to 20 hex ~ 12%)
+  
+  // Enhanced 3D Bezel with Color Depth
   const boxDepthStyle = {
-      boxShadow: `0 10px 20px -5px rgba(0, 0, 0, 0.8), 0 0 12px -2px ${shadowColor}20`
+      boxShadow: isHighTier 
+        ? `0 0 15px ${shadowColor}30, inset 0 1px 0 rgba(255, 255, 255, 0.25), inset 0 -2px 0 rgba(0, 0, 0, 0.4)`
+        : `0 4px 12px ${shadowColor}40, inset 0 1px 0 rgba(255, 255, 255, 0.25), inset 0 -2px 0 rgba(0, 0, 0, 0.4)`
   };
 
-  // Heavy black outline for text
-  const textOutlineStyle = {
-      textShadow: '2px 0 0 #000, -2px 0 0 #000, 0 2px 0 #000, 0 -2px 0 #000, 1px 1px #000, -1px -1px #000, 1px -1px #000, -1px 1px #000'
+  // Modern RPG Typography with potential metallic gradient
+  const textGradientClass = isGodTier ? 'bg-gradient-to-b from-yellow-100 via-amber-200 to-yellow-500 text-transparent bg-clip-text' : 
+                            isMetallic ? 'bg-gradient-to-b from-white via-slate-100 to-slate-400 text-transparent bg-clip-text' : 'text-white';
+
+  const textStyle = {
+      filter: isMetallic ? 'drop-shadow(0 2px 2px rgba(0,0,0,0.8))' : 'drop-shadow(0 3px 3px rgba(0,0,0,0.8))',
+      WebkitTextStroke: isMetallic ? '0px' : '1px rgba(0,0,0,0.4)', // Remove stroke if gradient is applied for cleanliness
+      paintOrder: 'stroke fill'
   };
 
   return (
     <div
-      className={`absolute ease-in-out z-10 p-1`}
+      className={`absolute ease-in-out z-10 p-1 transition-transform will-change-transform`}
       style={{
         width: `${size}%`,
         height: `${size}%`,
         transform: `translate(${xPos}%, ${yPos}%)`,
         transitionDuration: `${slideSpeed}ms`
       }}
-      draggable={false}
-      onDragStart={(e) => e.preventDefault()}
     >
       <div className={`w-full h-full relative ${isNewClass} ${mergeClass} group select-none`}>
         
         {showShockwave && (
-             <div className="absolute inset-0 z-50 rounded-lg border-2 border-white/20 animate-[ping_0.3s_cubic-bezier(0,0,0.2,1)_1] pointer-events-none"></div>
+             <div className="absolute inset-0 z-50 rounded-lg border-2 border-white/60 animate-[ping_0.5s_cubic-bezier(0,0,0.2,1)_1] pointer-events-none mix-blend-overlay"></div>
         )}
         
         {showGodwave && (
-             <div className="absolute inset-0 z-[60] rounded-xl animate-godwave pointer-events-none"></div>
+             <div className="absolute inset-0 z-[60] rounded-xl animate-godwave pointer-events-none mix-blend-screen"></div>
         )}
 
         <div className={`w-full h-full ${shakeClass}`}>
@@ -116,20 +129,28 @@ export const TileComponent = React.memo(({ tile, gridSize, slideSpeed, themeId, 
                 style={boxDepthStyle}
             >
                 
+                {/* Dynamic Shine/Facets for High Tiers */}
                 {isHighTier && (
-                    <div className="absolute inset-0 z-20 pointer-events-none rounded-lg overflow-hidden">
-                        <div className="absolute inset-0 border border-yellow-400/30 rounded-lg"></div>
-                        <div className="absolute -inset-[100%] bg-gradient-to-r from-transparent via-white/10 to-transparent -skew-x-12 animate-[shimmer_4s_infinite_linear]"></div>
-                    </div>
+                    <>
+                        <div className="absolute inset-0 z-20 pointer-events-none facet-overlay rounded-lg"></div>
+                        <div className="absolute inset-0 border border-white/20 rounded-lg z-20"></div>
+                    </>
                 )}
 
-                {/* Glow Container - Expensive opacity transition */}
+                {/* God Tier Pulse */}
+                {isGodTier && (
+                    <div className="absolute inset-0 z-10 bg-gradient-to-t from-yellow-500/30 to-transparent animate-pulse mix-blend-overlay"></div>
+                )}
+
+                {/* Glow Container */}
                 {!lowPerformanceMode && (
-                    <div className={`absolute inset-0 transition-opacity duration-300 ${style.glow} opacity-0 group-hover:opacity-100`}></div>
+                    <div className={`absolute inset-0 transition-opacity duration-300 ${style.glow} opacity-30 group-hover:opacity-60`}></div>
                 )}
 
-                <div className={`absolute inset-0 bg-gradient-to-br ${style.color} opacity-80`}></div>
+                {/* Gradient Background */}
+                <div className={`absolute inset-0 bg-gradient-to-br ${style.color} opacity-90`}></div>
 
+                {/* Texture/Image */}
                 {!imgError && style.imageUrl && (
                     <img 
                         src={style.imageUrl} 
@@ -140,22 +161,27 @@ export const TileComponent = React.memo(({ tile, gridSize, slideSpeed, themeId, 
                     />
                 )}
 
-                <div className={`absolute inset-0 border-2 ${style.ringColor.replace('ring-', 'border-')} opacity-50 rounded-lg`}></div>
+                {/* Inner Border Highlight */}
+                <div className={`absolute inset-0 border border-white/10 rounded-lg pointer-events-none`}></div>
+                <div className={`absolute inset-0 border-2 ${style.ringColor.replace('ring-', 'border-')} opacity-20 rounded-lg mix-blend-screen`}></div>
 
                 <div className="absolute inset-0 flex flex-col justify-between p-1 z-10">
                     {tile.value > 0 ? (
                         <>
-                            <div className="flex-1 flex items-center justify-center pt-2">
+                            <div className="flex-1 flex items-center justify-center pt-2 relative">
+                                {/* Back Glow for Text readability */}
+                                <div className="absolute inset-0 bg-radial-gradient from-black/60 to-transparent opacity-60 blur-md scale-75"></div>
+                                
                                 <span 
-                                    className="fantasy-font font-black text-white text-4xl sm:text-5xl lg:text-6xl leading-none z-20"
-                                    style={textOutlineStyle}
+                                    className={`fantasy-font font-black text-4xl sm:text-5xl lg:text-6xl leading-none z-20 tracking-wide ${textGradientClass}`}
+                                    style={textStyle}
                                 >
                                     {tile.value}
                                 </span>
                             </div>
                             <div className="w-full flex justify-center pb-1">
-                                <div className={`px-2 py-0.5 rounded ${lowPerformanceMode ? 'bg-black/80' : 'bg-black/60 backdrop-blur-[2px]'} border border-white/10`}>
-                                    <span className="block text-[8px] sm:text-[9px] font-serif font-bold text-slate-200 uppercase tracking-widest leading-none">
+                                <div className={`px-2 py-0.5 rounded-full ${lowPerformanceMode ? 'bg-black/80' : 'bg-black/60 backdrop-blur-sm'} border border-white/10 shadow-lg`}>
+                                    <span className="block text-[7px] sm:text-[8px] font-serif font-bold text-slate-200 uppercase tracking-[0.2em] leading-none text-shadow-sm">
                                         {style.label}
                                     </span>
                                 </div>
@@ -163,19 +189,19 @@ export const TileComponent = React.memo(({ tile, gridSize, slideSpeed, themeId, 
                         </>
                     ) : (
                         <div className="flex-1 flex flex-col items-center justify-center">
-                            <span className="text-3xl sm:text-4xl filter drop-shadow-[0_2px_2px_rgba(0,0,0,0.8)] transform group-hover:scale-110 transition-transform duration-300 mb-1">
+                            <span className="text-3xl sm:text-4xl filter drop-shadow-[0_4px_4px_rgba(0,0,0,0.5)] transform group-hover:scale-110 transition-transform duration-300 mb-1">
                                 {style.icon === '💀' && style.label !== 'BOSS' ? '' : style.icon} 
                             </span>
-                             <span className="text-[8px] sm:text-[10px] font-bold text-white/90 uppercase tracking-widest drop-shadow-md bg-black/30 px-2 rounded">
+                             <span className="text-[8px] sm:text-[10px] font-bold text-white/90 uppercase tracking-widest drop-shadow-md bg-black/40 px-2 py-0.5 rounded-full border border-white/10">
                                 {style.label}
                             </span>
                         </div>
                     )}
 
                     {tile.type === TileType.BOSS && tile.health !== undefined && (
-                        <div className="absolute bottom-1 left-1 right-1 h-1.5 bg-black/80 rounded-full overflow-hidden border border-red-900/50">
+                        <div className="absolute bottom-1 left-1 right-1 h-1.5 bg-gray-900/80 rounded-full overflow-hidden border border-red-900/50 shadow-inner">
                             <div 
-                                className="h-full bg-red-600 transition-all duration-300"
+                                className="h-full bg-gradient-to-r from-red-800 to-red-500 transition-all duration-300"
                                 style={{ width: `${healthPercent}%` }}
                             ></div>
                         </div>
@@ -183,29 +209,12 @@ export const TileComponent = React.memo(({ tile, gridSize, slideSpeed, themeId, 
                 </div>
 
                 {!lowPerformanceMode && (
-                    <div className="absolute inset-0 bg-gradient-to-b from-white/10 to-transparent pointer-events-none"></div>
+                    <div className="absolute inset-0 bg-gradient-to-b from-white/15 via-transparent to-black/30 pointer-events-none rounded-lg"></div>
                 )}
             </div>
         </div>
       </div>
     </div>
   );
-}, (prev, next) => {
-    // Custom comparison for performance optimization
-    // Only re-render if tile properties that affect display change
-    return (
-        prev.tile.id === next.tile.id &&
-        prev.tile.value === next.tile.value &&
-        prev.tile.x === next.tile.x &&
-        prev.tile.y === next.tile.y &&
-        prev.tile.type === next.tile.type &&
-        prev.tile.mergedFrom === next.tile.mergedFrom &&
-        prev.tile.isNew === next.tile.isNew &&
-        prev.tile.isCascade === next.tile.isCascade &&
-        prev.tile.health === next.tile.health &&
-        prev.gridSize === next.gridSize &&
-        prev.slideSpeed === next.slideSpeed &&
-        prev.themeId === next.themeId &&
-        prev.lowPerformanceMode === next.lowPerformanceMode
-    );
 });
+    

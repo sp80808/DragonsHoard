@@ -1,3 +1,4 @@
+import React from 'react';
 
 export enum Direction {
   UP = 'UP',
@@ -14,6 +15,7 @@ export enum TileType {
   RUNE_MIDAS = 'RUNE_MIDAS',
   RUNE_CHRONOS = 'RUNE_CHRONOS',
   RUNE_VOID = 'RUNE_VOID',
+  STONE = 'STONE', // Garbage tile for Versus
 }
 
 export enum ItemType {
@@ -53,9 +55,10 @@ export enum HeroClass {
   PALADIN = 'PALADIN'        // Starts with Golden Rune
 }
 
-export type GameMode = 'RPG' | 'CLASSIC';
+export type GameMode = 'RPG' | 'CLASSIC' | 'VERSUS' | 'DAILY' | 'BOSS_RUSH';
+export type Difficulty = 'NORMAL' | 'HARD';
 
-export type View = 'SPLASH' | 'GAME' | 'LEADERBOARD' | 'SETTINGS' | 'HELP';
+export type View = 'SPLASH' | 'GAME' | 'LEADERBOARD' | 'SETTINGS' | 'HELP' | 'VERSUS';
 
 export interface InventoryItem {
   id: string;
@@ -152,13 +155,14 @@ export interface PlayerProfile {
   accountLevel: number;
   gamesPlayed: number;
   highScore: number;
-  unlockedFeatures: string[]; // ['NG+', 'HardMode', 'Reroll']
+  unlockedFeatures: string[]; // ['NG+', 'HARD_MODE', 'TILESET_UNDEAD', 'MODE_BOSS_RUSH']
   unlockedClasses: HeroClass[];
   activeBounties: DailyBounty[];
   lastBountyDate: string; // YYYY-MM-DD
   lastPlayed: string;
   tutorialCompleted: boolean;
   bossTutorialCompleted: boolean;
+  seenHints: string[]; // IDs of hints player has already seen
 }
 
 export interface Achievement {
@@ -193,6 +197,14 @@ export interface ShopState {
     turnsUntilRestock: number;
 }
 
+export interface DailyModifier {
+    id: string;
+    name: string;
+    description: string;
+    icon: string;
+    color: string;
+}
+
 export interface GameState {
   grid: Tile[];
   score: number;
@@ -220,11 +232,14 @@ export interface GameState {
   achievements: string[]; // IDs of unlocked achievements
   settings: InputSettings;
   selectedClass: HeroClass; // Track current run class
-  gameMode: GameMode; // RPG or CLASSIC
+  gameMode: GameMode; // RPG or CLASSIC or DAILY or BOSS_RUSH
+  difficulty: Difficulty; // NORMAL or HARD
+  tilesetId: string; // DEFAULT or UNDEAD
   accountLevel: number; // Used for gating cascades
   justLeveledUp: boolean;
   unlockedPerk?: string;
   shop: ShopState;
+  activeModifiers: DailyModifier[]; // New: List of active modifiers for Daily/Challenge runs
 }
 
 export interface MoveResult {
@@ -253,4 +268,18 @@ export interface LeaderboardEntry {
     level: number;
     gold: number;
     date: number;
+    heroClass?: HeroClass;
+    turns?: number;
+    mode?: GameMode;
+}
+
+export type FeedbackType = 'LEVEL_UP' | 'BOSS_KILLED' | 'GRID_EXPAND' | 'UNLOCK' | 'ACHIEVEMENT';
+
+export interface FeedbackEvent {
+    id: string;
+    type: FeedbackType;
+    title: string;
+    subtitle?: string;
+    icon?: React.ReactNode;
+    reward?: string;
 }

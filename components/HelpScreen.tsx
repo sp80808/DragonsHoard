@@ -1,170 +1,212 @@
 
-import React from 'react';
-import { ArrowLeft, Zap, Skull, Swords, Scroll, Coins, Trophy, Sparkles, Package, Sparkles as MagicIcon, Sword } from 'lucide-react';
-import { SHOP_ITEMS } from '../constants';
+import React, { useState } from 'react';
+import { ArrowLeft, Zap, Skull, Swords, Scroll, Coins, Trophy, Sparkles, Package, Sparkles as MagicIcon, Sword, Book, Eye } from 'lucide-react';
+import { SHOP_ITEMS, TILE_STYLES } from '../constants';
+import { TileType } from '../types';
 
 interface HelpScreenProps {
   onBack: () => void;
 }
 
+type TabType = 'GUIDE' | 'BESTIARY' | 'ITEMS';
+
 export const HelpScreen: React.FC<HelpScreenProps> = ({ onBack }) => {
+  const [activeTab, setActiveTab] = useState<TabType>('GUIDE');
+
   const battleItems = SHOP_ITEMS.filter(i => i.category === 'BATTLE');
   const magicItems = SHOP_ITEMS.filter(i => i.category === 'MAGIC');
   const consumables = SHOP_ITEMS.filter(i => i.category === 'CONSUMABLE');
 
+  // Generate Monster List from Tile Styles (Powers of 2)
+  const monsters = Object.entries(TILE_STYLES).map(([val, style]) => ({
+      value: parseInt(val),
+      ...style
+  })).sort((a,b) => a.value - b.value);
+
+  const TabButton = ({ id, label, icon }: { id: TabType, label: string, icon: React.ReactNode }) => (
+      <button 
+        onClick={() => setActiveTab(id)}
+        className={`flex-1 py-3 text-sm font-bold border-b-2 transition-colors flex items-center justify-center gap-2
+            ${activeTab === id ? 'border-yellow-500 text-yellow-400 bg-slate-800/50' : 'border-transparent text-slate-500 hover:text-slate-300'}
+        `}
+      >
+          {icon} <span className="hidden sm:inline">{label}</span>
+      </button>
+  );
+
   return (
-    <div className="absolute inset-0 z-50 flex flex-col items-center bg-slate-950 text-slate-200 p-4 overflow-hidden">
-      <div className="w-full max-w-3xl flex flex-col h-full bg-slate-900/50 rounded-xl border border-slate-800 shadow-2xl overflow-hidden backdrop-blur-md">
+    <div className="absolute inset-0 z-50 flex flex-col items-center bg-slate-950 text-slate-200 p-4 overflow-hidden bg-[url('https://www.transparenttextures.com/patterns/dark-matter.png')]">
+      <div className="w-full max-w-3xl flex flex-col h-full bg-slate-900/80 rounded-xl border border-slate-800 shadow-2xl overflow-hidden backdrop-blur-md">
         
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-slate-700/50 bg-slate-900/80">
+        <div className="flex items-center justify-between p-4 border-b border-slate-700/50 bg-slate-900/95">
           <button 
             onClick={onBack}
             className="p-2 hover:bg-slate-800 rounded-full transition-colors text-slate-400 hover:text-white"
           >
             <ArrowLeft size={24} />
           </button>
-          <h2 className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-yellow-200 to-amber-500 fantasy-font">
-            Dungeon Guide
+          <h2 className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-yellow-200 to-amber-500 fantasy-font flex items-center gap-2">
+            <Book size={24} className="text-amber-500"/> Codex
           </h2>
           <div className="w-10"></div>
         </div>
 
+        {/* Tabs */}
+        <div className="flex border-b border-slate-800 bg-slate-900">
+            <TabButton id="GUIDE" label="Gameplay Guide" icon={<Scroll size={16}/>} />
+            <TabButton id="BESTIARY" label="Bestiary" icon={<Eye size={16}/>} />
+            <TabButton id="ITEMS" label="Item Log" icon={<Package size={16}/>} />
+        </div>
+
         {/* Content - Scrollable */}
-        <div className="flex-1 overflow-y-auto p-4 md:p-8 space-y-8 custom-scrollbar">
+        <div className="flex-1 overflow-y-auto p-4 md:p-8 custom-scrollbar">
           
-          {/* Section 1: The Basics */}
-          <section className="space-y-4">
-             <h3 className="text-xl font-bold text-white flex items-center gap-2">
-                 <Swords size={20} className="text-blue-400" /> Core Mechanics
-             </h3>
-             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                 <div className="bg-slate-800/50 p-4 rounded-xl border border-white/5">
-                     <h4 className="font-bold text-slate-200 mb-2">Move & Merge</h4>
-                     <p className="text-sm text-slate-400 leading-relaxed">
-                         Swipe or use Arrow Keys to move tiles. Merge matching monsters to <strong>EVOLVE</strong> them into stronger forms.
-                         <br/><br/>
-                         <span className="text-xs font-mono bg-black/30 p-1 rounded">Slime (2) + Slime (2) = Goblin (4)</span>
-                     </p>
-                 </div>
-                 <div className="bg-slate-800/50 p-4 rounded-xl border border-white/5">
-                     <h4 className="font-bold text-slate-200 mb-2">The Goal</h4>
-                     <p className="text-sm text-slate-400 leading-relaxed">
-                         Build your score, earn Gold, and survive long enough to summon the <strong>Dragon God (2048)</strong>.
-                         The dungeon grid expands as you level up, giving you more space to maneuver.
-                     </p>
-                 </div>
-             </div>
-          </section>
+          {/* TAB: GUIDE */}
+          {activeTab === 'GUIDE' && (
+            <div className="space-y-8 animate-in fade-in slide-in-from-right-4 duration-300">
+                <section className="space-y-4">
+                    <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                        <Swords size={20} className="text-blue-400" /> Core Mechanics
+                    </h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="bg-slate-800/50 p-4 rounded-xl border border-white/5">
+                            <h4 className="font-bold text-slate-200 mb-2">Move & Merge</h4>
+                            <p className="text-sm text-slate-400 leading-relaxed">
+                                Swipe or use Arrow Keys to move tiles. Merge matching monsters to <strong>EVOLVE</strong> them into stronger forms.
+                                <br/><br/>
+                                <span className="text-xs font-mono bg-black/30 p-1 rounded">Slime (2) + Slime (2) = Goblin (4)</span>
+                            </p>
+                        </div>
+                        <div className="bg-slate-800/50 p-4 rounded-xl border border-white/5">
+                            <h4 className="font-bold text-slate-200 mb-2">The Goal</h4>
+                            <p className="text-sm text-slate-400 leading-relaxed">
+                                Build your score, earn Gold, and survive long enough to summon the <strong>Dragon God (2048)</strong>.
+                            </p>
+                        </div>
+                    </div>
+                </section>
 
-          {/* Section 2: RPG Systems */}
-          <section className="space-y-4">
-             <h3 className="text-xl font-bold text-white flex items-center gap-2">
-                 <Sparkles size={20} className="text-purple-400" /> RPG Progression
-             </h3>
-             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                 <div className="bg-slate-800/50 p-4 rounded-xl border border-white/5">
-                     <div className="text-indigo-400 font-bold mb-1 flex items-center gap-2"><Trophy size={16}/> XP & Levels</div>
-                     <p className="text-xs text-slate-400">
-                         Merges grant XP. Leveling up heals you, unlocks perks (like Rerolls), and expands the grid size (up to 8x8).
-                     </p>
-                 </div>
-                 <div className="bg-slate-800/50 p-4 rounded-xl border border-white/5">
-                     <div className="text-yellow-400 font-bold mb-1 flex items-center gap-2"><Coins size={16}/> Gold & Shop</div>
-                     <p className="text-xs text-slate-400">
-                         Collect gold from high-level merges and bosses. Spend it in the Shop on Potions, Bombs, and Runes.
-                     </p>
-                 </div>
-                 <div className="bg-slate-800/50 p-4 rounded-xl border border-white/5">
-                     <div className="text-cyan-400 font-bold mb-1 flex items-center gap-2"><Zap size={16}/> Cascades</div>
-                     <p className="text-xs text-slate-400">
-                         (Account Lvl 10+) Setting up chain reactions triggers automatic combos that grant bonus XP/Gold multipliers.
-                     </p>
-                 </div>
-             </div>
-          </section>
+                <section className="space-y-4">
+                    <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                        <Sparkles size={20} className="text-purple-400" /> RPG Progression
+                    </h3>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div className="bg-slate-800/50 p-4 rounded-xl border border-white/5">
+                            <div className="text-indigo-400 font-bold mb-1 flex items-center gap-2"><Trophy size={16}/> XP & Levels</div>
+                            <p className="text-xs text-slate-400">
+                                Merges grant XP. Leveling up unlocks perks and expands the grid.
+                            </p>
+                        </div>
+                        <div className="bg-slate-800/50 p-4 rounded-xl border border-white/5">
+                            <div className="text-yellow-400 font-bold mb-1 flex items-center gap-2"><Coins size={16}/> Gold & Shop</div>
+                            <p className="text-xs text-slate-400">
+                                Collect gold from high-level merges. Spend it on Runes and Potions.
+                            </p>
+                        </div>
+                        <div className="bg-slate-800/50 p-4 rounded-xl border border-white/5">
+                            <div className="text-cyan-400 font-bold mb-1 flex items-center gap-2"><Zap size={16}/> Cascades</div>
+                            <p className="text-xs text-slate-400">
+                                (Lvl 10+) Chain reactions trigger combos for bonus multipliers.
+                            </p>
+                        </div>
+                    </div>
+                </section>
+            </div>
+          )}
 
-          {/* Section 3: Bosses */}
-          <section className="space-y-4">
-             <h3 className="text-xl font-bold text-white flex items-center gap-2">
-                 <Skull size={20} className="text-red-500" /> Boss Battles
-             </h3>
-             <div className="bg-red-900/10 border border-red-500/20 p-4 rounded-xl flex gap-4 items-start">
-                 <div className="bg-red-900/20 p-3 rounded-lg">
-                     <Skull size={32} className="text-red-500" />
-                 </div>
-                 <div>
-                     <h4 className="font-bold text-red-200">Dangerous Foes</h4>
-                     <p className="text-sm text-red-100/70 mt-1">
-                         Bosses appear every 5 levels. They block movement and cannot be merged directly.
-                     </p>
-                     <p className="text-sm text-red-100/70 mt-2 font-bold">
-                         How to Kill: Merge other tiles ADJACENT to the boss to deal damage.
-                     </p>
-                 </div>
-             </div>
-          </section>
+          {/* TAB: BESTIARY */}
+          {activeTab === 'BESTIARY' && (
+              <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+                  <div className="text-center mb-6">
+                      <h3 className="text-2xl font-black text-white fantasy-font">Monster Log</h3>
+                      <p className="text-slate-400 text-sm">Know your enemy.</p>
+                  </div>
+                  
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+                      {monsters.map((m) => (
+                          <div key={m.value} className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden group hover:border-slate-600 transition-colors">
+                              <div className={`h-24 bg-gradient-to-br ${m.color} relative overflow-hidden flex items-center justify-center`}>
+                                   {m.imageUrl && (
+                                       <img src={m.imageUrl} alt={m.label} className="absolute inset-0 w-full h-full object-cover opacity-60 mix-blend-overlay group-hover:scale-110 transition-transform duration-500" />
+                                   )}
+                                   <div className="relative z-10 text-4xl drop-shadow-md">{m.icon}</div>
+                              </div>
+                              <div className="p-3">
+                                  <div className="flex justify-between items-center mb-1">
+                                      <span className="font-bold text-white text-xs uppercase tracking-wide">{m.label}</span>
+                                      <span className="text-[10px] font-mono text-slate-500">{m.value}</span>
+                                  </div>
+                                  <div className="text-[10px] text-slate-400">
+                                      {m.value >= 2048 ? "Legendary Deity." : 
+                                       m.value >= 512 ? "Mythical Beast." : 
+                                       m.value >= 64 ? "Dangerous Foe." : "Common Monster."}
+                                  </div>
+                              </div>
+                          </div>
+                      ))}
+                  </div>
+              </div>
+          )}
 
-          {/* Section 4: Item Encyclopedia */}
-          <section className="space-y-6">
-             <h3 className="text-xl font-bold text-white flex items-center gap-2 border-b border-slate-700 pb-2">
-                 <Scroll size={20} className="text-emerald-400" /> Shop Encyclopedia
-             </h3>
-             
-             {/* Battle Items */}
-             <div className="space-y-2">
-                 <h4 className="text-xs font-bold text-red-400 uppercase tracking-widest flex items-center gap-2">
-                    <Sword size={14}/> Battle Gear
-                 </h4>
-                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                     {battleItems.map(item => (
-                         <div key={item.id} className="bg-slate-900/60 p-2 rounded-lg border border-slate-800 flex items-start gap-3 hover:border-red-900/50 transition-colors">
-                             <div className="text-2xl mt-0.5">{item.icon}</div>
-                             <div>
-                                 <div className="font-bold text-slate-200 text-xs">{item.name}</div>
-                                 <div className="text-[10px] text-slate-500 leading-tight mt-0.5">{item.desc}</div>
+          {/* TAB: ITEMS */}
+          {activeTab === 'ITEMS' && (
+              <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+                 {/* Battle Items */}
+                 <div className="space-y-2">
+                     <h4 className="text-xs font-bold text-red-400 uppercase tracking-widest flex items-center gap-2 border-b border-red-900/30 pb-2 mb-3">
+                        <Sword size={14}/> Battle Gear
+                     </h4>
+                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                         {battleItems.map(item => (
+                             <div key={item.id} className="bg-slate-900/60 p-2 rounded-lg border border-slate-800 flex items-start gap-3 hover:border-red-900/50 transition-colors">
+                                 <div className="text-2xl mt-0.5">{item.icon}</div>
+                                 <div>
+                                     <div className="font-bold text-slate-200 text-xs">{item.name}</div>
+                                     <div className="text-[10px] text-slate-500 leading-tight mt-0.5">{item.desc}</div>
+                                 </div>
                              </div>
-                         </div>
-                     ))}
+                         ))}
+                     </div>
                  </div>
-             </div>
 
-             {/* Magic Items */}
-             <div className="space-y-2">
-                 <h4 className="text-xs font-bold text-purple-400 uppercase tracking-widest flex items-center gap-2">
-                    <MagicIcon size={14}/> Arcane Magic
-                 </h4>
-                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                     {magicItems.map(item => (
-                         <div key={item.id} className="bg-slate-900/60 p-2 rounded-lg border border-slate-800 flex items-start gap-3 hover:border-purple-900/50 transition-colors">
-                             <div className="text-2xl mt-0.5">{item.icon}</div>
-                             <div>
-                                 <div className="font-bold text-slate-200 text-xs">{item.name}</div>
-                                 <div className="text-[10px] text-slate-500 leading-tight mt-0.5">{item.desc}</div>
+                 {/* Magic Items */}
+                 <div className="space-y-2">
+                     <h4 className="text-xs font-bold text-purple-400 uppercase tracking-widest flex items-center gap-2 border-b border-purple-900/30 pb-2 mb-3">
+                        <MagicIcon size={14}/> Arcane Magic
+                     </h4>
+                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                         {magicItems.map(item => (
+                             <div key={item.id} className="bg-slate-900/60 p-2 rounded-lg border border-slate-800 flex items-start gap-3 hover:border-purple-900/50 transition-colors">
+                                 <div className="text-2xl mt-0.5">{item.icon}</div>
+                                 <div>
+                                     <div className="font-bold text-slate-200 text-xs">{item.name}</div>
+                                     <div className="text-[10px] text-slate-500 leading-tight mt-0.5">{item.desc}</div>
+                                 </div>
                              </div>
-                         </div>
-                     ))}
+                         ))}
+                     </div>
                  </div>
-             </div>
 
-             {/* Consumables */}
-             <div className="space-y-2">
-                 <h4 className="text-xs font-bold text-blue-400 uppercase tracking-widest flex items-center gap-2">
-                    <Package size={14}/> Consumables
-                 </h4>
-                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                     {consumables.map(item => (
-                         <div key={item.id} className="bg-slate-900/60 p-2 rounded-lg border border-slate-800 flex items-start gap-3 hover:border-blue-900/50 transition-colors">
-                             <div className="text-2xl mt-0.5">{item.icon}</div>
-                             <div>
-                                 <div className="font-bold text-slate-200 text-xs">{item.name}</div>
-                                 <div className="text-[10px] text-slate-500 leading-tight mt-0.5">{item.desc}</div>
+                 {/* Consumables */}
+                 <div className="space-y-2">
+                     <h4 className="text-xs font-bold text-blue-400 uppercase tracking-widest flex items-center gap-2 border-b border-blue-900/30 pb-2 mb-3">
+                        <Package size={14}/> Consumables
+                     </h4>
+                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                         {consumables.map(item => (
+                             <div key={item.id} className="bg-slate-900/60 p-2 rounded-lg border border-slate-800 flex items-start gap-3 hover:border-blue-900/50 transition-colors">
+                                 <div className="text-2xl mt-0.5">{item.icon}</div>
+                                 <div>
+                                     <div className="font-bold text-slate-200 text-xs">{item.name}</div>
+                                     <div className="text-[10px] text-slate-500 leading-tight mt-0.5">{item.desc}</div>
+                                 </div>
                              </div>
-                         </div>
-                     ))}
+                         ))}
+                     </div>
                  </div>
-             </div>
-          </section>
+              </div>
+          )}
 
         </div>
       </div>

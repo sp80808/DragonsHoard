@@ -1,10 +1,11 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { getXpThreshold, getLevelRank } from '../constants';
-import { Trophy, Star, Store as StoreIcon, Coins, RefreshCw, Menu, Clover, Skull, Zap, Info, HelpCircle, Flame, Hammer, Moon, Sun, Waves, Gem } from 'lucide-react';
+import { Trophy, Star, Store as StoreIcon, Coins, RefreshCw, Menu, Clover, Skull, Zap, Info, HelpCircle, Flame, Hammer, Moon, Sun, Waves, Gem, Calendar } from 'lucide-react';
 import { InventoryItem, Stage, GameMode, InputSettings } from '../types';
 import { CountUp } from './CountUp';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, useAnimation } from 'framer-motion';
+import { useLootSystem } from './LootSystem';
 
 interface HUDProps {
   score: number;
@@ -115,6 +116,39 @@ export const HUD = React.memo(({
     onMenu,
     onOpenStats
 }: HUDProps) => {
+  // Loot System Hooks
+  const { registerTarget } = useLootSystem();
+  const xpRef = useRef<HTMLDivElement>(null);
+  const goldRef = useRef<HTMLSpanElement>(null);
+
+  // Impact Animations
+  const xpControls = useAnimation();
+  const goldControls = useAnimation();
+
+  // Register Targets on Mount
+  useEffect(() => {
+      if (xpRef.current) registerTarget('XP', xpRef.current);
+      if (goldRef.current) registerTarget('GOLD', goldRef.current);
+  }, [registerTarget]);
+
+  // Trigger Bump Animations when values increase drastically (simulating impact)
+  const prevXp = useRef(xp);
+  const prevGold = useRef(gold);
+
+  useEffect(() => {
+    if (xp > prevXp.current + 100) { // Threshold to prevent spam on small merges
+        xpControls.start({ scale: [1, 1.2, 1], filter: ["brightness(1)", "brightness(2)", "brightness(1)"], transition: { duration: 0.3 } });
+    }
+    prevXp.current = xp;
+  }, [xp, xpControls]);
+
+  useEffect(() => {
+    if (gold > prevGold.current + 50) {
+        goldControls.start({ scale: [1, 1.3, 1], color: ["#fbbf24", "#ffffff", "#fbbf24"], transition: { duration: 0.3 } });
+    }
+    prevGold.current = gold;
+  }, [gold, goldControls]);
+
   // Generic Tooltip State
   const [activeTooltip, setActiveTooltip] = useState<string | null>(null);
 
@@ -206,7 +240,7 @@ export const HUD = React.memo(({
             <div>
                 <div className="flex items-center">
                     <h1 className="text-xs sm:text-lg md:text-xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-yellow-200 via-orange-400 to-red-500 fantasy-font drop-shadow-sm whitespace-nowrap">
-                        {isClassic ? "Classic" : "Dragon's Hoard"}
+                        {gameMode === 'DAILY' ? 'Daily Run' : isClassic ? "Classic" : "Dragon's Hoard"}
                     </h1>
                     {/* Monster Evolution Tooltip */}
                     {!isClassic && (
@@ -233,10 +267,14 @@ export const HUD = React.memo(({
                         <CountUp value={bestScore} />
                     </span>
                     {!isClassic && (
-                        <span className="flex items-center gap-1 text-yellow-400 font-bold">
+                        <motion.span 
+                          ref={goldRef}
+                          animate={goldControls}
+                          className="flex items-center gap-1 text-yellow-400 font-bold inline-block"
+                        >
                             <Coins size={10} /> 
                             <StatDisplay value={gold} suffix=" G" />
-                        </span>
+                        </motion.span>
                     )}
                     
                     {/* Cascade Indicator */}
@@ -255,16 +293,40 @@ export const HUD = React.memo(({
         </div>
       </div>
 
-      {/* Buffs Row */}
-      {!isClassic && buffs.length > 0 && (
-          <div className="flex gap-2 justify-center animate-in fade-in slide-in-from-top-1 overflow-x-auto p-1 no-scrollbar">
-              {buffs.map(b => (
-                  <div key={b.id} className={`px-2 py-1 rounded border flex items-center gap-2 ${b.color} shadow-sm ${settings.lowPerformanceMode ? '' : 'backdrop-blur-sm'} whitespace-nowrap`}>
-                      {b.icon}
-                      <span className="text-[9px] font-bold text-slate-200 tracking-wide">{b.label}</span>
-                      <span className="text-[10px] font-mono text-white bg-black/40 px-1 rounded">{b.count}</span>
+      {/* Combo Meter & Buffs */}
+      {!isClassic && (
+          <div className="relative">
+              {/* Combo Meter - Only show if > 0 */}
+              {combo > 0 && (
+                  <div className="absolute top-0 left-0 right-0 z-10 flex justify-center -mt-3 pointer-events-none">
+                      <div className="bg-black/80 rounded-full px-4 py-1 border border-orange-500/50 flex items-center gap-2 shadow-lg animate-in slide-in-from-top-2">
+                          <span className="text-orange-400 font-black text-xs uppercase italic">Combo</span>
+                          <div className="flex items-end gap-0.5 h-3">
+                              {Array.from({length: Math.min(10, combo)}).map((_, i) => (
+                                  <div 
+                                    key={i} 
+                                    className={`w-1.5 rounded-t-sm bg-gradient-to-t from-orange-600 to-yellow-400 animate-pulse`} 
+                                    style={{ height: `${40 + (i*6)}%`, animationDelay: `${i * 0.05}s` }}
+                                  ></div>
+                              ))}
+                          </div>
+                          <span className="text-white font-black text-sm italic">x{combo}</span>
+                      </div>
                   </div>
-              ))}
+              )}
+
+              {/* Buffs Row */}
+              {buffs.length > 0 && (
+                  <div className="flex gap-2 justify-center animate-in fade-in slide-in-from-top-1 overflow-x-auto p-1 no-scrollbar mt-1">
+                      {buffs.map(b => (
+                          <div key={b.id} className={`px-2 py-1 rounded border flex items-center gap-2 ${b.color} shadow-sm ${settings.lowPerformanceMode ? '' : 'backdrop-blur-sm'} whitespace-nowrap`}>
+                              {b.icon}
+                              <span className="text-[9px] font-bold text-slate-200 tracking-wide">{b.label}</span>
+                              <span className="text-[10px] font-mono text-white bg-black/40 px-1 rounded">{b.count}</span>
+                          </div>
+                      ))}
+                  </div>
+              )}
           </div>
       )}
 
@@ -273,7 +335,9 @@ export const HUD = React.memo(({
       <>
         <div className="flex gap-2 h-9 md:h-14">
             {/* XP Bar Container */}
-            <div 
+            <motion.div 
+                ref={xpRef}
+                animate={xpControls}
                 className={`flex-1 bg-[#0a0c10] p-1 rounded-lg border border-slate-700 relative flex items-center shadow-lg overflow-visible group pl-4 cursor-pointer hover:border-slate-500 transition-colors active:scale-[0.99]`}
                 onClick={onOpenStats}
             >
@@ -332,7 +396,7 @@ export const HUD = React.memo(({
                         )}
                     </div>
                 </div>
-            </div>
+            </motion.div>
 
             {/* Store Button */}
             <button 

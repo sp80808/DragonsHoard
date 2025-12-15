@@ -31,25 +31,6 @@ Similar to *Puyo Puyo* or *Tetris Attack*.
 1.  **Survival:** The opponent's grid fills up (Game Over).
 2.  **Boss Slayer:** The first player to defeat a specialized "Raid Boss" (HP shared or separate race) wins.
 
-## Technical Implementation Plan
-
-1.  **State Management:**
-    - Refactor `GameState` to support an array of players: `players: [PlayerState, PlayerState]`.
-    - The `reducer` must handle actions with a `playerId` payload (e.g., `{ type: 'MOVE', direction: 'UP', playerId: 0 }`).
-
-2.  **Input Handling:**
-    - A single `useEffect` listener captures `keydown`.
-    - Map specific KeyCodes to specific Player Dispatchers.
-
-3.  **View Layer:**
-    - Create a `SplitScreenLayout` component.
-    - Render two smaller `<Grid />` components side-by-side.
-    - Central HUD area for timer and "Garbage Queue" visualization.
-
-4.  **Performance:**
-    - Strict `React.memo` usage on Grids is required as two updates happen frequently.
-    - Disable heavy particle effects in Versus mode to maintain 60fps.
-
 ---
 
 # Future Feature: Dynamic Store & Economy
@@ -82,19 +63,23 @@ An upgrade tree dedicated specifically to the Auto-Cascade mechanic, allowing pl
 
 # Future Feature: Visual Customization & Unlockables
 
-## Unlockable Grid Skins
-- **Classic:** The default dark aesthetic.
-- **Retro:** Pixel art borders and 8-bit fonts.
-- **Neon:** Cyberpunk aesthetic with glowing grid lines.
-- **Glass:** Frosted glass effect for tiles.
+## The "Grimoire" System
+A new personalization menu accessible from the main screen where players can equip unlocked aesthetics.
 
-## Custom Themes
-Allow players to mix and match discovered biomes.
-- *Example:* Use the "Molten Depths" background with "Celestial" tile sprites.
+## Level-Based Unlocks
+As the player increases their **Account Level**, new visual themes become permanently available for selection, allowing players to customize the dungeon's atmosphere regardless of the current run's difficulty.
 
-## Implementation
-- Add a "Cosmetics" tab to the Inventory/Settings.
-- Store unlocked skins in `PlayerProfile`.
+- **Level 5 (Fungal Caverns):** Unlocks the "Bioluminescent" Tile Set and Cave Background. Tiles glow with purple and green neon hues.
+- **Level 10 (Molten Depths):** Unlocks the "Infernal" Tile Set. Tiles appear as obsidian and magma, and the background features flowing lava.
+- **Level 20 (Crystal Spire):** Unlocks the "Glacial" Tile Set. Tiles look like carved ice and sapphires; the background is a frozen palace.
+- **Level 30 (Void Realm):** Unlocks the "Eldritch" Tile Set. Tiles feature cosmic horror art and non-Euclidean geometries.
+- **Level 40 (Celestial Citadel):** Unlocks the "Divine" Tile Set. Tiles are gold and marble with angelic motifs.
+
+## Customization Options
+Players can mix and match unlocked assets in the Grimoire:
+1.  **Background Override:** Choose to play in the "Void Realm" visual environment even while playing early game levels.
+2.  **Tile Set Selection:** Equip the "Glacial" monster sprites while playing in the "Infernal" background for unique contrast.
+3.  **Card Backs:** Unlock unique border styles for tiles (e.g., Pixel Art border, Gold Leaf border) via Achievements.
 
 ---
 
@@ -111,3 +96,27 @@ Allow players to mix and match discovered biomes.
 ## Camera Work
 - **Screen Shake 2.0:** Implement per-axis translational shake and rotational trauma for heavier impacts.
 - **Zoom/Dolly:** Subtle camera zoom-in during "Boss" encounters or "God Tile" creation moments to heighten tension.
+
+---
+
+# Future Feature: Daily Dungeons (Challenger Mode)
+
+## Overview
+A new competitive mode that resets every 24 hours.
+
+## Mechanics
+- **Fixed Seed:** Every player gets the exact same tile spawn sequence.
+- **Modifiers:** Each day features a unique twist (e.g., "Explosive Tiles", "Double Boss HP", "No Shop").
+- **Leaderboard:** A separate leaderboard resets daily. Top 100 players earn "Glory" points for their profile.
+- **Rewards:** Completing the Daily Run grants a large sum of XP towards the main Account Level.
+
+# Future Feature: The Bestiary
+
+## Overview
+A collection menu accessed via the main menu ("Codex").
+
+## Features
+- **Monster Logs:** Automatically records every monster type the player has merged.
+- **Lore Entries:** Clicking on a monster reveals flavor text, stats, and its "Shiny" variant if discovered.
+- **Progress Tracking:** "Discover 100% of monsters" is a long-term goal for completionists.
+- **Boss Trophies:** Defeating bosses adds their head/artifact to a trophy shelf in the Bestiary.

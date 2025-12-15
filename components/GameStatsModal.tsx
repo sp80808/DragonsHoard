@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { X, Trophy, Star, Shield, Lock, Unlock, Map, Coins, Zap, Swords, LayoutGrid } from 'lucide-react';
+import { X, Trophy, Star, Shield, Lock, Unlock, Map, Coins, Zap, Swords, LayoutGrid, Ghost, Skull } from 'lucide-react';
 import { GameState } from '../types';
 import { getLevelRank } from '../constants';
 
@@ -11,21 +11,24 @@ interface GameStatsModalProps {
 }
 
 export const GameStatsModal: React.FC<GameStatsModalProps> = ({ gameState, onClose, nextLevelXp }) => {
-    const { level, xp, score, runStats, gold, stats } = gameState;
+    const { level, xp, score, runStats, gold, stats, accountLevel } = gameState;
     const rank = getLevelRank(level);
     
-    // Unlocks Logic
+    // Updated Unlocks Logic based on Account Level
     const UNLOCKS = [
-        { level: 5, label: "Rogue Class & Cascades", desc: "Unlock standard cascades and the Rogue class.", icon: <Zap size={16}/> },
-        { level: 10, label: "Mage Class & Molten Depths", desc: "Unlock the Mage class and new fire zone.", icon: <Swords size={16}/> },
+        { level: 3, label: "Warrior Class", desc: "Start with a Bomb Scroll.", icon: <Swords size={16}/> },
+        { level: 5, label: "Hard Mode & Rogue", desc: "Unlock tougher difficulty and the Rogue class.", icon: <Skull size={16}/> },
+        { level: 8, label: "Undead Tileset", desc: "Unlock a spooky alternate look for enemies.", icon: <Ghost size={16}/> },
+        { level: 10, label: "Mage Class", desc: "Unlock the Mage class.", icon: <Zap size={16}/> },
+        { level: 12, label: "Boss Rush Mode", desc: "Battle bosses back-to-back in the arena.", icon: <LayoutGrid size={16}/> },
         { level: 15, label: "Reroll Feature", desc: "Ability to reroll the board when stuck.", icon: <LayoutGrid size={16}/> },
-        { level: 20, label: "Paladin Class & Crystal Spire", desc: "Unlock the Paladin class and ice zone.", icon: <Shield size={16}/> },
+        { level: 20, label: "Paladin Class", desc: "Unlock the Paladin class.", icon: <Shield size={16}/> },
         { level: 30, label: "Void Realm", desc: "Enter the eldritch void dimension.", icon: <Map size={16}/> },
         { level: 40, label: "Celestial Citadel", desc: "Ascend to the heavens.", icon: <Star size={16}/> },
-        { level: 50, label: "Aether Sanctum", desc: "The final frontier of magic.", icon: <Zap size={16}/> }
     ];
 
-    const nextUnlock = UNLOCKS.find(u => u.level > level);
+    // Find the next unlock based on Account Level, not Run Level
+    const nextUnlock = UNLOCKS.find(u => u.level > accountLevel);
     const xpPercent = Math.min(100, (xp / nextLevelXp) * 100);
 
     return (
@@ -97,14 +100,14 @@ export const GameStatsModal: React.FC<GameStatsModalProps> = ({ gameState, onClo
 
                      {/* Unlock Preview */}
                      <div className="pt-4 border-t border-slate-800">
-                         <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-3">Next Milestone</h3>
+                         <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-3">Next Account Reward</h3>
                          {nextUnlock ? (
                              <div className="bg-gradient-to-r from-indigo-900/40 to-slate-900 border border-indigo-500/30 p-4 rounded-xl flex items-center gap-4">
                                  <div className="w-10 h-10 rounded-full bg-indigo-900 flex items-center justify-center border border-indigo-500 text-indigo-300 shadow-[0_0_15px_rgba(99,102,241,0.3)]">
                                      <Lock size={18} />
                                  </div>
                                  <div>
-                                     <div className="text-sm font-bold text-indigo-200">Level {nextUnlock.level}: {nextUnlock.label}</div>
+                                     <div className="text-sm font-bold text-indigo-200">Account Level {nextUnlock.level}: {nextUnlock.label}</div>
                                      <div className="text-xs text-indigo-400/80 mt-1 leading-snug">{nextUnlock.desc}</div>
                                  </div>
                              </div>
@@ -119,6 +122,7 @@ export const GameStatsModal: React.FC<GameStatsModalProps> = ({ gameState, onClo
                                  </div>
                              </div>
                          )}
+                         <div className="text-[10px] text-slate-500 text-center mt-2">Current Account Level: {accountLevel}</div>
                      </div>
 
                  </div>

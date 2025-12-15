@@ -14,6 +14,7 @@ class AudioService {
   
   // Active Nodes
   private activeMusicSource: AudioBufferSourceNode | null = null;
+  private activeDroneSource: OscillatorNode | null = null;
   private musicFilter: BiquadFilterNode | null = null;
 
   private enabled: boolean = true;
@@ -121,6 +122,15 @@ class AudioService {
           } catch(e) {}
           this.activeMusicSource = null;
       }
+      
+      // Stop Drone
+      if (this.activeDroneSource) {
+          try {
+              this.activeDroneSource.stop(t + fadeOutDuration);
+          } catch(e) {}
+          this.activeDroneSource = null;
+      }
+
       this.musicFilter = null;
   }
 
@@ -166,13 +176,55 @@ class AudioService {
       this.activeMusicSource = source;
   }
 
+  // Fallback: Dark Drone Ambience using FM Synthesis
+  playAmbientDrone() {
+      if (!this.ctx) return;
+      
+      const t = this.ctx.currentTime;
+      const osc = this.ctx.createOscillator();
+      const lfo = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      const filter = this.ctx.createBiquadFilter();
+
+      osc.type = 'sawtooth';
+      osc.frequency.value = 55; // Low A
+
+      lfo.type = 'sine';
+      lfo.frequency.value = 0.1; // Slow modulation
+      
+      filter.type = 'lowpass';
+      filter.frequency.value = 200;
+      
+      // LFO modulate Filter Cutoff
+      const lfoGain = this.ctx.createGain();
+      lfoGain.gain.value = 100;
+      lfo.connect(lfoGain);
+      lfoGain.connect(filter.frequency);
+
+      gain.gain.value = 0.2;
+
+      osc.connect(filter);
+      filter.connect(gain);
+      gain.connect(this.musicGain!);
+
+      osc.start(t);
+      lfo.start(t);
+      
+      this.activeDroneSource = osc;
+  }
+
   playGameplayTheme() {
       if (!this.enabled || !this.ctx) return;
       this.stopCurrentMusic();
       
       // Pick random gameplay track
       const availableTracks = Object.keys(this.buffers).filter(k => k.startsWith('GAMEPLAY_'));
-      if (availableTracks.length === 0) return;
+      
+      if (availableTracks.length === 0) {
+          // No tracks loaded (maybe network error)? Play procedural drone.
+          this.playAmbientDrone();
+          return;
+      }
 
       const randomKey = availableTracks[Math.floor(Math.random() * availableTracks.length)];
       const buffer = this.buffers[randomKey];
@@ -445,13 +497,14 @@ class AudioService {
           osc.type = 'sine';
           const baseFreq = 220 + (Math.log2(value) * 50);
           osc.frequency.setValueAtTime(baseFreq, t);
-          osc.frequency.exponentialRampToValueAtTime(baseFreq * 1.5, t + 0.15);
+          osc.frequency.exponentialRampToValueAtTime(baseFreq * 1.5, t + 0.1);
           
           gain.gain.setValueAtTime(0.08, t);
-          gain.gain.exponentialRampToValueAtTime(0.001, t + 0.3);
+          // Smoother fade out
+          gain.gain.exponentialRampToValueAtTime(0.001, t + 0.15);
           
-          osc.start();
-          osc.stop(t + 0.3);
+          osc.start(t);
+          osc.stop(t + 0.2);
       }
 
       // 2. Combo Layer (Zap!)
