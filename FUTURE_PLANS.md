@@ -50,7 +50,7 @@ To keep the mid-to-late game interesting, the store will evolve. Items will rota
 3.  **Black Market:**
     - A rare chance (5%) for a "Black Market" tab to appear, selling "Illegal" items (extremely powerful but with debuffs, e.g., "Gain 5000 Gold but lose 50% max HP").
 
-# Future Feature: Cascade Mastery
+# Future Feature: Cascade Mastery & Extension
 
 ## Overview
 An upgrade tree dedicated specifically to the Auto-Cascade mechanic, allowing players to lean into a "Chain Reaction" playstyle.
@@ -60,6 +60,27 @@ An upgrade tree dedicated specifically to the Auto-Cascade mechanic, allowing pl
 - **Gold Transmutation:** Every cascade step generates +5 Gold per tile.
 - **Mana Syphon:** Cascades restore a small amount of Player HP (if HP mechanic is added) or charge an "Ultimate Ability" bar.
 - **Deep Impact:** Cascade merges at Depth > 3 explode, clearing adjacent low-tier tiles.
+
+## New Item Ideas
+- **Prism of Echoes:** When a cascade occurs, it has a 50% chance to duplicate the merged tile into an empty slot.
+- **Gravity Anchor:** Pulls all tiles downwards after a cascade, potentially triggering *another* set of merges (Tetris-style gravity).
+
+---
+
+# Future Feature: Juicy XP Feedback
+
+To make gaining XP feel more rewarding, we need better visual and auditory feedback.
+
+## Visual Improvements
+1.  **Floating XP Numbers:** When a merge happens, spawn a small floating text `+50 XP` near the tile, drifting towards the XP bar.
+2.  **Bar Physics:** When a large chunk of XP is gained (e.g., Boss Kill), the XP bar should fill up rapidly, glow white, and shake the UI slightly.
+3.  **Level Up Moment:** Freeze frame for 0.5s, darken the background, and have the "LEVEL UP" text slam onto the screen with a shockwave.
+
+## Audio Improvements
+1.  **Pitch Shifting:** Consecutive merges (combos) should play the XP gain sound at progressively higher pitches (do-re-mi-fa-so...).
+2.  **Liquid Fill Sound:** A subtle liquid pouring sound while the XP bar fills up.
+
+---
 
 # Future Feature: Visual Customization & Unlockables
 
@@ -83,19 +104,43 @@ Players can mix and match unlocked assets in the Grimoire:
 
 ---
 
-# Future Feature: Visual Polish & Juice
+# Future Feature: Visual Polish & Eye Candy (Non-Destructive)
 
-## Dynamic Lighting
-- **Shader Implementation:** Use custom WebGL shaders for the background to create true dynamic lighting that reacts to tile merges (e.g., a "burst" of light illuminating the dungeon walls on big combos).
-- **Tile Emission:** High-tier tiles should act as light sources in the scene.
+A plan to introduce high-fidelity visual flair that enhances the "game feel" without affecting game logic or overwhelming the DOM.
 
-## Advanced Particles
-- **Physics-based Debris:** When tiles break or merge, generate debris that respects pseudo-gravity and collision with the bottom of the grid.
-- **Liquid Effects:** For "Slime" or "Magma" themes, use metaballs for fluid-like merging animations.
+## 1. Dynamic Lighting (The "Torch" Effect)
+Instead of static vignettes, we implement a dynamic CSS radial gradient that tracks the user's cursor or touch position.
+- **Implementation:** Update CSS variables `--mouse-x` and `--mouse-y` on container `mousemove`.
+- **Effect:** A subtle warm glow follows the player's input, illuminating the borders of the tiles near the cursor, simulating a torch in a dark dungeon.
+- **Performance:** CSS-only transform/gradient update. Zero React render cycle cost.
 
-## Camera Work
-- **Screen Shake 2.0:** Implement per-axis translational shake and rotational trauma for heavier impacts.
-- **Zoom/Dolly:** Subtle camera zoom-in during "Boss" encounters or "God Tile" creation moments to heighten tension.
+## 2. "Living" Tiles (Internal Animation)
+High-tier tiles (512+) should feel volatile and alive, not just static images.
+- **Implementation:** Use `mask-image` on the tile container combined with a scrolling background noise texture.
+- **Effect:** The interior of a "Void" tile seems to swirl, or the "Magma" tile seems to flow.
+- **Target:** Only active on tiles > Value 512 to save GPU resources.
+
+## 3. Hitstop (Time Dilation)
+To give weight to massive impacts (Boss Kills or 1024+ Merges).
+- **Implementation:** When a specific event triggers, freeze the main game loop and CSS animations for 50-100ms.
+- **Effect:** The game momentarily "pauses" on impact, emphasizing the power of the move, before resuming with a screen shake.
+
+## 4. Biome-Specific Weather (Canvas Overlay)
+Expand the `AmbientBackground` component to support distinct weather modes based on the current Stage.
+- **Fungal Caverns:** Floating spores (slow upward drift, pulse opacity).
+- **Molten Depths:** Rising embers and ash (fast upward drift, orange/red).
+- **Crystal Spire:** Diamond dust / Snow (diagonal downward drift, sparkle).
+- **Void Realm:** Digital glitch artifacts or reverse-gravity particles.
+
+## 5. UI Juice: "Odometer" Numbers
+When the score or gold increases significantly, the numbers should not just swap.
+- **Implementation:** Use a sliding number reel effect (using `framer-motion` layout projection or a dedicated counter component).
+- **Effect:** Makes earning Gold feel like a slot machine payout.
+
+## 6. Shockwave Distortion (WebGL)
+*Optional High-End Feature*
+- **Implementation:** A transparent WebGL canvas layer on top of the grid.
+- **Effect:** When a bomb explodes or a boss dies, a refractive "ripple" distorts the grid behind it, expanding outward.
 
 ---
 

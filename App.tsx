@@ -1,4 +1,5 @@
 
+
 import React, { useEffect, useReducer, useRef, useState } from 'react';
 import { Grid } from './components/Grid';
 import { HUD } from './components/HUD';
@@ -7,11 +8,13 @@ import { SplashScreen } from './components/SplashScreen';
 import { Leaderboard } from './components/Leaderboard';
 import { Settings } from './components/Settings';
 import { RunSummary } from './components/RunSummary';
+import { VictoryScreen } from './components/VictoryScreen';
 import { TutorialOverlay } from './components/TutorialOverlay';
 import { FeedbackLayer } from './components/FeedbackLayer';
 import { HelpScreen } from './components/HelpScreen';
 import { GameStatsModal } from './components/GameStatsModal';
 import { VersusGame } from './components/VersusGame';
+import { Grimoire } from './components/Grimoire';
 import { AmbientBackground } from './components/AmbientBackground';
 import { Direction, GameState, TileType, InventoryItem, CraftingRecipe, View, Achievement, ItemType, InputSettings, HeroClass, GameMode, PlayerProfile, DailyBounty, Difficulty, FeedbackEvent } from './types';
 import { initializeGame, moveGrid, spawnTile, isGameOver, useInventoryItem, checkAchievements, executeAutoCascade } from './services/gameLogic';
@@ -98,6 +101,12 @@ const reducer = (state: GameState, action: Action): GameState => {
              turnCount: newState.runStats.turnCount + 1,
              goldEarned: newState.runStats.goldEarned + result.goldGained
         };
+
+        // Check Victory Condition (2048) - Only trigger once
+        if (!newState.gameWon && newState.grid.some(t => t.value >= 2048)) {
+            newState.victory = true;
+            newState.gameWon = true; 
+        }
 
         // Check Level Up
         const threshold = getXpThreshold(newState.level);
@@ -539,6 +548,7 @@ const App: React.FC = () => {
               onOpenLeaderboard={() => setView('LEADERBOARD')}
               onOpenSettings={() => setView('SETTINGS')}
               onOpenHelp={() => setView('HELP')}
+              onOpenGrimoire={() => setView('GRIMOIRE')}
               hasSave={state.score > 0} 
             />
         )}
@@ -546,6 +556,15 @@ const App: React.FC = () => {
         {view === 'LEADERBOARD' && <Leaderboard onBack={() => setView('SPLASH')} />}
         {view === 'HELP' && <HelpScreen onBack={() => setView('SPLASH')} />}
         {view === 'VERSUS' && <VersusGame onBack={() => setView('SPLASH')} />}
+        {view === 'GRIMOIRE' && (
+            <Grimoire 
+                profile={getPlayerProfile()} // In a real app we'd likely pass state, but this works for direct storage access
+                onBack={() => setView('SPLASH')}
+                onSelectTileset={(id) => {
+                    // Force re-render of this view or relying on storage sync next mount
+                }}
+            />
+        )}
         {view === 'SETTINGS' && <Settings 
               settings={state.settings}
               onUpdateSettings={(s) => dispatch({ type: 'UPDATE_SETTINGS', settings: s })}
@@ -699,13 +718,11 @@ const App: React.FC = () => {
             )}
             
             {state.victory && !state.gameWon && (
-                <div className="absolute inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
-                <div className="bg-gradient-to-br from-yellow-900 to-amber-900 p-8 rounded-xl border-2 border-yellow-500 text-center shadow-[0_0_50px_rgba(234,179,8,0.5)] animate-in zoom-in">
-                    <h2 className="text-5xl font-black text-transparent bg-clip-text bg-gradient-to-b from-yellow-200 to-amber-500 fantasy-font mb-4">VICTORY</h2>
-                    <p className="text-yellow-100 mb-6">You have created the Dragon God tile!</p>
-                    <button onClick={() => dispatch({ type: 'CONTINUE' })} className="px-8 py-3 bg-yellow-500 text-black font-bold rounded-lg hover:bg-yellow-400 hover:scale-105 transition-all shadow-lg">CONTINUE RUN</button>
-                </div>
-                </div>
+                <VictoryScreen 
+                    gameState={state} 
+                    onContinue={() => dispatch({ type: 'CONTINUE' })}
+                    onHome={() => setView('SPLASH')}
+                />
             )}
           </>
         )}

@@ -1,3 +1,4 @@
+
 import React from 'react';
 
 export enum Direction {
@@ -52,13 +53,14 @@ export enum HeroClass {
   WARRIOR = 'WARRIOR',       // Starts with Bomb Scroll
   ROGUE = 'ROGUE',           // Starts with Reroll Token
   MAGE = 'MAGE',             // Starts with XP Potion
-  PALADIN = 'PALADIN'        // Starts with Golden Rune
+  PALADIN = 'PALADIN',       // Starts with Golden Rune
+  DRAGON_SLAYER = 'DRAGON_SLAYER' // Starts with Siege Breaker (Unlocked by winning)
 }
 
 export type GameMode = 'RPG' | 'CLASSIC' | 'VERSUS' | 'DAILY' | 'BOSS_RUSH';
 export type Difficulty = 'NORMAL' | 'HARD';
 
-export type View = 'SPLASH' | 'GAME' | 'LEADERBOARD' | 'SETTINGS' | 'HELP' | 'VERSUS';
+export type View = 'SPLASH' | 'GAME' | 'LEADERBOARD' | 'SETTINGS' | 'HELP' | 'VERSUS' | 'GRIMOIRE';
 
 export interface InventoryItem {
   id: string;
@@ -155,7 +157,7 @@ export interface PlayerProfile {
   accountLevel: number;
   gamesPlayed: number;
   highScore: number;
-  unlockedFeatures: string[]; // ['NG+', 'HARD_MODE', 'TILESET_UNDEAD', 'MODE_BOSS_RUSH']
+  unlockedFeatures: string[]; // ['NG+', 'HARD_MODE', 'TILESET_UNDEAD', 'MODE_BOSS_RUSH', 'TILESET_INFERNAL']
   unlockedClasses: HeroClass[];
   activeBounties: DailyBounty[];
   lastBountyDate: string; // YYYY-MM-DD
@@ -163,6 +165,7 @@ export interface PlayerProfile {
   tutorialCompleted: boolean;
   bossTutorialCompleted: boolean;
   seenHints: string[]; // IDs of hints player has already seen
+  activeTilesetId: string;
 }
 
 export interface Achievement {

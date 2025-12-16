@@ -1,4 +1,5 @@
 
+
 import { PlayerProfile, GameState, RunStats, HeroClass, DailyBounty } from '../types';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -49,6 +50,7 @@ export const getPlayerProfile = (): PlayerProfile => {
         if (profile.tutorialCompleted === undefined) profile.tutorialCompleted = false;
         if (profile.bossTutorialCompleted === undefined) profile.bossTutorialCompleted = false;
         if (!profile.seenHints) profile.seenHints = [];
+        if (!profile.activeTilesetId) profile.activeTilesetId = 'DEFAULT';
         
         // Check Daily Reset
         const today = new Date().toISOString().split('T')[0];
@@ -78,7 +80,8 @@ export const getPlayerProfile = (): PlayerProfile => {
     lastPlayed: new Date().toISOString(),
     tutorialCompleted: false,
     bossTutorialCompleted: false,
-    seenHints: []
+    seenHints: [],
+    activeTilesetId: 'DEFAULT'
   };
   saveProfile(newProfile);
   return newProfile;
@@ -96,6 +99,23 @@ export const markHintSeen = (hintId: string) => {
         profile.seenHints.push(hintId);
         saveProfile(profile);
     }
+};
+
+export const setActiveTileset = (id: string) => {
+    const profile = getPlayerProfile();
+    profile.activeTilesetId = id;
+    saveProfile(profile);
+};
+
+// Forcefully unlock a class (used for victory rewards)
+export const unlockClass = (cls: HeroClass) => {
+    const profile = getPlayerProfile();
+    if (!profile.unlockedClasses.includes(cls)) {
+        profile.unlockedClasses.push(cls);
+        saveProfile(profile);
+        return true; // Was new unlock
+    }
+    return false; // Already unlocked
 };
 
 export const finalizeRun = (finalState: GameState): { profile: PlayerProfile, leveledUp: boolean, xpGained: number, bountiesCompleted: number } => {
@@ -175,6 +195,10 @@ export const finalizeRun = (finalState: GameState): { profile: PlayerProfile, le
         // Level 12: Boss Rush Mode
         if (profile.accountLevel >= 12 && !profile.unlockedFeatures.includes('MODE_BOSS_RUSH')) {
             profile.unlockedFeatures.push('MODE_BOSS_RUSH');
+        }
+        // Level 15: Infernal Tileset
+        if (profile.accountLevel >= 15 && !profile.unlockedFeatures.includes('TILESET_INFERNAL')) {
+            profile.unlockedFeatures.push('TILESET_INFERNAL');
         }
 
     } else {

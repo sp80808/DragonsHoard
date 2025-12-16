@@ -198,6 +198,9 @@ export const initializeGame = (restart = false, heroClass: HeroClass = HeroClass
   } else if (heroClass === HeroClass.PALADIN) {
       const def = getItemDefinition(ItemType.GOLDEN_RUNE);
       inventory.push({ id: createId(), type: ItemType.GOLDEN_RUNE, name: def.name, description: def.desc, icon: def.icon });
+  } else if (heroClass === HeroClass.DRAGON_SLAYER) {
+      const def = getItemDefinition(ItemType.SIEGE_BREAKER);
+      inventory.push({ id: createId(), type: ItemType.SIEGE_BREAKER, name: def.name, description: def.desc, icon: def.icon });
   }
 
   const stats: GameStats = {

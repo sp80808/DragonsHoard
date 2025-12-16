@@ -1,4 +1,5 @@
 
+
 import { TileType, ItemType, GameStats, GameState, Stage, Achievement, HeroClass, CraftingRecipe, DailyModifier } from './types';
 import { Trophy, Star, Shield, Zap, Swords, LayoutGrid, Map } from 'lucide-react';
 
@@ -56,11 +57,27 @@ export const UNDEAD_TILE_STYLES: Record<number, any> = {
   128: { label: 'VAMPIRE', color: 'from-red-800 to-red-950', ringColor: 'ring-red-600', icon: '🧛', glow: 'shadow-red-600/50', imageUrl: genUrl('vampire lord dracula rpg', 1128), particleColor: '#dc2626' },
 };
 
+// Alternative Tileset: Infernal
+export const INFERNAL_TILE_STYLES: Record<number, any> = {
+  ...TILE_STYLES,
+  2: { label: 'EMBER', color: 'from-orange-600 to-red-600', ringColor: 'ring-orange-500', icon: '🔥', glow: 'shadow-orange-500/50', imageUrl: genUrl('glowing ember coal fire rpg', 2002), particleColor: '#f97316' },
+  4: { label: 'IMP', color: 'from-red-600 to-red-800', ringColor: 'ring-red-500', icon: '😈', glow: 'shadow-red-500/50', imageUrl: genUrl('mischievous red imp demon rpg', 2004), particleColor: '#ef4444' },
+  8: { label: 'HELLHOUND', color: 'from-orange-800 to-red-900', ringColor: 'ring-orange-600', icon: '🐕', glow: 'shadow-orange-600/50', imageUrl: genUrl('hellhound fire dog rpg', 2008), particleColor: '#ea580c' },
+  16: { label: 'MAGMA', color: 'from-red-800 to-stone-900', ringColor: 'ring-red-600', icon: '🌋', glow: 'shadow-red-600/50', imageUrl: genUrl('magma golem lava rpg', 2016), particleColor: '#dc2626' },
+  32: { label: 'IFRIT', color: 'from-yellow-600 to-orange-700', ringColor: 'ring-yellow-500', icon: '🧞', glow: 'shadow-yellow-500/50', imageUrl: genUrl('fire djinn ifrit rpg', 2032), particleColor: '#ca8a04' },
+  64: { label: 'DRAKE', color: 'from-red-700 to-red-950', ringColor: 'ring-red-500', icon: '🐲', glow: 'shadow-red-500/50', imageUrl: genUrl('fire drake dragon rpg', 2064), particleColor: '#b91c1c' },
+  128: { label: 'BALROG', color: 'from-orange-900 to-black', ringColor: 'ring-orange-600', icon: '👹', glow: 'shadow-orange-600/50', imageUrl: genUrl('shadow flame demon balrog rpg', 2128), particleColor: '#7c2d12' },
+};
+
+export const THEME_STYLES: Record<string, any> = {
+    DEFAULT: TILE_STYLES,
+    UNDEAD: UNDEAD_TILE_STYLES,
+    INFERNAL: INFERNAL_TILE_STYLES
+};
+
 export const getTileStyle = (value: number, themeId?: string, tilesetId: string = 'DEFAULT') => {
-    if (tilesetId === 'UNDEAD') {
-        return UNDEAD_TILE_STYLES[value] || TILE_STYLES[value];
-    }
-    return TILE_STYLES[value] || FALLBACK_STYLE;
+    const set = THEME_STYLES[tilesetId] || TILE_STYLES;
+    return set[value] || TILE_STYLES[value] || FALLBACK_STYLE;
 };
 
 export const RUNE_STYLES: Record<string, any> = {
@@ -171,11 +188,6 @@ export const DAILY_MODIFIERS: DailyModifier[] = [
     { id: 'VOLATILE_ALCHEMY', name: 'Volatile Alchemy', description: 'Potions are 50% off, but have a 10% chance to fail.', icon: '⚗️', color: 'text-green-400' },
     { id: 'CHAOS_THEORY', name: 'Chaos Theory', description: 'Rune spawn rate is tripled.', icon: '🌀', color: 'text-purple-400' },
 ];
-
-export const THEME_STYLES: Record<string, any> = {
-    DEFAULT: TILE_STYLES,
-    UNDEAD: UNDEAD_TILE_STYLES
-}; 
 
 export const MUSIC_PATHS = {
     SPLASH: 'https://cdn.pixabay.com/audio/2022/03/24/audio_33a7e4e116.mp3', // Epic intro placeholder
