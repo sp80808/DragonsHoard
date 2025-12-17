@@ -1,4 +1,3 @@
-
 import React, { useReducer, useEffect, useState } from 'react';
 import { Grid } from './Grid';
 import { Direction, Tile, TileType } from '../types';
@@ -25,6 +24,7 @@ interface PlayerState {
   inventory: VersusPowerup[]; // Max 2
   activeBuffs: { type: 'MANA_SURGE'; duration: number }[]; // duration in moves
   lastActionText?: string;
+  combo: number;
 }
 
 interface VersusState {
@@ -59,7 +59,8 @@ const initPlayer = (id: number): PlayerState => {
         mergeEvents: [],
         pendingAttacks: 0,
         inventory: [],
-        activeBuffs: []
+        activeBuffs: [],
+        combo: 0
     };
 };
 
@@ -199,7 +200,8 @@ const versusReducer = (state: VersusState, action: any): VersusState => {
                 mergeEvents: res.mergedIds.length > 0 ? res.grid.filter(t => res.mergedIds.includes(t.id)).map(t => ({ id: t.id, x: t.x, y: t.y, value: t.value, type: t.type })) : [],
                 inventory: itemGranted ? [...currentPlayer.inventory, itemGranted] : currentPlayer.inventory,
                 activeBuffs: nextBuffs,
-                lastActionText: itemGranted ? `Got ${POWERUPS[itemGranted].name}!` : (res.combo > 1 ? `Combo x${res.combo}` : undefined)
+                lastActionText: itemGranted ? `Got ${POWERUPS[itemGranted].name}!` : (res.combo > 1 ? `Combo x${res.combo}` : undefined),
+                combo: res.combo
             };
 
             const nextOpponent = {
@@ -317,6 +319,7 @@ const PlayerPanel = ({ player, isActive, showKeys, isWinner, isLeader }: { playe
                         slideSpeed={100}
                         themeId={player.id === 1 ? "CRYSTAL" : "MAGMA"}
                         lowPerformanceMode={false}
+                        combo={player.combo}
                     />
                     
                     {/* Game Over Overlay */}

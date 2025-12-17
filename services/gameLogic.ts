@@ -1,5 +1,5 @@
 
-import { Direction, GameState, Tile, TileType, MoveResult, LootResult, ItemType, InventoryItem, Stage, LeaderboardEntry, GameStats, Achievement, InputSettings, RunStats, HeroClass, GameMode, PlayerProfile, ShopState, DailyModifier, Difficulty } from '../types';
+import { Direction, GameState, Tile, TileType, MoveResult, LootResult, ItemType, InventoryItem, Stage, LeaderboardEntry, GameStats, Achievement, InputSettings, RunStats, HeroClass, GameMode, PlayerProfile, ShopState, DailyModifier, Difficulty, LootEvent } from '../types';
 import { GRID_SIZE_INITIAL, SHOP_ITEMS, getXpThreshold, getStage, getStageBackground, ACHIEVEMENTS, TILE_STYLES, FALLBACK_STYLE, getItemDefinition, BOSS_DEFINITIONS, SHOP_CONFIG, DAILY_MODIFIERS } from '../constants';
 import { v4 as uuidv4 } from 'uuid';
 import { rng } from '../utils/rng';
@@ -164,6 +164,7 @@ export const initializeGame = (restart = false, heroClass: HeroClass = HeroClass
             if (!parsed.settings.slideSpeed) parsed.settings.slideSpeed = 150;
             if (parsed.justLeveledUp === undefined) parsed.justLeveledUp = false;
             if (parsed.settings.lowPerformanceMode === undefined) parsed.settings.lowPerformanceMode = false;
+            if (!parsed.lootEvents) parsed.lootEvents = [];
             
             // Migration for Shop State
             if (!parsed.shop) parsed.shop = getInitialShopState();
@@ -275,7 +276,8 @@ export const initializeGame = (restart = false, heroClass: HeroClass = HeroClass
     accountLevel: profile.accountLevel,
     justLeveledUp: false,
     shop: getInitialShopState(activeModifiers),
-    activeModifiers
+    activeModifiers,
+    lootEvents: []
   };
 };
 
@@ -300,6 +302,7 @@ export const moveGrid = (
   let mergedIds: string[] = [];
   let powerUpTriggered: TileType | undefined;
   let bossDefeated = false;
+  let lootEvents: LootEvent[] = [];
   const logs: string[] = [];
 
   // Remove "new" and "cascade" flags
@@ -451,6 +454,7 @@ export const moveGrid = (
                       if (hasMod(modifiers, 'GOLD_RUSH')) goldAmount *= 2;
                       goldGained += goldAmount;
                       logs.push(`Found Pouch: ${goldAmount} G`);
+                      lootEvents.push({ id: createId(), x: next.x, y: next.y, type: 'GOLD', value: goldAmount });
                   } 
                   // 20% chance for Item
                   else {
@@ -465,6 +469,7 @@ export const moveGrid = (
                           icon: itemDef.icon
                       };
                       itemsFound.push(item);
+                      lootEvents.push({ id: createId(), x: next.x, y: next.y, type: 'ITEM', icon: itemDef.icon, value: itemDef.name });
                   }
               }
           }
@@ -514,7 +519,7 @@ export const moveGrid = (
      }
   }
 
-  return { grid: newGrid, score, xpGained, goldGained, itemsFound, moved, mergedIds, combo, comboMultiplier, logs, powerUpTriggered, bossDefeated };
+  return { grid: newGrid, score, xpGained, goldGained, itemsFound, moved, mergedIds, combo, comboMultiplier, logs, powerUpTriggered, bossDefeated, lootEvents };
 };
 
 // ... keep existing isGameOver, checkLoot, applyMidasTouch etc ... 

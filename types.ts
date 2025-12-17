@@ -105,6 +105,15 @@ export interface Stage {
   themeId?: string; // For tile sets
 }
 
+export interface LootEvent {
+  id: string;
+  x: number;
+  y: number;
+  type: 'GOLD' | 'ITEM';
+  value?: number | string;
+  icon?: string;
+}
+
 export interface FloatingText {
   id: string;
   x: number; // Percentage or pixel
@@ -243,6 +252,7 @@ export interface GameState {
   unlockedPerk?: string;
   shop: ShopState;
   activeModifiers: DailyModifier[]; // New: List of active modifiers for Daily/Challenge runs
+  lootEvents: LootEvent[];
 }
 
 export interface MoveResult {
@@ -258,6 +268,7 @@ export interface MoveResult {
   logs: string[];
   powerUpTriggered?: TileType;
   bossDefeated: boolean;
+  lootEvents: LootEvent[];
 }
 
 export interface LootResult {

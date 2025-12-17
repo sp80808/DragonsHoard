@@ -1,4 +1,5 @@
 
+
 class AudioService {
   private ctx: AudioContext | null = null;
   private buffers: Record<string, AudioBuffer> = {};
@@ -18,7 +19,7 @@ class AudioService {
   private musicFilter: BiquadFilterNode | null = null;
 
   private enabled: boolean = true;
-  private volume: number = 0.3; 
+  private volume: number = 0.5; // Boosted from 0.3
   private musicVolume: number = 0.5; 
   
   private isInitialized = false;
@@ -43,7 +44,7 @@ class AudioService {
       // --- Setup Reverb (Procedural Hall) ---
       this.reverbNode = this.ctx!.createConvolver();
       this.reverbGain = this.ctx!.createGain();
-      this.reverbGain.gain.value = 0.4; // High reverb for atmosphere
+      this.reverbGain.gain.value = 0.3; // Reduced slightly for clarity
 
       // Generate Impulse Response (Dark Hall)
       const duration = 2.5;
@@ -85,7 +86,6 @@ class AudioService {
         this.buffers[key] = audioBuffer;
     } catch (e) {
         console.warn(`Failed to load audio track: ${key} (${url})`);
-        // We do not rethrow here, so the app can continue without the file
     }
   }
 
@@ -97,14 +97,14 @@ class AudioService {
 
   setVolume(val: number) {
       this.volume = Math.max(0, Math.min(1, val));
-      if (this.sfxGain) this.sfxGain.gain.setTargetAtTime(this.volume, this.ctx!.currentTime, 0.1);
+      if (this.sfxGain && this.ctx) this.sfxGain.gain.setTargetAtTime(this.volume, this.ctx.currentTime, 0.1);
   }
 
   getVolume() { return this.volume; }
 
   setMusicVolume(val: number) {
       this.musicVolume = Math.max(0, Math.min(1, val));
-      if (this.musicGain) this.musicGain.gain.setTargetAtTime(this.musicVolume, this.ctx!.currentTime, 0.1);
+      if (this.musicGain && this.ctx) this.musicGain.gain.setTargetAtTime(this.musicVolume, this.ctx.currentTime, 0.1);
   }
 
   getMusicVolume() { return this.musicVolume; }
@@ -112,12 +112,12 @@ class AudioService {
   // --- Playback Control ---
 
   stopCurrentMusic(fadeOutDuration = 1.0) {
-      const t = this.ctx!.currentTime;
+      if (!this.ctx) return;
+      const t = this.ctx.currentTime;
       
       // Stop File-based Music
       if (this.activeMusicSource) {
           try {
-             // Stop gently
              this.activeMusicSource.stop(t + fadeOutDuration);
           } catch(e) {}
           this.activeMusicSource = null;
@@ -135,6 +135,7 @@ class AudioService {
   }
 
   playSplashTheme() {
+      this.resume();
       if (!this.enabled || !this.ctx) return;
       this.stopCurrentMusic();
       
@@ -157,6 +158,7 @@ class AudioService {
   }
 
   playDeathTheme() {
+      this.resume();
       if (!this.enabled || !this.ctx) return;
       this.stopCurrentMusic();
       
@@ -214,6 +216,7 @@ class AudioService {
   }
 
   playGameplayTheme() {
+      this.resume();
       if (!this.enabled || !this.ctx) return;
       this.stopCurrentMusic();
       
@@ -221,7 +224,6 @@ class AudioService {
       const availableTracks = Object.keys(this.buffers).filter(k => k.startsWith('GAMEPLAY_'));
       
       if (availableTracks.length === 0) {
-          // No tracks loaded (maybe network error)? Play procedural drone.
           this.playAmbientDrone();
           return;
       }
@@ -237,11 +239,11 @@ class AudioService {
       // Create Filter for Dynamic Intensity (Muffled -> Clear)
       this.musicFilter = this.ctx.createBiquadFilter();
       this.musicFilter.type = 'lowpass';
-      this.musicFilter.frequency.value = 100; // Start Very Muffled
+      this.musicFilter.frequency.value = 400; // Start Audible but Muffled
       this.musicFilter.Q.value = 0.5;
 
       const trackGain = this.ctx.createGain();
-      trackGain.gain.value = 0.4; // Slightly lower as gameplay tracks can be loud
+      trackGain.gain.value = 0.4;
 
       // Connect: Source -> Filter -> Gain -> MusicMix
       source.connect(this.musicFilter);
@@ -261,13 +263,15 @@ class AudioService {
       
       const t = this.ctx.currentTime;
       
-      // Map intensity to Filter Opening (100Hz -> 20000Hz)
-      // Cubic curve for dramatic opening only when very intense
-      const minFreq = 100;
-      const maxFreq = 20000;
-      const targetFreq = minFreq + (Math.pow(intensity, 3) * (maxFreq - minFreq));
+      // Map intensity to Filter Opening (400Hz -> 3000Hz)
+      const minFreq = 400;
+      const maxFreq = 3000;
+      const clamped = Math.max(0, Math.min(1, intensity));
       
-      this.musicFilter.frequency.setTargetAtTime(targetFreq, t, 1.0);
+      const targetFreq = minFreq + (clamped * (maxFreq - minFreq));
+      
+      // Use shorter ramp for reactiveness
+      this.musicFilter.frequency.setTargetAtTime(targetFreq, t, 0.5);
   }
 
   // --- SOUND EFFECTS (SYNTHESIS) ---
@@ -305,7 +309,7 @@ class AudioService {
       filter.frequency.linearRampToValueAtTime(600, t + 0.15); // Slight upward slide
 
       const gain = this.ctx.createGain();
-      gain.gain.setValueAtTime(0.08, t);
+      gain.gain.setValueAtTime(0.4, t); // Boosted volume
       gain.gain.exponentialRampToValueAtTime(0.001, t + 0.15);
 
       noiseSrc.connect(filter);
@@ -338,7 +342,7 @@ class AudioService {
       osc2.frequency.exponentialRampToValueAtTime(baseFreq * 4.04, t + 0.15);
 
       // Envelope
-      gain.gain.setValueAtTime(0.1, t);
+      gain.gain.setValueAtTime(0.35, t); // Boosted volume
       gain.gain.exponentialRampToValueAtTime(0.001, t + 0.15);
 
       // Filter Sweep for "Whoosh/Zap" feel
@@ -370,7 +374,7 @@ class AudioService {
       subOsc.frequency.setValueAtTime(80, t);
       subOsc.frequency.exponentialRampToValueAtTime(10, t + 0.4);
       
-      subGain.gain.setValueAtTime(0.4, t);
+      subGain.gain.setValueAtTime(0.6, t); // Boosted
       subGain.gain.exponentialRampToValueAtTime(0.001, t + 0.4);
       
       subOsc.connect(subGain);
@@ -389,7 +393,7 @@ class AudioService {
           noiseFilter.frequency.setValueAtTime(800, t); // Cut mud
 
           const noiseGain = this.ctx.createGain();
-          noiseGain.gain.setValueAtTime(0.2, t);
+          noiseGain.gain.setValueAtTime(0.4, t); // Boosted
           noiseGain.gain.exponentialRampToValueAtTime(0.001, t + 0.25);
 
           noiseSrc.connect(noiseFilter);
@@ -415,7 +419,7 @@ class AudioService {
           osc.frequency.setValueAtTime(f, t);
           
           gain.gain.setValueAtTime(0, t);
-          gain.gain.linearRampToValueAtTime(0.1, t + 0.5); // Slow attack
+          gain.gain.linearRampToValueAtTime(0.3, t + 0.5); // Slow attack, boosted
           gain.gain.exponentialRampToValueAtTime(0.001, t + 4.0); // Long sustain
           
           osc.connect(gain);
@@ -426,6 +430,7 @@ class AudioService {
   }
 
   playSFX(type: 'MOVE' | 'LEVEL_UP' | 'BOMB') {
+      this.resume();
       if (!this.enabled || !this.ctx) return;
       const t = this.ctx.currentTime;
 
@@ -435,7 +440,7 @@ class AudioService {
           
           const filter = this.ctx.createBiquadFilter();
           filter.type = 'lowpass';
-          filter.frequency.value = 400; // Very soft
+          filter.frequency.value = 600; // Brightened up
           filter.Q.value = 0.5;
           filter.connect(this.sfxGain!);
 
@@ -449,7 +454,7 @@ class AudioService {
               osc.frequency.setValueAtTime(freq, t + (i * 0.1)); 
               
               gain.gain.setValueAtTime(0, t + (i * 0.1));
-              gain.gain.linearRampToValueAtTime(0.05, t + (i * 0.1) + 0.1); 
+              gain.gain.linearRampToValueAtTime(0.2, t + (i * 0.1) + 0.1); 
               gain.gain.exponentialRampToValueAtTime(0.001, t + (i * 0.1) + 2.0); 
 
               osc.start(t + (i * 0.1));
@@ -464,13 +469,12 @@ class AudioService {
       gain.connect(this.sfxGain!);
 
       if (type === 'MOVE') {
-          // Replaced simple blip with "Stone Slide" whoosh
           this.playWhoosh();
       } else if (type === 'BOMB') {
           osc.type = 'sawtooth';
           osc.frequency.setValueAtTime(100, t);
           osc.frequency.exponentialRampToValueAtTime(10, t + 0.5);
-          gain.gain.setValueAtTime(0.2, t);
+          gain.gain.setValueAtTime(0.4, t); // Boosted
           gain.gain.exponentialRampToValueAtTime(0.001, t + 0.5);
           osc.start();
           osc.stop(t + 0.5);
@@ -479,6 +483,7 @@ class AudioService {
 
   // Updated Merge Logic: Handles Value-based Impact + Combo Zaps
   playMerge(value: number, combo: number = 0) {
+      this.resume();
       if (!this.enabled || !this.ctx) return;
       
       // 1. Base Sound based on Value
@@ -499,7 +504,7 @@ class AudioService {
           osc.frequency.setValueAtTime(baseFreq, t);
           osc.frequency.exponentialRampToValueAtTime(baseFreq * 1.5, t + 0.1);
           
-          gain.gain.setValueAtTime(0.08, t);
+          gain.gain.setValueAtTime(0.3, t); // Boosted
           // Smoother fade out
           gain.gain.exponentialRampToValueAtTime(0.001, t + 0.15);
           
@@ -528,7 +533,7 @@ class AudioService {
       osc.type = 'sawtooth';
       osc.frequency.setValueAtTime(60, t);
       osc.frequency.linearRampToValueAtTime(40, t + 2);
-      gain.gain.setValueAtTime(0.2, t);
+      gain.gain.setValueAtTime(0.3, t);
       gain.gain.linearRampToValueAtTime(0, t + 2);
       osc.start();
       osc.stop(t + 2);

@@ -1,5 +1,4 @@
 
-
 import { PlayerProfile, GameState, RunStats, HeroClass, DailyBounty } from '../types';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -199,6 +198,30 @@ export const finalizeRun = (finalState: GameState): { profile: PlayerProfile, le
         // Level 15: Infernal Tileset
         if (profile.accountLevel >= 15 && !profile.unlockedFeatures.includes('TILESET_INFERNAL')) {
             profile.unlockedFeatures.push('TILESET_INFERNAL');
+        }
+        // Level 25: Aquatic Tileset
+        if (profile.accountLevel >= 25 && !profile.unlockedFeatures.includes('TILESET_AQUATIC')) {
+            profile.unlockedFeatures.push('TILESET_AQUATIC');
+        }
+        // Level 35: Cyberpunk Tileset
+        if (profile.accountLevel >= 35 && !profile.unlockedFeatures.includes('TILESET_CYBERPUNK')) {
+            profile.unlockedFeatures.push('TILESET_CYBERPUNK');
+        }
+        // Level 45: Steampunk Tileset
+        if (profile.accountLevel >= 45 && !profile.unlockedFeatures.includes('TILESET_STEAMPUNK')) {
+            profile.unlockedFeatures.push('TILESET_STEAMPUNK');
+        }
+        // Level 50: Celestial Tileset
+        if (profile.accountLevel >= 50 && !profile.unlockedFeatures.includes('TILESET_CELESTIAL')) {
+            profile.unlockedFeatures.push('TILESET_CELESTIAL');
+        }
+        // Level 55: Feudal Tileset
+        if (profile.accountLevel >= 55 && !profile.unlockedFeatures.includes('TILESET_FEUDAL')) {
+            profile.unlockedFeatures.push('TILESET_FEUDAL');
+        }
+        // Level 60: Candy Tileset
+        if (profile.accountLevel >= 60 && !profile.unlockedFeatures.includes('TILESET_CANDY')) {
+            profile.unlockedFeatures.push('TILESET_CANDY');
         }
 
     } else {

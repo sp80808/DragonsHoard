@@ -1,5 +1,4 @@
 
-
 import React, { useEffect, useState, useRef } from 'react';
 import { HeroClass, GameMode, PlayerProfile, DailyBounty, Difficulty } from '../types';
 import { Trophy, Settings, BookOpen, Swords, Play, Maximize, Minimize, CheckCircle, Circle, Skull, RefreshCw, Calendar, Zap, LayoutGrid, Ghost, Star, Palette } from 'lucide-react';
@@ -222,27 +221,17 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({ onStart, onContinue,
               </div>
           )}
 
-          {/* Grimoire & Setup Toggles */}
-          <div className="w-full bg-slate-900/30 border border-slate-800/50 rounded-xl p-3 backdrop-blur-sm flex justify-center gap-4 shrink-0">
-              
-              {/* Hard Mode Toggle */}
-              {unlockedHardMode && (
+          {/* Hard Mode Toggle */}
+          {unlockedHardMode && (
+              <div className="w-full bg-slate-900/30 border border-slate-800/50 rounded-xl p-3 backdrop-blur-sm flex justify-center gap-4 shrink-0">
                   <button 
                     onClick={() => setDifficulty(d => d === 'NORMAL' ? 'HARD' : 'NORMAL')}
                     className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-bold transition-all ${difficulty === 'HARD' ? 'bg-red-900/50 border-red-500 text-red-100' : 'bg-slate-800/50 border-slate-700 text-slate-400'}`}
                   >
                       <Skull size={14} /> {difficulty === 'HARD' ? 'HARD MODE' : 'NORMAL'}
                   </button>
-              )}
-
-              {/* Grimoire Button */}
-              <button 
-                  onClick={onOpenGrimoire}
-                  className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-purple-500/50 bg-purple-900/20 text-purple-200 text-xs font-bold hover:bg-purple-900/40 transition-all"
-              >
-                  <Palette size={14} /> CUSTOMIZE
-              </button>
-          </div>
+              </div>
+          )}
 
           {/* Daily Bounties */}
           {profile && (
@@ -362,6 +351,7 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({ onStart, onContinue,
                   <SecondaryBtn icon={<Trophy size={14} />} label="Legends" onClick={onOpenLeaderboard} />
                   <SecondaryBtn icon={<Settings size={14} />} label="Config" onClick={onOpenSettings} />
                   <SecondaryBtn icon={<BookOpen size={14} />} label="Codex" onClick={onOpenHelp} />
+                  <SecondaryBtn icon={<Palette size={14} />} label="Customize" onClick={onOpenGrimoire} />
               </div>
           </div>
       </div>

@@ -1,5 +1,4 @@
 
-
 import React, { useEffect, useReducer, useRef, useState } from 'react';
 import { Grid } from './components/Grid';
 import { HUD } from './components/HUD';
@@ -61,6 +60,7 @@ const reducer = (state: GameState, action: Action): GameState => {
         newState.xp += result.xpGained;
         newState.gold += result.goldGained;
         newState.combo = result.combo;
+        newState.lootEvents = result.lootEvents;
         
         // Handle Loot
         if (result.itemsFound.length > 0) {
@@ -377,6 +377,16 @@ const App: React.FC = () => {
       else if (view === 'SPLASH') audioService.playSplashTheme();
   }, [view, state.gameOver]);
 
+  // Audio Intensity
+  useEffect(() => {
+      if (view === 'GAME' && !state.gameOver) {
+          // Normalize combo: 0-8 -> 0-1
+          // Higher combo = sharper audio (higher cutoff)
+          const intensity = Math.min(1, state.combo / 8);
+          audioService.updateGameplayIntensity(intensity);
+      }
+  }, [state.combo, view, state.gameOver]);
+
   // Input Handling
   useEffect(() => {
       if (view !== 'GAME') return;
@@ -507,9 +517,6 @@ const App: React.FC = () => {
       value: t.value,
       type: t.type
   }));
-
-  // Loot events placeholder - current logic doesn't support spatial loot events directly from state
-  const lootEvents: { id: string, x: number, y: number, type: 'GOLD' | 'ITEM', value?: string | number, icon?: string }[] = [];
 
   if (isLoading) {
       return (
@@ -658,7 +665,7 @@ const App: React.FC = () => {
                             grid={state.grid} 
                             size={state.gridSize} 
                             mergeEvents={mergeEvents} 
-                            lootEvents={lootEvents} 
+                            lootEvents={state.lootEvents || []} 
                             slideSpeed={state.settings.slideSpeed || 150}
                             themeId={state.currentStage.themeId}
                             lowPerformanceMode={state.settings.lowPerformanceMode}

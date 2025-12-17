@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { ArrowLeft, Lock, CheckCircle, Palette, Flame, Ghost, Grid } from 'lucide-react';
+import { ArrowLeft, Lock, CheckCircle, Palette, Flame, Ghost, Grid, Droplets, Zap, Star, Settings, Sword, Heart } from 'lucide-react';
 import { PlayerProfile } from '../types';
 import { THEME_STYLES } from '../constants';
 import { setActiveTileset } from '../services/storageService';
@@ -15,7 +15,13 @@ export const Grimoire: React.FC<GrimoireProps> = ({ profile, onBack, onSelectTil
   const themes = [
     { id: 'DEFAULT', name: 'Classic Runic', desc: 'The standard dungeon aesthetic.', icon: <Grid size={24} />, reqLevel: 0, unlocked: true },
     { id: 'UNDEAD', name: 'Necrotic Rot', desc: 'Bones, skulls, and spirits.', icon: <Ghost size={24} />, reqLevel: 8, unlocked: profile.unlockedFeatures.includes('TILESET_UNDEAD') },
-    { id: 'INFERNAL', name: 'Infernal Core', desc: 'Demons born of fire and brimstone.', icon: <Flame size={24} />, reqLevel: 15, unlocked: profile.unlockedFeatures.includes('TILESET_INFERNAL') }
+    { id: 'INFERNAL', name: 'Infernal Core', desc: 'Demons born of fire and brimstone.', icon: <Flame size={24} />, reqLevel: 15, unlocked: profile.unlockedFeatures.includes('TILESET_INFERNAL') },
+    { id: 'AQUATIC', name: 'Abyssal Depth', desc: 'Monsters from the deep sea.', icon: <Droplets size={24} />, reqLevel: 25, unlocked: profile.unlockedFeatures.includes('TILESET_AQUATIC') },
+    { id: 'CYBERPUNK', name: 'Neon City', desc: 'High-tech droids and chips.', icon: <Zap size={24} />, reqLevel: 35, unlocked: profile.unlockedFeatures.includes('TILESET_CYBERPUNK') },
+    { id: 'STEAMPUNK', name: 'Clockwork', desc: 'Brass gears and steam engines.', icon: <Settings size={24} />, reqLevel: 45, unlocked: profile.unlockedFeatures.includes('TILESET_STEAMPUNK') },
+    { id: 'CELESTIAL', name: 'Divine Light', desc: 'Angels and holy entities.', icon: <Star size={24} />, reqLevel: 50, unlocked: profile.unlockedFeatures.includes('TILESET_CELESTIAL') },
+    { id: 'FEUDAL', name: 'Ronin Path', desc: 'Samurai, oni, and ancient spirits.', icon: <Sword size={24} />, reqLevel: 55, unlocked: profile.unlockedFeatures.includes('TILESET_FEUDAL') },
+    { id: 'CANDY', name: 'Sugar Rush', desc: 'Sweet treats with a bitter bite.', icon: <Heart size={24} />, reqLevel: 60, unlocked: profile.unlockedFeatures.includes('TILESET_CANDY') }
   ];
 
   const handleSelect = (id: string) => {

@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { X, Trophy, Star, Shield, Lock, Unlock, Map, Coins, Zap, Swords, LayoutGrid, Ghost, Skull } from 'lucide-react';
+import { X, Trophy, Star, Shield, Lock, Unlock, Map, Coins, Zap, Swords, LayoutGrid, Ghost, Skull, Flame, Droplets, Settings, Sword, Heart } from 'lucide-react';
 import { GameState } from '../types';
 import { getLevelRank } from '../constants';
 
@@ -21,10 +21,17 @@ export const GameStatsModal: React.FC<GameStatsModalProps> = ({ gameState, onClo
         { level: 8, label: "Undead Tileset", desc: "Unlock a spooky alternate look for enemies.", icon: <Ghost size={16}/> },
         { level: 10, label: "Mage Class", desc: "Unlock the Mage class.", icon: <Zap size={16}/> },
         { level: 12, label: "Boss Rush Mode", desc: "Battle bosses back-to-back in the arena.", icon: <LayoutGrid size={16}/> },
+        { level: 15, label: "Infernal Tileset", desc: "Unlock the fiery demon theme.", icon: <Flame size={16}/> },
         { level: 15, label: "Reroll Feature", desc: "Ability to reroll the board when stuck.", icon: <LayoutGrid size={16}/> },
         { level: 20, label: "Paladin Class", desc: "Unlock the Paladin class.", icon: <Shield size={16}/> },
+        { level: 25, label: "Aquatic Tileset", desc: "Unlock the monsters of the deep.", icon: <Droplets size={16}/> },
         { level: 30, label: "Void Realm", desc: "Enter the eldritch void dimension.", icon: <Map size={16}/> },
+        { level: 35, label: "Cyberpunk Tileset", desc: "Unlock the neon city theme.", icon: <Zap size={16}/> },
         { level: 40, label: "Celestial Citadel", desc: "Ascend to the heavens.", icon: <Star size={16}/> },
+        { level: 45, label: "Clockwork Tileset", desc: "Unlock the Steampunk theme.", icon: <Settings size={16}/> },
+        { level: 50, label: "Celestial Tileset", desc: "Unlock the divine angel theme.", icon: <Star size={16}/> },
+        { level: 55, label: "Ronin Tileset", desc: "Unlock the feudal Japan theme.", icon: <Sword size={16}/> },
+        { level: 60, label: "Sugar Rush Tileset", desc: "Unlock the candy monster theme.", icon: <Heart size={16}/> },
     ];
 
     // Find the next unlock based on Account Level, not Run Level

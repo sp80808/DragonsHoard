@@ -1,6 +1,6 @@
 
 import React, { useMemo, useEffect, useRef } from 'react';
-import { Tile } from '../types';
+import { Tile, LootEvent } from '../types';
 import { TileComponent } from './TileComponent';
 import { TILE_STYLES, BOSS_STYLE, RUNE_STYLES, FALLBACK_STYLE, STONE_STYLE } from '../constants';
 import { Coins } from 'lucide-react';
@@ -9,7 +9,7 @@ interface GridProps {
   grid: Tile[];
   size: number;
   mergeEvents: { id: string, x: number, y: number, value: number, type: string }[];
-  lootEvents: { id: string, x: number, y: number, type: 'GOLD' | 'ITEM', value?: string | number, icon?: string }[];
+  lootEvents: LootEvent[];
   slideSpeed: number;
   themeId?: string;
   lowPerformanceMode?: boolean;
@@ -280,4 +280,3 @@ export const Grid = React.memo(({ grid, size, mergeEvents, lootEvents, slideSpee
     </div>
   );
 });
-    
