@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { SHOP_ITEMS, RECIPES } from '../constants';
 import { ItemType, CraftingRecipe, InventoryItem, ShopState } from '../types';
-import { Coins, X, Hammer, ShoppingBag, AlertCircle, Sparkles, Sword, Package, Check, Lock, RefreshCcw } from 'lucide-react';
+import { Coins, X, Hammer, ShoppingBag, AlertCircle, Sparkles, Sword, Package, Check, Lock, RefreshCcw, Info } from 'lucide-react';
 
 interface StoreProps {
   gold: number;
@@ -19,6 +19,11 @@ type TabType = 'ESSENTIALS' | 'MAGIC' | 'BATTLE' | 'FORGE';
 export const Store: React.FC<StoreProps> = ({ gold, inventory, onClose, onBuy, onCraft, onUseItem, shopState }) => {
   const [tab, setTab] = useState<TabType>('ESSENTIALS');
   const [showFullModal, setShowFullModal] = useState(false);
+
+  // Calculate loot probability stats
+  const lootableItems = SHOP_ITEMS.filter(i => i.category !== 'BATTLE');
+  const lootableCount = lootableItems.length;
+  const dropChancePercent = Math.round((1 / lootableCount) * 100);
 
   // Filter Items by Tab Category
   const getItemsForTab = () => {
@@ -155,6 +160,7 @@ export const Store: React.FC<StoreProps> = ({ gold, inventory, onClose, onBuy, o
                                     stock={stock}
                                     canAfford={gold >= currentPrice && stock > 0}
                                     onAttemptBuy={(onSuccess, onError) => handleBuyAttempt(item, currentPrice, stock, onSuccess, onError)}
+                                    dropChance={dropChancePercent}
                                  />
                              );
                         })}
@@ -251,10 +257,12 @@ interface StoreCardProps {
     isCrafting?: boolean;
     stock?: number;
     price?: number;
+    dropChance?: number;
 }
 
-const StoreCard: React.FC<StoreCardProps> = ({ item, recipe, inventoryCounts, canAfford, onAttemptBuy, isCrafting, stock = 99, price = 0 }) => {
+const StoreCard: React.FC<StoreCardProps> = ({ item, recipe, inventoryCounts, canAfford, onAttemptBuy, isCrafting, stock = 99, price = 0, dropChance }) => {
     const [state, setState] = useState<'IDLE' | 'SHAKE' | 'SUCCESS'>('IDLE');
+    const [showInfo, setShowInfo] = useState(false);
     
     // Derived data
     const data = isCrafting && recipe ? {
@@ -280,6 +288,11 @@ const StoreCard: React.FC<StoreCardProps> = ({ item, recipe, inventoryCounts, ca
         );
     };
 
+    const handleInfoClick = (e: React.MouseEvent) => {
+        e.stopPropagation();
+        setShowInfo(!showInfo);
+    };
+
     return (
         <button
             onClick={handleClick}
@@ -303,6 +316,47 @@ const StoreCard: React.FC<StoreCardProps> = ({ item, recipe, inventoryCounts, ca
                 </div>
             )}
 
+            {/* Info Button */}
+            {!isCrafting && (
+                <div 
+                    onClick={handleInfoClick} 
+                    className="absolute top-2 right-2 z-30 p-1.5 rounded-full bg-slate-900/50 hover:bg-slate-700 text-slate-500 hover:text-blue-300 transition-colors border border-transparent hover:border-blue-500/30"
+                >
+                    <Info size={14} />
+                </div>
+            )}
+
+            {/* Info Overlay */}
+            {showInfo && (
+                <div 
+                    className="absolute inset-0 z-40 bg-slate-900/95 rounded-2xl flex flex-col items-center justify-center p-4 text-center animate-in fade-in zoom-in-95 duration-200 backdrop-blur-sm"
+                    onClick={(e) => { e.stopPropagation(); setShowInfo(false); }}
+                >
+                    <h4 className="text-white font-bold text-sm mb-2 flex items-center gap-2">
+                        <Info size={14} className="text-blue-400"/> Item Details
+                    </h4>
+                    
+                    {item?.category === 'BATTLE' ? (
+                        <div className="space-y-1">
+                            <div className="text-red-400 font-bold text-xs uppercase tracking-wider">Shop Exclusive</div>
+                            <div className="text-[10px] text-slate-500">Cannot be found in chests.</div>
+                        </div>
+                    ) : (
+                        <div className="space-y-1">
+                            <div className="text-green-400 font-bold text-xs uppercase tracking-wider">Lootable</div>
+                            <div className="text-xs text-slate-300">
+                                Drop Chance: <span className="font-mono text-yellow-400 font-bold">{dropChance}%</span>
+                            </div>
+                            <div className="text-[9px] text-slate-500 italic mt-1">(Probability per Item Drop)</div>
+                        </div>
+                    )}
+                    
+                    <div className="mt-4 text-[9px] text-slate-600 font-bold uppercase tracking-widest border-t border-slate-800 pt-2 w-full">
+                        Tap to Close
+                    </div>
+                </div>
+            )}
+
             {/* Inner Content */}
             <div className="relative z-10 w-full p-4 flex flex-col h-full">
                 
@@ -314,7 +368,7 @@ const StoreCard: React.FC<StoreCardProps> = ({ item, recipe, inventoryCounts, ca
                         {data.icon}
                     </div>
                     
-                    <div className={`flex flex-col items-end`}>
+                    <div className={`flex flex-col items-end pt-6`}>
                         <div className={`font-mono font-bold text-sm px-3 py-1.5 rounded-lg border shadow-sm
                             ${canAfford 
                                 ? 'bg-yellow-900/20 text-yellow-400 border-yellow-700/30' 
@@ -336,7 +390,7 @@ const StoreCard: React.FC<StoreCardProps> = ({ item, recipe, inventoryCounts, ca
                 </div>
 
                 {/* Body: Name & Desc */}
-                <div className="font-bold text-slate-200 text-lg mb-1 group-hover:text-yellow-200 transition-colors text-left font-serif tracking-wide">
+                <div className="font-bold text-slate-200 text-lg mb-1 group-hover:text-yellow-200 transition-colors text-left font-serif tracking-wide pr-6">
                     {data.name}
                 </div>
                 <div className="text-xs text-slate-400 leading-relaxed text-left font-medium min-h-[2.5em]">

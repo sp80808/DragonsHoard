@@ -1,17 +1,24 @@
 
-import React, { useState } from 'react';
-import { ArrowLeft, Zap, Skull, Swords, Scroll, Coins, Trophy, Sparkles, Package, Sparkles as MagicIcon, Sword, Book, Eye } from 'lucide-react';
-import { SHOP_ITEMS, TILE_STYLES } from '../constants';
+import React, { useState, useEffect } from 'react';
+import { ArrowLeft, Zap, Skull, Swords, Scroll, Coins, Trophy, Sparkles, Package, Sparkles as MagicIcon, Sword, Book, Eye, Feather } from 'lucide-react';
+import { SHOP_ITEMS, TILE_STYLES, STORY_ENTRIES } from '../constants';
 import { TileType } from '../types';
+import { getPlayerProfile } from '../services/storageService';
 
 interface HelpScreenProps {
   onBack: () => void;
 }
 
-type TabType = 'GUIDE' | 'BESTIARY' | 'ITEMS';
+type TabType = 'GUIDE' | 'BESTIARY' | 'ITEMS' | 'LORE';
 
 export const HelpScreen: React.FC<HelpScreenProps> = ({ onBack }) => {
   const [activeTab, setActiveTab] = useState<TabType>('GUIDE');
+  const [unlockedLore, setUnlockedLore] = useState<string[]>([]);
+
+  useEffect(() => {
+      const p = getPlayerProfile();
+      setUnlockedLore(p.unlockedLore);
+  }, []);
 
   const battleItems = SHOP_ITEMS.filter(i => i.category === 'BATTLE');
   const magicItems = SHOP_ITEMS.filter(i => i.category === 'MAGIC');
@@ -57,6 +64,7 @@ export const HelpScreen: React.FC<HelpScreenProps> = ({ onBack }) => {
             <TabButton id="GUIDE" label="Gameplay Guide" icon={<Scroll size={16}/>} />
             <TabButton id="BESTIARY" label="Bestiary" icon={<Eye size={16}/>} />
             <TabButton id="ITEMS" label="Item Log" icon={<Package size={16}/>} />
+            <TabButton id="LORE" label="Journal" icon={<Feather size={16}/>} />
         </div>
 
         {/* Content - Scrollable */}
@@ -205,6 +213,39 @@ export const HelpScreen: React.FC<HelpScreenProps> = ({ onBack }) => {
                          ))}
                      </div>
                  </div>
+              </div>
+          )}
+
+          {/* TAB: LORE */}
+          {activeTab === 'LORE' && (
+              <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+                  <div className="text-center mb-6">
+                      <h3 className="text-2xl font-black text-white fantasy-font">Adventurer's Journal</h3>
+                      <p className="text-slate-400 text-sm">Secrets of the hoard.</p>
+                  </div>
+                  
+                  <div className="space-y-4">
+                      {STORY_ENTRIES.sort((a,b) => a.order - b.order).map(entry => {
+                          const isUnlocked = unlockedLore.includes(entry.id);
+                          return (
+                              <div key={entry.id} className={`p-4 rounded-xl border ${isUnlocked ? 'bg-slate-900/60 border-slate-700' : 'bg-slate-950/40 border-slate-800 border-dashed opacity-60'}`}>
+                                  <div className="flex justify-between items-center mb-2">
+                                      <h4 className={`font-bold font-serif text-lg ${isUnlocked ? 'text-amber-200' : 'text-slate-600'}`}>
+                                          {isUnlocked ? entry.title : "???"}
+                                      </h4>
+                                      {isUnlocked ? (
+                                          <Feather size={14} className="text-amber-500 opacity-50"/>
+                                      ) : (
+                                          <div className="text-[9px] text-slate-600 uppercase tracking-widest font-bold">LOCKED</div>
+                                      )}
+                                  </div>
+                                  <div className={`text-sm leading-relaxed font-serif ${isUnlocked ? 'text-slate-300' : 'text-slate-700 blur-sm select-none'}`}>
+                                      {isUnlocked ? entry.text : "The text is faded and unreadable. You must delve deeper to decipher it."}
+                                  </div>
+                              </div>
+                          );
+                      })}
+                  </div>
               </div>
           )}
 

@@ -50,6 +50,7 @@ export const getPlayerProfile = (): PlayerProfile => {
         if (profile.bossTutorialCompleted === undefined) profile.bossTutorialCompleted = false;
         if (!profile.seenHints) profile.seenHints = [];
         if (!profile.activeTilesetId) profile.activeTilesetId = 'DEFAULT';
+        if (!profile.unlockedLore) profile.unlockedLore = [];
         
         // Check Daily Reset
         const today = new Date().toISOString().split('T')[0];
@@ -80,7 +81,8 @@ export const getPlayerProfile = (): PlayerProfile => {
     tutorialCompleted: false,
     bossTutorialCompleted: false,
     seenHints: [],
-    activeTilesetId: 'DEFAULT'
+    activeTilesetId: 'DEFAULT',
+    unlockedLore: []
   };
   saveProfile(newProfile);
   return newProfile;
@@ -104,6 +106,16 @@ export const setActiveTileset = (id: string) => {
     const profile = getPlayerProfile();
     profile.activeTilesetId = id;
     saveProfile(profile);
+};
+
+export const unlockLore = (loreId: string) => {
+    const profile = getPlayerProfile();
+    if (!profile.unlockedLore.includes(loreId)) {
+        profile.unlockedLore.push(loreId);
+        saveProfile(profile);
+        return true;
+    }
+    return false;
 };
 
 // Forcefully unlock a class (used for victory rewards)

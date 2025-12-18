@@ -2,7 +2,7 @@
 import React, { useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { FeedbackEvent } from '../types';
-import { Skull, Star, Maximize } from 'lucide-react';
+import { Skull, Star, Maximize, Feather } from 'lucide-react';
 
 interface FeedbackLayerProps {
     events: FeedbackEvent[];
@@ -15,7 +15,7 @@ export const FeedbackLayer: React.FC<FeedbackLayerProps> = ({ events, onDismiss 
     useEffect(() => {
         if (activeEvent) {
             // Auto dismiss duration
-            const duration = activeEvent.type === 'BOSS_KILLED' ? 3000 : 2500;
+            const duration = activeEvent.type === 'BOSS_KILLED' ? 3000 : activeEvent.type === 'LORE_UNLOCK' ? 4000 : 2500;
             const timer = setTimeout(() => {
                 onDismiss(activeEvent.id);
             }, duration);
@@ -88,6 +88,19 @@ export const FeedbackLayer: React.FC<FeedbackLayerProps> = ({ events, onDismiss 
                         <p className="text-emerald-300 mt-4 text-lg md:text-xl font-bold tracking-widest max-w-lg bg-black/60 px-6 py-2 rounded-lg border border-emerald-500/30">
                             The dungeon grows larger.
                         </p>
+                    </div>
+                );
+            case 'LORE_UNLOCK':
+                return (
+                    <div className="flex flex-col items-center justify-center text-center animate-in slide-in-from-bottom-10 fade-in duration-1000 pointer-events-none">
+                        <Feather size={60} className="text-amber-200 mb-4 animate-[bounce_2s_infinite]" />
+                        <h2 className="text-3xl md:text-5xl font-black text-amber-100 fantasy-font drop-shadow-lg tracking-wide mb-2">
+                            JOURNAL UPDATED
+                        </h2>
+                        <div className="bg-black/70 border border-amber-500/30 px-6 py-4 rounded-xl max-w-md backdrop-blur-md">
+                            <h3 className="text-amber-400 font-bold text-lg mb-1">{activeEvent.title}</h3>
+                            <p className="text-slate-300 text-sm italic font-serif">"New secrets have been revealed in the Codex."</p>
+                        </div>
                     </div>
                 );
             default:

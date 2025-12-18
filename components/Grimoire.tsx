@@ -14,7 +14,7 @@ interface GrimoireProps {
 export const Grimoire: React.FC<GrimoireProps> = ({ profile, onBack, onSelectTileset }) => {
   const themes = [
     { id: 'DEFAULT', name: 'Classic Runic', desc: 'The standard dungeon aesthetic.', icon: <Grid size={24} />, reqLevel: 0, unlocked: true },
-    { id: 'UNDEAD', name: 'Necrotic Rot', desc: 'Bones, skulls, and spirits.', icon: <Ghost size={24} />, reqLevel: 8, unlocked: profile.unlockedFeatures.includes('TILESET_UNDEAD') },
+    { id: 'UNDEAD', name: 'Necrotic Rot', desc: 'Rot, skulls, and spirits.', icon: <Ghost size={24} />, reqLevel: 8, unlocked: profile.unlockedFeatures.includes('TILESET_UNDEAD') },
     { id: 'INFERNAL', name: 'Infernal Core', desc: 'Demons born of fire and brimstone.', icon: <Flame size={24} />, reqLevel: 15, unlocked: profile.unlockedFeatures.includes('TILESET_INFERNAL') },
     { id: 'AQUATIC', name: 'Abyssal Depth', desc: 'Monsters from the deep sea.', icon: <Droplets size={24} />, reqLevel: 25, unlocked: profile.unlockedFeatures.includes('TILESET_AQUATIC') },
     { id: 'CYBERPUNK', name: 'Neon City', desc: 'High-tech droids and chips.', icon: <Zap size={24} />, reqLevel: 35, unlocked: profile.unlockedFeatures.includes('TILESET_CYBERPUNK') },

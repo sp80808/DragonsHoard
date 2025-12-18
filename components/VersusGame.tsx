@@ -1,9 +1,10 @@
+
 import React, { useReducer, useEffect, useState } from 'react';
 import { Grid } from './Grid';
-import { Direction, Tile, TileType } from '../types';
+import { Direction, Tile, TileType, HeroClass } from '../types';
 import { moveGrid, spawnTile, isGameOver } from '../services/gameLogic';
 import { audioService } from '../services/audioService';
-import { Swords, ArrowLeft, Zap, Skull, Crown, Flame, Shield, Gauge, Settings, Play } from 'lucide-react';
+import { Swords, ArrowLeft, Zap, Skull, Crown, Flame, Shield, Gauge, Settings, Play, Check } from 'lucide-react';
 
 interface VersusGameProps {
   onBack: () => void;
@@ -25,6 +26,7 @@ interface PlayerState {
   activeBuffs: { type: 'MANA_SURGE'; duration: number }[]; // duration in moves
   lastActionText?: string;
   combo: number;
+  heroClass: HeroClass;
 }
 
 interface VersusState {
@@ -46,10 +48,20 @@ const POWERUPS: Record<VersusPowerup, { name: string, icon: React.ReactNode, col
     SPEED: { name: "Mana Surge", icon: <Gauge size={16} />, color: "text-yellow-400" }
 };
 
-const initPlayer = (id: number): PlayerState => {
+const CLASS_BONUSES: Record<HeroClass, { desc: string, bonus: (p: PlayerState) => PlayerState }> = {
+    [HeroClass.WARRIOR]: { desc: "Starts with Pyroblast", bonus: (p) => ({ ...p, inventory: ['ATTACK'] }) },
+    [HeroClass.ROGUE]: { desc: "Starts with Mana Surge", bonus: (p) => ({ ...p, inventory: ['SPEED'] }) },
+    [HeroClass.PALADIN]: { desc: "Starts with Purify", bonus: (p) => ({ ...p, inventory: ['DEFENSE'] }) },
+    [HeroClass.MAGE]: { desc: "Starts with 50 Mana", bonus: (p) => ({ ...p, mana: 50 }) },
+    [HeroClass.ADVENTURER]: { desc: "No Bonuses", bonus: (p) => p },
+    [HeroClass.DRAGON_SLAYER]: { desc: "Starts with 50 Mana", bonus: (p) => ({ ...p, mana: 50 }) }, // Simplified for Versus
+};
+
+const initPlayer = (id: number, heroClass: HeroClass = HeroClass.ADVENTURER): PlayerState => {
     let grid = spawnTile([], INITIAL_GRID_SIZE, 1, { isClassic: true });
     grid = spawnTile(grid, INITIAL_GRID_SIZE, 1, { isClassic: true });
-    return {
+    
+    let baseState: PlayerState = {
         id,
         grid,
         score: 0,
@@ -60,8 +72,16 @@ const initPlayer = (id: number): PlayerState => {
         pendingAttacks: 0,
         inventory: [],
         activeBuffs: [],
-        combo: 0
+        combo: 0,
+        heroClass
     };
+
+    // Apply Bonuses
+    if (CLASS_BONUSES[heroClass]) {
+        baseState = CLASS_BONUSES[heroClass].bonus(baseState);
+    }
+
+    return baseState;
 };
 
 const versusReducer = (state: VersusState, action: any): VersusState => {
@@ -69,8 +89,8 @@ const versusReducer = (state: VersusState, action: any): VersusState => {
         case 'INIT_GAME': {
             return {
                 ...state,
-                p1: initPlayer(1),
-                p2: initPlayer(2),
+                p1: initPlayer(1, action.p1Class),
+                p2: initPlayer(2, action.p2Class),
                 winner: null,
                 countDown: 3,
                 gameActive: true,
@@ -138,6 +158,11 @@ const versusReducer = (state: VersusState, action: any): VersusState => {
                     if (b.type === 'MANA_SURGE') manaMultiplier = 2;
                     return b.duration > 0;
                 });
+
+            // Mage Passive: 25% more mana gain
+            if (currentPlayer.heroClass === HeroClass.MAGE) {
+                manaMultiplier *= 1.25;
+            }
 
             const manaGain = Math.floor(res.score * 0.25 * manaMultiplier);
             let newMana = currentPlayer.mana + manaGain;
@@ -261,7 +286,7 @@ const PlayerPanel = ({ player, isActive, showKeys, isWinner, isLeader }: { playe
             <div className="p-4 flex justify-between items-start relative z-10">
                 <div>
                     <div className={`text-xs font-bold uppercase tracking-widest mb-1 flex items-center gap-2 ${player.id === 1 ? 'text-cyan-400' : 'text-red-400'}`}>
-                        Player {player.id}
+                        P{player.id}: {player.heroClass}
                         {isLeader && <Crown size={14} className="text-yellow-400 animate-bounce" fill="currentColor" />}
                     </div>
                     <div className="text-4xl font-mono font-black text-white leading-none">
@@ -361,39 +386,92 @@ const PlayerPanel = ({ player, isActive, showKeys, isWinner, isLeader }: { playe
 }
 
 // Setup Screen Component
-const VersusSetup = ({ onStart, onBack }: { onStart: (mode: WinCondition, target: number) => void, onBack: () => void }) => {
+const VersusSetup = ({ onStart, onBack }: { onStart: (mode: WinCondition, target: number, p1: HeroClass, p2: HeroClass) => void, onBack: () => void }) => {
     const [mode, setMode] = useState<WinCondition>('SURVIVAL');
     const [target, setTarget] = useState<number>(10000);
+    const [p1Class, setP1Class] = useState<HeroClass>(HeroClass.ADVENTURER);
+    const [p2Class, setP2Class] = useState<HeroClass>(HeroClass.ADVENTURER);
+
+    const availableClasses = [HeroClass.ADVENTURER, HeroClass.WARRIOR, HeroClass.ROGUE, HeroClass.MAGE, HeroClass.PALADIN];
 
     return (
-        <div className="flex flex-col items-center justify-center h-full w-full max-w-md mx-auto p-6 animate-in fade-in zoom-in duration-500">
-            <h1 className="text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-red-500 fantasy-font mb-8 drop-shadow-sm">
+        <div className="flex flex-col items-center justify-center h-full w-full max-w-2xl mx-auto p-6 animate-in fade-in zoom-in duration-500 overflow-y-auto">
+            <h1 className="text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-red-500 fantasy-font mb-6 drop-shadow-sm">
                 VERSUS SETUP
             </h1>
 
             <div className="w-full bg-slate-900/80 border border-slate-700 rounded-2xl p-6 space-y-6 backdrop-blur-md shadow-2xl">
                 
+                {/* Class Selection Grid */}
+                <div className="grid grid-cols-2 gap-6">
+                    {/* P1 Select */}
+                    <div className="space-y-2">
+                        <label className="text-xs font-bold text-cyan-400 uppercase tracking-widest block text-center">Player 1 (WASD)</label>
+                        <div className="space-y-1">
+                            {availableClasses.map(cls => (
+                                <button
+                                    key={cls}
+                                    onClick={() => setP1Class(cls)}
+                                    className={`w-full py-2 px-3 rounded-lg text-xs font-bold flex justify-between items-center transition-all
+                                        ${p1Class === cls ? 'bg-cyan-900 border border-cyan-500 text-white' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'}
+                                    `}
+                                >
+                                    <span>{cls}</span>
+                                    {p1Class === cls && <Check size={12} />}
+                                </button>
+                            ))}
+                        </div>
+                        <div className="text-[10px] text-cyan-300/80 text-center h-8 flex items-center justify-center bg-black/20 rounded p-1">
+                            {CLASS_BONUSES[p1Class].desc}
+                        </div>
+                    </div>
+
+                    {/* P2 Select */}
+                    <div className="space-y-2">
+                        <label className="text-xs font-bold text-red-400 uppercase tracking-widest block text-center">Player 2 (Arrows)</label>
+                        <div className="space-y-1">
+                            {availableClasses.map(cls => (
+                                <button
+                                    key={cls}
+                                    onClick={() => setP2Class(cls)}
+                                    className={`w-full py-2 px-3 rounded-lg text-xs font-bold flex justify-between items-center transition-all
+                                        ${p2Class === cls ? 'bg-red-900 border border-red-500 text-white' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'}
+                                    `}
+                                >
+                                    <span>{cls}</span>
+                                    {p2Class === cls && <Check size={12} />}
+                                </button>
+                            ))}
+                        </div>
+                         <div className="text-[10px] text-red-300/80 text-center h-8 flex items-center justify-center bg-black/20 rounded p-1">
+                            {CLASS_BONUSES[p2Class].desc}
+                        </div>
+                    </div>
+                </div>
+
+                <div className="h-px bg-slate-700 w-full"></div>
+
                 {/* Mode Select */}
                 <div className="space-y-3">
                     <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">Victory Condition</label>
                     <div className="grid grid-cols-2 gap-3">
                         <button 
                             onClick={() => setMode('SURVIVAL')}
-                            className={`p-4 rounded-xl border flex flex-col items-center gap-2 transition-all
-                                ${mode === 'SURVIVAL' ? 'bg-red-900/40 border-red-500 text-white' : 'bg-slate-800 border-slate-700 text-slate-400 hover:bg-slate-700'}
+                            className={`p-3 rounded-xl border flex flex-col items-center gap-1 transition-all
+                                ${mode === 'SURVIVAL' ? 'bg-slate-800 border-white text-white' : 'bg-slate-800/50 border-slate-700 text-slate-500 hover:bg-slate-800'}
                             `}
                         >
-                            <Skull size={24} />
-                            <span className="font-bold text-sm">SURVIVAL</span>
+                            <Skull size={20} />
+                            <span className="font-bold text-xs">SURVIVAL</span>
                         </button>
                         <button 
                             onClick={() => setMode('SCORE')}
-                            className={`p-4 rounded-xl border flex flex-col items-center gap-2 transition-all
-                                ${mode === 'SCORE' ? 'bg-yellow-900/40 border-yellow-500 text-white' : 'bg-slate-800 border-slate-700 text-slate-400 hover:bg-slate-700'}
+                            className={`p-3 rounded-xl border flex flex-col items-center gap-1 transition-all
+                                ${mode === 'SCORE' ? 'bg-slate-800 border-white text-white' : 'bg-slate-800/50 border-slate-700 text-slate-500 hover:bg-slate-800'}
                             `}
                         >
-                            <Crown size={24} />
-                            <span className="font-bold text-sm">SCORE RACE</span>
+                            <Crown size={20} />
+                            <span className="font-bold text-xs">SCORE RACE</span>
                         </button>
                     </div>
                 </div>
@@ -418,9 +496,9 @@ const VersusSetup = ({ onStart, onBack }: { onStart: (mode: WinCondition, target
                     </div>
                 )}
 
-                <div className="pt-4 space-y-3">
+                <div className="pt-2 space-y-3">
                     <button 
-                        onClick={() => onStart(mode, target)}
+                        onClick={() => onStart(mode, target, p1Class, p2Class)}
                         className="w-full py-4 bg-gradient-to-r from-red-600 to-cyan-600 hover:from-red-500 hover:to-cyan-500 text-white font-black text-lg rounded-xl shadow-lg transition-all flex items-center justify-center gap-2"
                     >
                         <Play fill="currentColor" /> START BATTLE
@@ -491,7 +569,7 @@ export const VersusGame: React.FC<VersusGameProps> = ({ onBack }) => {
     });
 
     if (!state.gameActive && !state.winner) {
-        return <VersusSetup onStart={(c, t) => dispatch({ type: 'INIT_GAME', condition: c, target: t })} onBack={onBack} />;
+        return <VersusSetup onStart={(c, t, p1, p2) => dispatch({ type: 'INIT_GAME', condition: c, target: t, p1Class: p1, p2Class: p2 })} onBack={onBack} />;
     }
 
     return (
@@ -563,7 +641,7 @@ export const VersusGame: React.FC<VersusGameProps> = ({ onBack }) => {
                     
                     <div className="flex gap-4">
                         <button 
-                            onClick={() => dispatch({ type: 'INIT_GAME', condition: state.winCondition, target: state.targetScore })} 
+                            onClick={() => dispatch({ type: 'INIT_GAME', condition: state.winCondition, target: state.targetScore, p1Class: state.p1.heroClass, p2Class: state.p2.heroClass })} 
                             className="px-8 py-4 bg-white text-black font-black text-lg rounded-xl hover:bg-gray-200 hover:scale-105 transition-all shadow-xl flex items-center gap-2"
                         >
                             <Swords size={20} /> REMATCH

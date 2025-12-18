@@ -1,5 +1,5 @@
 
-import { TileType, ItemType, GameStats, GameState, Stage, Achievement, HeroClass, CraftingRecipe, DailyModifier } from './types';
+import { TileType, ItemType, GameStats, GameState, Stage, Achievement, HeroClass, CraftingRecipe, DailyModifier, StoryEntry, PlayerProfile } from './types';
 import { Trophy, Star, Shield, Zap, Swords, LayoutGrid, Map } from 'lucide-react';
 
 export const GRID_SIZE_INITIAL = 4;
@@ -47,9 +47,9 @@ export const TILE_STYLES: Record<number, any> = {
 // Alternative Tileset: Undead
 export const UNDEAD_TILE_STYLES: Record<number, any> = {
   ...TILE_STYLES,
-  2: { label: 'BONE', color: 'from-stone-700 to-stone-900', ringColor: 'ring-stone-500', icon: '🦴', glow: 'shadow-stone-500/50', imageUrl: genUrl('pile of bones skeleton rpg', 1002), particleColor: '#a8a29e' },
-  4: { label: 'SKULL', color: 'from-gray-500 to-gray-700', ringColor: 'ring-gray-400', icon: '💀', glow: 'shadow-gray-400/50', imageUrl: genUrl('human skull sinister rpg', 1004), particleColor: '#9ca3af' },
-  8: { label: 'ZOMBIE', color: 'from-green-800 to-green-950', ringColor: 'ring-green-600', icon: '🧟', glow: 'shadow-green-600/50', imageUrl: genUrl('rotting zombie monster rpg', 1008), particleColor: '#16a34a' },
+  2: { label: 'ICHOR', color: 'from-lime-900 to-slate-900', ringColor: 'ring-lime-700', icon: '🦠', glow: 'shadow-lime-700/50', imageUrl: genUrl('green toxic slime ooze undead monster rpg', 1002), particleColor: '#4d7c0f' },
+  4: { label: 'SKULL', color: 'from-gray-500 to-gray-700', ringColor: 'ring-gray-400', icon: '💀', glow: 'shadow-gray-400/50', imageUrl: genUrl('floating human skull glowing red eyes sinister rpg', 1004), particleColor: '#9ca3af' },
+  8: { label: 'ZOMBIE', color: 'from-emerald-800 to-emerald-950', ringColor: 'ring-emerald-600', icon: '🧟', glow: 'shadow-emerald-600/50', imageUrl: genUrl('rotting flesh zombie warrior rpg', 1008), particleColor: '#059669' },
   16: { label: 'GHOUL', color: 'from-teal-800 to-teal-950', ringColor: 'ring-teal-600', icon: '😱', glow: 'shadow-teal-600/50', imageUrl: genUrl('ghoul monster graveyard rpg', 1016), particleColor: '#0d9488' },
   32: { label: 'WRAITH', color: 'from-indigo-800 to-black', ringColor: 'ring-indigo-600', icon: '👻', glow: 'shadow-indigo-600/50', imageUrl: genUrl('shadow wraith phantom rpg', 1032), particleColor: '#4f46e5' },
   64: { label: 'MUMMY', color: 'from-yellow-800 to-yellow-950', ringColor: 'ring-yellow-600', icon: '🤕', glow: 'shadow-yellow-600/50', imageUrl: genUrl('ancient mummy bandages rpg', 1064), particleColor: '#ca8a04' },
@@ -251,6 +251,58 @@ export const ACHIEVEMENTS: Achievement[] = [
     { id: 'slayer', name: 'Boss Slayer', description: 'Defeat your first boss.', icon: '💀', condition: (s) => s.bossesDefeated >= 1, reward: { gold: 500, xp: 1000 } },
     { id: 'hoarder', name: 'Hoarder', description: 'Collect 1000 Gold.', icon: '💰', condition: (s) => s.goldCollected >= 1000, reward: { item: ItemType.LUCKY_CHARM } },
     { id: 'legendary', name: 'Legendary', description: 'Create a 1024 Tile.', icon: '🐲', condition: (s) => s.highestTile >= 1024, reward: { item: ItemType.GOLDEN_RUNE } },
+];
+
+export const STORY_ENTRIES: StoryEntry[] = [
+    {
+        id: 'intro',
+        title: 'The Entrance',
+        text: "They said the hoard was infinite. They didn't say the dungeon was alive. It inhales greed and exhales monsters. I am not the first to enter, but I intend to be the first to leave.",
+        order: 1,
+        unlockCondition: (s, g, p) => p.gamesPlayed >= 1
+    },
+    {
+        id: 'first_blood',
+        title: 'Alchemy of Flesh',
+        text: "The slimes quiver when they touch, binding together to form something... viler. Is this biology, or heresy? The dungeon seems to reward this consolidation of power.",
+        order: 2,
+        unlockCondition: (s, g, p) => s.totalMerges >= 50
+    },
+    {
+        id: 'guardian',
+        title: 'The Gatekeeper',
+        text: "A guardian blocks the path. It does not speak; it only kills. It stands as a test: do I have the strength to claim what lies deeper?",
+        order: 3,
+        unlockCondition: (s, g, p) => s.bossesDefeated >= 1
+    },
+    {
+        id: 'gold_curse',
+        title: 'Golden Weight',
+        text: "The gold here glitters in the torchlight, but it feels cold to the touch. It wants to be held. It whispers promises of power, but I feel lighter only when I spend it.",
+        order: 4,
+        unlockCondition: (s, g, p) => s.goldCollected >= 1000
+    },
+    {
+        id: 'cycle',
+        title: 'Eternal Return',
+        text: "Death is not the end here. The dungeon simply resets the board. I awake at the entrance, memories intact, but my pockets empty. The cycle continues.",
+        order: 5,
+        unlockCondition: (s, g, p) => p.gamesPlayed >= 3
+    },
+    {
+        id: 'dragon_sight',
+        title: 'The God',
+        text: "I saw it. A god of scales and fire. It does not hoard gold; it hoards souls. We are not intruders; we are livestock, fattening ourselves on its treasures until we are ripe for the harvest.",
+        order: 6,
+        unlockCondition: (s, g, p) => s.highestTile >= 1024
+    },
+    {
+        id: 'ascension',
+        title: 'Part of the Walls',
+        text: "I have spent so long in the dark that the light burns my eyes. I am no longer just an adventurer. I am a function of this dungeon. A variable in its equation.",
+        order: 7,
+        unlockCondition: (s, g, p) => p.accountLevel >= 10
+    }
 ];
 
 export const BOSS_DEFINITIONS: Record<string, any> = {

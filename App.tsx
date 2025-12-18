@@ -15,12 +15,12 @@ import { GameStatsModal } from './components/GameStatsModal';
 import { VersusGame } from './components/VersusGame';
 import { Grimoire } from './components/Grimoire';
 import { AmbientBackground } from './components/AmbientBackground';
-import { Direction, GameState, TileType, InventoryItem, CraftingRecipe, View, Achievement, ItemType, InputSettings, HeroClass, GameMode, PlayerProfile, DailyBounty, Difficulty, FeedbackEvent } from './types';
-import { initializeGame, moveGrid, spawnTile, isGameOver, useInventoryItem, checkAchievements, executeAutoCascade } from './services/gameLogic';
+import { Direction, GameState, TileType, InventoryItem, CraftingRecipe, View, Achievement, ItemType, InputSettings, HeroClass, GameMode, PlayerProfile, DailyBounty, Difficulty, FeedbackEvent, LootEvent } from './types';
+import { initializeGame, moveGrid, spawnTile, isGameOver, useInventoryItem, checkAchievements, executeAutoCascade, checkLoreUnlocks } from './services/gameLogic';
 import { SHOP_ITEMS, getXpThreshold, getStage, getItemDefinition } from './constants';
 import { audioService } from './services/audioService';
 import { loadCriticalAssets, loadBackgroundAssets } from './services/assetLoader';
-import { getPlayerProfile, markHintSeen, completeTutorial } from './services/storageService';
+import { getPlayerProfile, markHintSeen, completeTutorial, unlockLore } from './services/storageService';
 import { Skull, Loader2, CheckCircle } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -38,9 +38,10 @@ type Action =
   | { type: 'USE_ITEM'; item: InventoryItem }
   | { type: 'REROLL' }
   | { type: 'UPDATE_SETTINGS'; settings: InputSettings }
-  | { type: 'CASCADE_STEP'; payload: { grid: any[], rewards: { xp: number, gold: number } } }
+  | { type: 'CASCADE_STEP'; payload: { grid: any[], rewards: { xp: number, gold: number }, lootEvents: LootEvent[] } }
   | { type: 'CASCADE_COMPLETE' }
-  | { type: 'ACK_LEVEL_UP' };
+  | { type: 'ACK_LEVEL_UP' }
+  | { type: 'CLEAR_LOOT' };
 
 const reducer = (state: GameState, action: Action): GameState => {
   switch (action.type) {
@@ -60,9 +61,11 @@ const reducer = (state: GameState, action: Action): GameState => {
         newState.xp += result.xpGained;
         newState.gold += result.goldGained;
         newState.combo = result.combo;
-        newState.lootEvents = result.lootEvents;
         
-        // Handle Loot
+        // Accumulate loot events rather than replacing, Grid will filter old ones
+        newState.lootEvents = [...(state.lootEvents || []), ...result.lootEvents];
+        
+        // Handle Loot Items
         if (result.itemsFound.length > 0) {
             newState.inventory = [...newState.inventory, ...result.itemsFound];
             newState.logs = [...newState.logs, ...result.itemsFound.map(i => `Looted: ${i.name}`)];
@@ -94,12 +97,14 @@ const reducer = (state: GameState, action: Action): GameState => {
             ...newState.stats,
             totalMoves: newState.stats.totalMoves + 1,
             goldCollected: newState.stats.goldCollected + result.goldGained,
-            highestCombo: Math.max(newState.stats.highestCombo, result.combo)
+            highestCombo: Math.max(newState.stats.highestCombo, result.combo),
+            highestTile: Math.max(newState.stats.highestTile, ...newState.grid.map(t => t.value))
         };
         newState.runStats = {
              ...newState.runStats,
              turnCount: newState.runStats.turnCount + 1,
-             goldEarned: newState.runStats.goldEarned + result.goldGained
+             goldEarned: newState.runStats.goldEarned + result.goldGained,
+             bossesDefeated: newState.runStats.bossesDefeated + (result.bossDefeated ? 1 : 0)
         };
 
         // Check Victory Condition (2048) - Only trigger once
@@ -145,6 +150,9 @@ const reducer = (state: GameState, action: Action): GameState => {
         }
 
         return newState;
+
+    case 'CLEAR_LOOT':
+        return { ...state, lootEvents: [] };
 
     case 'CONTINUE':
         return { ...state, victory: false }; 
@@ -237,6 +245,7 @@ const reducer = (state: GameState, action: Action): GameState => {
             xp: state.xp + action.payload.rewards.xp,
             gold: state.gold + action.payload.rewards.gold,
             cascadeStep: (state.cascadeStep || 0) + 1,
+            lootEvents: [...(state.lootEvents || []), ...action.payload.lootEvents],
             runStats: { ...state.runStats, cascadesTriggered: state.runStats.cascadesTriggered + 1 }
         };
 
@@ -301,6 +310,16 @@ const App: React.FC = () => {
       }
   }, [state, isLoading, view]);
 
+  // Accumulative Loot Clearing
+  useEffect(() => {
+      if (state.lootEvents.length > 0) {
+          const timer = setTimeout(() => {
+              dispatch({ type: 'CLEAR_LOOT' });
+          }, 2000);
+          return () => clearTimeout(timer);
+      }
+  }, [state.lootEvents]);
+
   // --- GAMEPLAY FEEDBACK MONITORING ---
   useEffect(() => {
       if (view !== 'GAME') return;
@@ -344,8 +363,22 @@ const App: React.FC = () => {
       if (!profile.tutorialCompleted && state.stats.totalMoves < 5 && !showTutorial && state.gameMode === 'RPG') {
           setShowTutorial(true);
       }
+      
+      // 5. Check Lore Unlocks
+      const newLore = checkLoreUnlocks(state, profile);
+      newLore.forEach(entry => {
+          const unlocked = unlockLore(entry.id);
+          if (unlocked) {
+              setFeedbackQueue(prev => [...prev, {
+                  id: uuidv4(),
+                  type: 'LORE_UNLOCK',
+                  title: entry.title
+              }]);
+              audioService.playLevelUp(); // Re-use nice sound
+          }
+      });
 
-  }, [state.level, state.gridSize, state.runStats.bossesDefeated, state.grid, view]);
+  }, [state.level, state.gridSize, state.runStats.bossesDefeated, state.grid, view, state.stats, state.score]);
 
   // Bounty Check
   useEffect(() => {
@@ -380,8 +413,6 @@ const App: React.FC = () => {
   // Audio Intensity
   useEffect(() => {
       if (view === 'GAME' && !state.gameOver) {
-          // Normalize combo: 0-8 -> 0-1
-          // Higher combo = sharper audio (higher cutoff)
           const intensity = Math.min(1, state.combo / 8);
           audioService.updateGameplayIntensity(intensity);
       }
@@ -419,13 +450,11 @@ const App: React.FC = () => {
           dragStartRef.current = null;
       };
 
-      // Wheel Handler for Trackpad
       const handleWheel = (e: WheelEvent) => {
           if (!state.settings.enableScroll) return;
-          if (scrollTimeoutRef.current) return; // Debounce
+          if (scrollTimeoutRef.current) return; 
           if (state.gameOver || state.isCascading || showStore || showStats || showTutorial) return;
 
-          // Threshold for wheel
           if (Math.abs(e.deltaX) > 20 || Math.abs(e.deltaY) > 20) {
               let direction: Direction | null = null;
               if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) {
@@ -456,7 +485,7 @@ const App: React.FC = () => {
       window.addEventListener('touchend', onTouchEnd);
       window.addEventListener('mousedown', onMouseDown);
       window.addEventListener('mouseup', onMouseUp);
-      window.addEventListener('wheel', handleWheel); // Add Wheel Listener
+      window.addEventListener('wheel', handleWheel);
 
       return () => {
           window.removeEventListener('touchstart', onTouchStart);
@@ -471,7 +500,7 @@ const App: React.FC = () => {
     const handleKeyDown = (e: KeyboardEvent) => {
         if (!state.settings.enableKeyboard) return;
         if (e.ctrlKey && e.key === '`') { setShowDebug(prev => !prev); return; }
-        if (showTutorial) return; // Block input during tutorial
+        if (showTutorial) return; 
         if (state.gameOver || view !== 'GAME' || state.isCascading || showStore || showStats) return;
         switch(e.key) {
             case 'ArrowUp': case 'w': case 'W': dispatch({ type: 'MOVE', direction: Direction.UP }); break;
@@ -490,7 +519,7 @@ const App: React.FC = () => {
           const timer = setTimeout(() => {
                const res = executeAutoCascade(state.grid, state.gridSize, state.cascadeStep || 0, state.effectCounters);
                if (res.occurred) {
-                   dispatch({ type: 'CASCADE_STEP', payload: { grid: res.grid, rewards: res.rewards } });
+                   dispatch({ type: 'CASCADE_STEP', payload: { grid: res.grid, rewards: res.rewards, lootEvents: res.lootEvents } });
                    audioService.playCascade(state.cascadeStep || 0);
                } else {
                    dispatch({ type: 'CASCADE_COMPLETE' });
@@ -509,7 +538,6 @@ const App: React.FC = () => {
       setFeedbackQueue(prev => prev.filter(e => e.id !== id));
   };
   
-  // Calculate transient events for the Grid
   const mergeEvents = state.grid.filter(t => t.mergedFrom).map(t => ({
       id: t.id,
       x: t.x,
@@ -565,11 +593,9 @@ const App: React.FC = () => {
         {view === 'VERSUS' && <VersusGame onBack={() => setView('SPLASH')} />}
         {view === 'GRIMOIRE' && (
             <Grimoire 
-                profile={getPlayerProfile()} // In a real app we'd likely pass state, but this works for direct storage access
+                profile={getPlayerProfile()} 
                 onBack={() => setView('SPLASH')}
-                onSelectTileset={(id) => {
-                    // Force re-render of this view or relying on storage sync next mount
-                }}
+                onSelectTileset={(id) => {}}
             />
         )}
         {view === 'SETTINGS' && <Settings 
@@ -581,7 +607,6 @@ const App: React.FC = () => {
 
         {view === 'GAME' && (
           <>
-            {/* Background Layers */}
             <motion.div 
             className="fixed inset-0 z-0 bg-cover bg-center"
             key={state.currentStage.name}
@@ -599,14 +624,23 @@ const App: React.FC = () => {
               <div className="vignette"></div>
             </motion.div>
 
+            {/* Torch Effect Layer - Dynamic Opacity based on gameplay action */}
+            {!state.settings.lowPerformanceMode && (
+                <div 
+                    className="torch-overlay"
+                    style={{ 
+                        opacity: 0.6 + (Math.min(state.combo, 20) * 0.02), // Base 0.6, up to 1.0 with combos
+                        transform: `scale(${1 + (Math.min(state.combo, 10) * 0.01)})` 
+                    }}
+                ></div>
+            )}
+
             <AmbientBackground lowPerformanceMode={state.settings.lowPerformanceMode} />
             {!state.settings.lowPerformanceMode && <div className="fog-layer"></div>}
 
-            {/* FEEDBACK OVERLAYS */}
             <FeedbackLayer events={feedbackQueue} onDismiss={removeFeedback} />
             {showTutorial && <TutorialOverlay onDismiss={dismissTutorial} />}
 
-            {/* Notification Toasts */}
             <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[90] flex flex-col gap-2 pointer-events-none w-full max-w-sm px-4">
               <AnimatePresence>
                   {notifications.map(n => (
@@ -627,14 +661,12 @@ const App: React.FC = () => {
               </AnimatePresence>
             </div>
 
-            {/* MAIN LAYOUT - Fixed Centering & Scaling */}
             <div className={`relative z-10 flex flex-col h-full w-full mx-auto pb-safe
                 max-w-md md:max-w-xl lg:max-w-3xl xl:max-w-4xl
                 ${shakeIntensity === 1 ? 'animate-shake-sm' : ''}
                 ${shakeIntensity === 2 ? 'animate-shake-md' : ''}
                 ${shakeIntensity === 3 ? 'animate-shake-lg chromatic-shake' : ''}
             `}>
-                {/* Header HUD */}
                 <div className="flex-none px-2 pt-2 z-40">
                     <HUD 
                         score={state.score} 
@@ -650,6 +682,8 @@ const App: React.FC = () => {
                         accountLevel={state.accountLevel}
                         settings={state.settings}
                         combo={state.combo}
+                        justLeveledUp={state.justLeveledUp}
+                        activeModifiers={state.activeModifiers}
                         onOpenStore={() => setShowStore(true)}
                         onUseItem={(item) => dispatch({ type: 'USE_ITEM', item })}
                         onReroll={() => dispatch({ type: 'REROLL' })}
@@ -658,7 +692,6 @@ const App: React.FC = () => {
                     />
                 </div>
 
-                {/* Grid Container - Responsive & Centered */}
                 <div className="flex-1 flex flex-col items-center justify-center p-2 md:p-4 min-h-0">
                     <div className="aspect-square w-full max-w-full max-h-full relative shadow-2xl rounded-xl">
                         <Grid 
@@ -676,7 +709,6 @@ const App: React.FC = () => {
                 </div>
             </div>
 
-            {/* Modal Layers */}
             {showStore && (
                 <Store 
                 gold={state.gold} 
@@ -724,7 +756,7 @@ const App: React.FC = () => {
                 <RunSummary gameState={state} onRestart={() => dispatch({ type: 'RESTART' })} onShowLeaderboard={() => setView('LEADERBOARD')} onHome={() => setView('SPLASH')} />
             )}
             
-            {state.victory && !state.gameWon && (
+            {state.victory && (
                 <VictoryScreen 
                     gameState={state} 
                     onContinue={() => dispatch({ type: 'CONTINUE' })}

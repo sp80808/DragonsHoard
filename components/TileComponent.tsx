@@ -80,7 +80,7 @@ export const TileComponent = React.memo(({ tile, gridSize, slideSpeed, themeId, 
 
   const isSlash = tile.mergedFrom && tile.value >= 32 && tile.mergedFrom[0] !== 'damage' ? 'slash-effect' : '';
   const healthPercent = tile.maxHealth ? Math.max(0, (tile.health || 0) / tile.maxHealth) * 100 : 0;
-  const isHighTier = tile.value >= 512 && !lowPerformanceMode;
+  const isHighTier = tile.value >= 128 && !lowPerformanceMode;
   const isGodTier = tile.value >= 2048 && !lowPerformanceMode;
   const isMetallic = tile.value >= 128; // Add gradient text for 128+
 
@@ -102,6 +102,9 @@ export const TileComponent = React.memo(({ tile, gridSize, slideSpeed, themeId, 
       WebkitTextStroke: isMetallic ? '0px' : '1px rgba(0,0,0,0.4)', // Remove stroke if gradient is applied for cleanliness
       paintOrder: 'stroke fill'
   };
+
+  // Living Tile Animation Class
+  const livingClass = isGodTier ? 'animate-living-fast' : isHighTier ? 'animate-living-slow' : '';
 
   return (
     <div
@@ -147,8 +150,8 @@ export const TileComponent = React.memo(({ tile, gridSize, slideSpeed, themeId, 
                     <div className={`absolute inset-0 transition-opacity duration-300 ${style.glow} opacity-30 group-hover:opacity-60`}></div>
                 )}
 
-                {/* Gradient Background */}
-                <div className={`absolute inset-0 bg-gradient-to-br ${style.color} opacity-90`}></div>
+                {/* Gradient Background with Living Animation */}
+                <div className={`absolute inset-0 bg-gradient-to-br ${style.color} opacity-90 ${livingClass}`}></div>
 
                 {/* Texture/Image */}
                 {!imgError && style.imageUrl && (
@@ -217,4 +220,3 @@ export const TileComponent = React.memo(({ tile, gridSize, slideSpeed, themeId, 
     </div>
   );
 });
-    

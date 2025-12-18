@@ -109,7 +109,7 @@ export interface LootEvent {
   id: string;
   x: number;
   y: number;
-  type: 'GOLD' | 'ITEM';
+  type: 'GOLD' | 'ITEM' | 'XP';
   value?: number | string;
   icon?: string;
 }
@@ -175,6 +175,7 @@ export interface PlayerProfile {
   bossTutorialCompleted: boolean;
   seenHints: string[]; // IDs of hints player has already seen
   activeTilesetId: string;
+  unlockedLore: string[]; // IDs of unlocked story fragments
 }
 
 export interface Achievement {
@@ -185,6 +186,14 @@ export interface Achievement {
   condition: (stats: GameStats, state: GameState) => boolean;
   reward?: { gold?: number; xp?: number; item?: ItemType };
   isSecret?: boolean;
+}
+
+export interface StoryEntry {
+    id: string;
+    title: string;
+    text: string;
+    unlockCondition: (stats: GameStats, state: GameState, profile: PlayerProfile) => boolean;
+    order: number;
 }
 
 export interface InputSettings {
@@ -287,7 +296,7 @@ export interface LeaderboardEntry {
     mode?: GameMode;
 }
 
-export type FeedbackType = 'LEVEL_UP' | 'BOSS_KILLED' | 'GRID_EXPAND' | 'UNLOCK' | 'ACHIEVEMENT';
+export type FeedbackType = 'LEVEL_UP' | 'BOSS_KILLED' | 'GRID_EXPAND' | 'UNLOCK' | 'ACHIEVEMENT' | 'LORE_UNLOCK';
 
 export interface FeedbackEvent {
     id: string;

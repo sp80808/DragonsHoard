@@ -1,6 +1,6 @@
 
-import { Direction, GameState, Tile, TileType, MoveResult, LootResult, ItemType, InventoryItem, Stage, LeaderboardEntry, GameStats, Achievement, InputSettings, RunStats, HeroClass, GameMode, PlayerProfile, ShopState, DailyModifier, Difficulty, LootEvent } from '../types';
-import { GRID_SIZE_INITIAL, SHOP_ITEMS, getXpThreshold, getStage, getStageBackground, ACHIEVEMENTS, TILE_STYLES, FALLBACK_STYLE, getItemDefinition, BOSS_DEFINITIONS, SHOP_CONFIG, DAILY_MODIFIERS } from '../constants';
+import { Direction, GameState, Tile, TileType, MoveResult, LootResult, ItemType, InventoryItem, Stage, LeaderboardEntry, GameStats, Achievement, InputSettings, RunStats, HeroClass, GameMode, PlayerProfile, ShopState, DailyModifier, Difficulty, LootEvent, StoryEntry } from '../types';
+import { GRID_SIZE_INITIAL, SHOP_ITEMS, getXpThreshold, getStage, getStageBackground, ACHIEVEMENTS, TILE_STYLES, FALLBACK_STYLE, getItemDefinition, BOSS_DEFINITIONS, SHOP_CONFIG, DAILY_MODIFIERS, STORY_ENTRIES } from '../constants';
 import { v4 as uuidv4 } from 'uuid';
 import { rng } from '../utils/rng';
 
@@ -169,6 +169,10 @@ export const initializeGame = (restart = false, heroClass: HeroClass = HeroClass
             // Migration for Shop State
             if (!parsed.shop) parsed.shop = getInitialShopState();
             if (!parsed.activeModifiers) parsed.activeModifiers = [];
+            
+            // Migration for Victory flags
+            if (parsed.victory === undefined) parsed.victory = false;
+            if (parsed.gameWon === undefined) parsed.gameWon = false;
 
             return parsed;
         } catch (e) { console.error("Save corrupted", e); }
@@ -363,6 +367,9 @@ export const moveGrid = (
             nextTile.health = Math.max(0, (nextTile.health || 0) - damage);
             nextTile.mergedFrom = ['damage']; // Visual shake
 
+            // Visual Loot for Boss Damage (floating XP or minor gold)
+            lootEvents.push({ id: createId(), x: next.x, y: next.y, type: 'XP', value: damage });
+
             // Boss defeated?
             if (nextTile.health <= 0) {
                 // Boss dies
@@ -372,6 +379,9 @@ export const moveGrid = (
                 goldGained += 100;
                 bossDefeated = true;
                 
+                lootEvents.push({ id: createId(), x: next.x, y: next.y, type: 'GOLD', value: 100 });
+                lootEvents.push({ id: createId(), x: next.x, y: next.y, type: 'XP', value: 2000 });
+
                 // Bonus for Boss Rush
                 if (mode === 'BOSS_RUSH') {
                     xpGained += 5000;
@@ -421,6 +431,7 @@ export const moveGrid = (
           if (tile.type === TileType.GOLDEN || nextTile.type === TileType.GOLDEN) {
               mergedTile.type = TileType.GOLDEN;
               goldGained += mergedValue; 
+              lootEvents.push({ id: createId(), x: next.x, y: next.y, type: 'GOLD', value: mergedValue });
           }
 
           newGrid = newGrid.filter(t => t.id !== tile.id && t.id !== nextTile.id);
@@ -430,9 +441,16 @@ export const moveGrid = (
           score += mergedValue;
           xpGained += mergedValue;
           
+          // Visual Merge XP Indicator
+          lootEvents.push({ id: createId(), x: next.x, y: next.y, type: 'XP', value: mergedValue });
+
           // Midas Potion Effect
           const goldMult = (effectCounters['MIDAS_POTION'] || 0) > 0 ? 2 : 1;
-          goldGained += Math.floor((mergedValue / 10) * goldMult);
+          const basicGold = Math.floor((mergedValue / 10) * goldMult);
+          if (basicGold > 0) {
+              goldGained += basicGold;
+              // Only spawn gold indicator if it's a decent amount or golden
+          }
 
           // === LOOT LOGIC ===
           if (mode === 'RPG' || mode === 'DAILY' || mode === 'BOSS_RUSH') {
@@ -826,6 +844,7 @@ export const executeAutoCascade = (grid: Tile[], size: number, cascadeStep: numb
     let xp = 0;
     let gold = 0;
     let occurred = false;
+    let lootEvents: LootEvent[] = [];
     
     // We scan for stationary merges (neighbours with same value)
     // To prevent infinite loops or total board clear in one tick, we limit to one pass per "Step"
@@ -853,9 +872,15 @@ export const executeAutoCascade = (grid: Tile[], size: number, cascadeStep: numb
                 stepMult = 1 + (cascadeStep * 0.5); 
             }
 
-            xp += Math.floor(newVal * stepMult);
-            gold += Math.floor((newVal / 5) * stepMult);
+            const gainXp = Math.floor(newVal * stepMult);
+            const gainGold = Math.floor((newVal / 5) * stepMult);
+            xp += gainXp;
+            gold += gainGold;
             
+            // Visual Loot
+            lootEvents.push({ id: createId(), x: target.x, y: target.y, type: 'XP', value: gainXp });
+            if (gainGold > 0) lootEvents.push({ id: createId(), x: target.x, y: target.y, type: 'GOLD', value: gainGold });
+
             const mergedTile: Tile = {
                 ...target,
                 id: createId(),
@@ -892,7 +917,7 @@ export const executeAutoCascade = (grid: Tile[], size: number, cascadeStep: numb
         }
     }
     
-    return { occurred, grid: newGrid, rewards: { xp, gold } };
+    return { occurred, grid: newGrid, rewards: { xp, gold }, lootEvents };
 };
 
 // --- ACHIEVEMENTS ---
@@ -905,6 +930,15 @@ export const checkAchievements = (state: GameState): Achievement[] => {
 
 export const savePersistentAchievements = (ids: string[]) => {
     localStorage.setItem(ACHIEVEMENTS_STORAGE_KEY, JSON.stringify(ids));
+};
+
+// --- LORE SYSTEM ---
+export const checkLoreUnlocks = (state: GameState, profile: PlayerProfile): StoryEntry[] => {
+    const newUnlocks = STORY_ENTRIES.filter(entry => {
+        if (profile.unlockedLore.includes(entry.id)) return false;
+        return entry.unlockCondition(state.stats, state, profile);
+    });
+    return newUnlocks;
 };
 
 // --- DATA MGMT ---
