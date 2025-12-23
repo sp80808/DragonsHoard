@@ -1,6 +1,6 @@
 
 import React, { useMemo, useEffect, useRef } from 'react';
-import { Tile, LootEvent } from '../types';
+import { Tile, LootEvent, GraphicsQuality } from '../types';
 import { TileComponent } from './TileComponent';
 import { TILE_STYLES, BOSS_STYLE, RUNE_STYLES, FALLBACK_STYLE, STONE_STYLE } from '../constants';
 import { Coins, Star } from 'lucide-react';
@@ -12,24 +12,30 @@ interface GridProps {
   lootEvents: LootEvent[];
   slideSpeed: number;
   themeId?: string;
-  lowPerformanceMode?: boolean;
+  graphicsQuality?: GraphicsQuality;
   combo: number;
   tilesetId?: string;
+  lowPerformanceMode?: boolean; // Legacy
 }
 
-export const Grid = React.memo(({ grid, size, mergeEvents, lootEvents, slideSpeed, themeId, lowPerformanceMode, combo, tilesetId = 'DEFAULT' }: GridProps) => {
+export const Grid = React.memo(({ grid, size, mergeEvents, lootEvents, slideSpeed, themeId, graphicsQuality = 'HIGH', combo, tilesetId = 'DEFAULT', lowPerformanceMode }: GridProps) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const particlesRef = useRef<any[]>([]);
   const animationFrameRef = useRef<number>(0);
   const containerRef = useRef<HTMLDivElement>(null);
 
+  // Backward compatibility logic
+  const isLowQuality = graphicsQuality === 'LOW' || lowPerformanceMode === true;
+  const isMediumQuality = graphicsQuality === 'MEDIUM';
+
   // Dynamic Background Style based on Combo
   const ambientGlowClass = useMemo(() => {
+      if (isLowQuality) return "";
       if (combo >= 10) return "from-fuchsia-600/30 via-cyan-500/30 to-white/10 animate-pulse duration-75";
       if (combo >= 5) return "from-red-600/20 via-orange-600/20 to-yellow-600/10 animate-pulse duration-150";
       if (combo >= 2) return "from-yellow-600/15 via-orange-600/15 to-transparent animate-pulse duration-300";
       return "from-slate-900/40 to-slate-800/40";
-  }, [combo]);
+  }, [combo, isLowQuality]);
 
   const backgroundCells = useMemo(() => {
       const cells = Array.from({ length: size * size });
@@ -53,7 +59,7 @@ export const Grid = React.memo(({ grid, size, mergeEvents, lootEvents, slideSpee
   }, [size]);
 
   useEffect(() => {
-      if (lowPerformanceMode || mergeEvents.length === 0) return;
+      if (isLowQuality || mergeEvents.length === 0) return;
       const canvas = canvasRef.current;
       if (!canvas) return;
       const rect = canvas.getBoundingClientRect();
@@ -65,7 +71,11 @@ export const Grid = React.memo(({ grid, size, mergeEvents, lootEvents, slideSpee
            else if (evt.type === 'STONE') style = STONE_STYLE;
            else if (evt.type.startsWith('RUNE')) style = RUNE_STYLES[evt.type];
            const color = style?.particleColor || '#ffffff';
-           const comboMultiplier = Math.min(3, 1 + (combo * 0.2));
+           
+           // Reduce particles on Medium
+           let comboMultiplier = Math.min(3, 1 + (combo * 0.2));
+           if (isMediumQuality) comboMultiplier *= 0.5;
+           
            const particleCount = Math.floor(10 * comboMultiplier);
 
            for (let i = 0; i < particleCount; i++) {
@@ -94,10 +104,10 @@ export const Grid = React.memo(({ grid, size, mergeEvents, lootEvents, slideSpee
                });
            }
       });
-  }, [mergeEvents, size, lowPerformanceMode, combo]);
+  }, [mergeEvents, size, isLowQuality, isMediumQuality, combo]);
 
   useEffect(() => {
-      if (lowPerformanceMode) return;
+      if (isLowQuality) return;
       const canvas = canvasRef.current;
       if (!canvas) return;
       const ctx = canvas.getContext('2d');
@@ -134,20 +144,20 @@ export const Grid = React.memo(({ grid, size, mergeEvents, lootEvents, slideSpee
           window.removeEventListener('resize', resize);
           if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
       };
-  }, [lowPerformanceMode]);
+  }, [isLowQuality]);
 
   return (
     <div ref={containerRef} className="relative w-full aspect-square group mx-auto">
-        {!lowPerformanceMode && <div className={`absolute -inset-4 bg-gradient-to-r ${ambientGlowClass} rounded-3xl blur-2xl -z-10 transition-colors duration-500`}></div>}
+        {!isLowQuality && <div className={`absolute -inset-4 bg-gradient-to-r ${ambientGlowClass} rounded-3xl blur-2xl -z-10 transition-colors duration-500`}></div>}
         
-        <div className={`relative w-full h-full bg-black/90 rounded-xl p-1 sm:p-2 border-2 border-slate-700/50 shadow-2xl overflow-hidden ${lowPerformanceMode ? '' : 'backdrop-blur-md'}`}>
+        <div className={`relative w-full h-full bg-black/90 rounded-xl p-1 sm:p-2 border-2 border-slate-700/50 shadow-2xl overflow-hidden ${isLowQuality ? '' : 'backdrop-blur-md'}`}>
             <div className="absolute inset-0 opacity-20 pointer-events-none" style={{ backgroundImage: 'radial-gradient(circle at 50% 50%, rgba(255,255,255,0.1) 1px, transparent 1px)', backgroundSize: '20px 20px' }}></div>
             {backgroundCells}
 
             <div className="absolute inset-0 p-1 sm:p-2 pointer-events-none z-10">
                 <div className="relative w-full h-full">
                     {grid.map((tile) => (
-                    <TileComponent key={tile.id} tile={tile} gridSize={size} slideSpeed={slideSpeed} themeId={themeId} lowPerformanceMode={lowPerformanceMode} tilesetId={tilesetId} />
+                    <TileComponent key={tile.id} tile={tile} gridSize={size} slideSpeed={slideSpeed} themeId={themeId} graphicsQuality={graphicsQuality} tilesetId={tilesetId} />
                     ))}
                 </div>
             </div>
@@ -160,7 +170,7 @@ export const Grid = React.memo(({ grid, size, mergeEvents, lootEvents, slideSpee
                          const left = loot.x * tileSize;
                          return (
                              <div key={loot.id} className="absolute flex flex-col items-center justify-center animate-loot-float" style={{ width: `${tileSize}%`, height: `${tileSize}%`, top: `${top}%`, left: `${left}%` }}>
-                                 <div className={`flex items-center gap-1 px-2 py-1 rounded-full border shadow-lg ${lowPerformanceMode ? '' : 'backdrop-blur-md'}
+                                 <div className={`flex items-center gap-1 px-2 py-1 rounded-full border shadow-lg ${isLowQuality ? '' : 'backdrop-blur-md'}
                                      ${loot.type === 'GOLD' ? 'bg-yellow-900/80 border-yellow-500 text-yellow-300' 
                                        : loot.type === 'XP' ? 'bg-cyan-900/80 border-cyan-500 text-cyan-200' 
                                        : 'bg-indigo-900/80 border-indigo-500 text-indigo-200'}
@@ -180,7 +190,7 @@ export const Grid = React.memo(({ grid, size, mergeEvents, lootEvents, slideSpee
                 </div>
             </div>
 
-            {!lowPerformanceMode && <canvas ref={canvasRef} className="absolute inset-0 z-20 pointer-events-none w-full h-full"></canvas>}
+            {!isLowQuality && <canvas ref={canvasRef} className="absolute inset-0 z-20 pointer-events-none w-full h-full"></canvas>}
         </div>
     </div>
   );

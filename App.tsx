@@ -15,12 +15,13 @@ import { GameStatsModal } from './components/GameStatsModal';
 import { VersusGame } from './components/VersusGame';
 import { Grimoire } from './components/Grimoire';
 import { AmbientBackground } from './components/AmbientBackground';
-import { Direction, GameState, TileType, InventoryItem, CraftingRecipe, View, Achievement, ItemType, InputSettings, HeroClass, GameMode, PlayerProfile, DailyBounty, Difficulty, FeedbackEvent, LootEvent } from './types';
+import { MedalFeed } from './components/MedalFeed';
+import { Direction, GameState, TileType, InventoryItem, CraftingRecipe, View, Achievement, ItemType, InputSettings, HeroClass, GameMode, PlayerProfile, DailyBounty, Difficulty, FeedbackEvent, LootEvent, Medal } from './types';
 import { initializeGame, moveGrid, spawnTile, isGameOver, useInventoryItem, checkAchievements, executeAutoCascade, checkLoreUnlocks } from './services/gameLogic';
 import { SHOP_ITEMS, getXpThreshold, getStage, getItemDefinition } from './constants';
 import { audioService } from './services/audioService';
 import { loadCriticalAssets, loadBackgroundAssets } from './services/assetLoader';
-import { getPlayerProfile, markHintSeen, completeTutorial, unlockLore } from './services/storageService';
+import { getPlayerProfile, markHintSeen, completeTutorial, unlockLore, awardMedal } from './services/storageService';
 import { Skull, Loader2, CheckCircle } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -41,7 +42,8 @@ type Action =
   | { type: 'CASCADE_STEP'; payload: { grid: any[], rewards: { xp: number, gold: number }, lootEvents: LootEvent[] } }
   | { type: 'CASCADE_COMPLETE' }
   | { type: 'ACK_LEVEL_UP' }
-  | { type: 'CLEAR_LOOT' };
+  | { type: 'CLEAR_LOOT' }
+  | { type: 'CLEAR_MEDALS' };
 
 const reducer = (state: GameState, action: Action): GameState => {
   switch (action.type) {
@@ -51,7 +53,7 @@ const reducer = (state: GameState, action: Action): GameState => {
     case 'MOVE':
         if (state.gameOver || state.isCascading) return state;
 
-        const result = moveGrid(state.grid, action.direction, state.gridSize, state.gameMode, state.effectCounters, state.activeModifiers, state.difficulty);
+        const result = moveGrid(state.grid, action.direction, state.gridSize, state.gameMode, state.effectCounters, state.activeModifiers, state.difficulty, state.stats);
         
         if (!result.moved) return state;
 
@@ -61,6 +63,9 @@ const reducer = (state: GameState, action: Action): GameState => {
         newState.xp += result.xpGained;
         newState.gold += result.goldGained;
         newState.combo = result.combo;
+        
+        // Pass up medals
+        newState.lastTurnMedals = result.medalsEarned;
         
         // Accumulate loot events rather than replacing, Grid will filter old ones
         newState.lootEvents = [...(state.lootEvents || []), ...result.lootEvents];
@@ -98,13 +103,16 @@ const reducer = (state: GameState, action: Action): GameState => {
             totalMoves: newState.stats.totalMoves + 1,
             goldCollected: newState.stats.goldCollected + result.goldGained,
             highestCombo: Math.max(newState.stats.highestCombo, result.combo),
-            highestTile: Math.max(newState.stats.highestTile, ...newState.grid.map(t => t.value))
+            highestTile: Math.max(newState.stats.highestTile, ...newState.grid.map(t => t.value)),
+            totalMerges: newState.stats.totalMerges + result.mergedIds.length,
         };
+        
         newState.runStats = {
              ...newState.runStats,
              turnCount: newState.runStats.turnCount + 1,
              goldEarned: newState.runStats.goldEarned + result.goldGained,
-             bossesDefeated: newState.runStats.bossesDefeated + (result.bossDefeated ? 1 : 0)
+             bossesDefeated: newState.runStats.bossesDefeated + (result.bossDefeated ? 1 : 0),
+             medalsEarned: [...(newState.runStats.medalsEarned || []), ...result.medalsEarned.map(m => m.id)]
         };
 
         // Check Victory Condition (2048) - Only trigger once
@@ -153,6 +161,9 @@ const reducer = (state: GameState, action: Action): GameState => {
 
     case 'CLEAR_LOOT':
         return { ...state, lootEvents: [] };
+    
+    case 'CLEAR_MEDALS':
+        return { ...state, lastTurnMedals: [] };
 
     case 'CONTINUE':
         return { ...state, victory: false }; 
@@ -271,6 +282,7 @@ const App: React.FC = () => {
   const [feedbackQueue, setFeedbackQueue] = useState<FeedbackEvent[]>([]);
   const [shakeIntensity, setShakeIntensity] = useState(0);
   const [showTutorial, setShowTutorial] = useState(false);
+  const [medalQueue, setMedalQueue] = useState<{id: string, medal: Medal}[]>([]);
   
   // HUD/UI State
   const [showStore, setShowStore] = useState(false);
@@ -288,6 +300,9 @@ const App: React.FC = () => {
   const prevLevelRef = useRef(state.level);
   const prevBossesRef = useRef(state.runStats.bossesDefeated);
   const prevGridSizeRef = useRef(state.gridSize);
+
+  // Derived low performance bool for legacy components until full migration
+  const lowPerformanceMode = state.settings.graphicsQuality === 'LOW';
 
   useEffect(() => {
      loadCriticalAssets((p) => {
@@ -309,6 +324,27 @@ const App: React.FC = () => {
           localStorage.setItem('2048_rpg_state_v3', JSON.stringify(state));
       }
   }, [state, isLoading, view]);
+
+  // Handle Medals
+  useEffect(() => {
+      if (state.lastTurnMedals && state.lastTurnMedals.length > 0) {
+          const newMedals = state.lastTurnMedals.map(medal => {
+              awardMedal(medal.id);
+              return { id: uuidv4(), medal };
+          });
+          
+          setMedalQueue(prev => [...prev, ...newMedals]);
+          audioService.playLevelUp(); // Re-use nice sound for medal earn
+          
+          // Clear after processing so we don't re-process on re-renders
+          setTimeout(() => dispatch({ type: 'CLEAR_MEDALS' }), 0);
+          
+          // Auto remove from visual feed faster (1.5s)
+          setTimeout(() => {
+              setMedalQueue(prev => prev.slice(newMedals.length));
+          }, 1500); 
+      }
+  }, [state.lastTurnMedals]);
 
   // Accumulative Loot Clearing
   useEffect(() => {
@@ -428,8 +464,12 @@ const App: React.FC = () => {
           if (!dragStartRef.current || !state.settings.enableSwipe) return;
           const dx = clientX - dragStartRef.current.x;
           const dy = clientY - dragStartRef.current.y;
-          const threshold = (state.settings.sensitivity || 5) * 10;
-          if (Math.abs(dx) > threshold || Math.abs(dy) > threshold) {
+          
+          const sensitivity = state.settings.sensitivity || 5;
+          const threshold = 80 - (sensitivity * 6); // Range: 74px to 20px
+          const safeThreshold = Math.max(15, threshold); 
+
+          if (Math.abs(dx) > safeThreshold || Math.abs(dy) > safeThreshold) {
               if (state.gameOver || state.isCascading || showStore || showStats || showTutorial) {
                   dragStartRef.current = null;
                   return;
@@ -617,15 +657,15 @@ const App: React.FC = () => {
             >
               <div className={`absolute inset-0 bg-black/60 ${state.level >= 30 ? 'bg-black/80' : ''}`}></div>
               <div className={`absolute inset-0 bg-gradient-to-t from-black via-transparent to-black/80`}></div>
-              {!state.settings.lowPerformanceMode && (
+              {!lowPerformanceMode && (
                   <div className="fog-wrapper"><div className="fog-piece"></div><div className="fog-piece"></div></div>
               )}
-              {!state.settings.lowPerformanceMode && <div className="scanlines"></div>}
+              {state.settings.graphicsQuality === 'HIGH' && <div className="scanlines"></div>}
               <div className="vignette"></div>
             </motion.div>
 
             {/* Torch Effect Layer - Dynamic Opacity based on gameplay action */}
-            {!state.settings.lowPerformanceMode && (
+            {state.settings.graphicsQuality === 'HIGH' && (
                 <div 
                     className="torch-overlay"
                     style={{ 
@@ -635,10 +675,11 @@ const App: React.FC = () => {
                 ></div>
             )}
 
-            <AmbientBackground lowPerformanceMode={state.settings.lowPerformanceMode} />
-            {!state.settings.lowPerformanceMode && <div className="fog-layer"></div>}
+            <AmbientBackground graphicsQuality={state.settings.graphicsQuality} />
+            {state.settings.graphicsQuality === 'HIGH' && <div className="fog-layer"></div>}
 
             <FeedbackLayer events={feedbackQueue} onDismiss={removeFeedback} />
+            <MedalFeed queue={medalQueue} />
             {showTutorial && <TutorialOverlay onDismiss={dismissTutorial} />}
 
             <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[90] flex flex-col gap-2 pointer-events-none w-full max-w-sm px-4">
@@ -701,7 +742,7 @@ const App: React.FC = () => {
                             lootEvents={state.lootEvents || []} 
                             slideSpeed={state.settings.slideSpeed || 150}
                             themeId={state.currentStage.themeId}
-                            lowPerformanceMode={state.settings.lowPerformanceMode}
+                            graphicsQuality={state.settings.graphicsQuality}
                             combo={state.combo}
                             tilesetId={state.tilesetId}
                         />

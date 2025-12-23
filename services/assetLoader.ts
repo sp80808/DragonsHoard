@@ -75,6 +75,8 @@ export const loadCriticalAssets = async (onProgress: (percent: number) => void, 
     
     // 1. Collect Image URLs (Visuals are critical)
     const imagesToLoad = [
+        // SPLASH BACKGROUND - Explicitly loaded here
+        'https://image.pollinations.ai/prompt/mysterious%20dark%20fantasy%20dungeon%20entrance%20environment%20art%20no%20text%20scenery?width=1024&height=1024&nologo=true&seed=99',
         ...Object.values(TILE_STYLES).map(s => s.imageUrl),
         BOSS_STYLE.imageUrl,
         ...Object.values(RUNE_STYLES).map(s => s.imageUrl),

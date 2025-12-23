@@ -1,9 +1,9 @@
 
 import React, { useState } from 'react';
-import { ArrowLeft, Volume2, VolumeX, Trash2, AlertCircle, Music, Keyboard, MousePointer, Monitor, MessageSquare, Gauge, Zap, Sparkles, Database, Save, Activity } from 'lucide-react';
+import { ArrowLeft, Volume2, VolumeX, Trash2, AlertCircle, Music, Keyboard, MousePointer, Monitor, MessageSquare, Gauge, Zap, Sparkles, Database, Save, Activity, Layers, Image as ImageIcon, Box } from 'lucide-react';
 import { audioService } from '../services/audioService';
 import { clearSaveData } from '../services/gameLogic';
-import { InputSettings } from '../types';
+import { InputSettings, GraphicsQuality } from '../types';
 
 interface SettingsProps {
   settings: InputSettings;
@@ -14,7 +14,6 @@ interface SettingsProps {
 
 type SettingsTab = 'GAMEPLAY' | 'AUDIO' | 'DATA';
 
-// Sub Components defined before usage to ensure type inference works correctly
 const SettingsIcon = ({ className }: { className?: string }) => (
     <svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" className={className}><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
 );
@@ -48,6 +47,27 @@ const Toggle = ({ checked, onChange, size = 'md' }: { checked: boolean, onChange
     </label>
 );
 
+const QualityButton = ({ value, label, current, onClick, desc }: { value: GraphicsQuality, label: string, current: GraphicsQuality, onClick: (v: GraphicsQuality) => void, desc: string }) => {
+    const isActive = value === current;
+    return (
+        <button 
+            onClick={() => onClick(value)}
+            className={`flex-1 flex flex-col items-center justify-center p-3 rounded-xl border transition-all duration-200 gap-1
+                ${isActive 
+                    ? 'bg-blue-900/30 border-blue-500 shadow-[0_0_15px_rgba(59,130,246,0.2)]' 
+                    : 'bg-slate-900 border-slate-700 hover:bg-slate-800 hover:border-slate-500'}
+            `}
+        >
+            <span className={`text-xs font-bold uppercase tracking-widest ${isActive ? 'text-blue-400' : 'text-slate-400'}`}>
+                {label}
+            </span>
+            <span className={`text-[9px] text-center leading-tight ${isActive ? 'text-blue-200' : 'text-slate-500'}`}>
+                {desc}
+            </span>
+        </button>
+    );
+};
+
 export const Settings: React.FC<SettingsProps> = ({ settings, onUpdateSettings, onBack, onClearData }) => {
   const [activeTab, setActiveTab] = useState<SettingsTab>('GAMEPLAY');
   const [sfxVolume, setSfxVolume] = useState(audioService.getVolume() * 100);
@@ -70,8 +90,8 @@ export const Settings: React.FC<SettingsProps> = ({ settings, onUpdateSettings, 
       onUpdateSettings({ ...settings, [key]: !settings[key] });
   };
 
-  const handleSensitivityChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-      onUpdateSettings({ ...settings, sensitivity: parseInt(e.target.value) });
+  const handleQualityChange = (q: GraphicsQuality) => {
+      onUpdateSettings({ ...settings, graphicsQuality: q });
   };
 
   const handleSlideSpeedChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -121,19 +141,35 @@ export const Settings: React.FC<SettingsProps> = ({ settings, onUpdateSettings, 
             {activeTab === 'GAMEPLAY' && (
                 <div className="space-y-6 animate-in slide-in-from-right-4 duration-300">
                     
-                    {/* Performance Section */}
-                    <Section title="Performance" icon={<Activity size={18} className="text-green-400"/>}>
-                        <div className="bg-slate-900/80 border border-slate-700 rounded-xl p-4 flex items-center justify-between">
-                            <div>
-                                <div className="text-white font-bold flex items-center gap-2">
-                                    <Zap size={16} className={settings.lowPerformanceMode ? "text-slate-500" : "text-yellow-400"} /> 
-                                    Performance Mode
-                                </div>
-                                <div className="text-xs text-slate-400 mt-1 max-w-[280px]">
-                                    Reduces particles and disables blur effects. Recommended for older devices or battery saving.
-                                </div>
+                    {/* Visual Quality Section */}
+                    <Section title="Visual Quality" icon={<Layers size={18} className="text-green-400"/>}>
+                        <div className="bg-slate-900/80 border border-slate-700 rounded-xl p-4">
+                            <div className="flex gap-2 mb-4">
+                                <QualityButton 
+                                    value="LOW" 
+                                    label="Performance" 
+                                    desc="Max FPS. No effects." 
+                                    current={settings.graphicsQuality} 
+                                    onClick={handleQualityChange} 
+                                />
+                                <QualityButton 
+                                    value="MEDIUM" 
+                                    label="Balanced" 
+                                    desc="Standard look. No blur." 
+                                    current={settings.graphicsQuality} 
+                                    onClick={handleQualityChange} 
+                                />
+                                <QualityButton 
+                                    value="HIGH" 
+                                    label="Quality" 
+                                    desc="Full particles & glow." 
+                                    current={settings.graphicsQuality} 
+                                    onClick={handleQualityChange} 
+                                />
                             </div>
-                            <Toggle checked={settings.lowPerformanceMode} onChange={() => toggleSetting('lowPerformanceMode')} />
+                            <div className="text-[10px] text-slate-500 text-center italic">
+                                Note: Changing quality may require a reload to fully apply all shaders.
+                            </div>
                         </div>
                     </Section>
 
@@ -285,4 +321,3 @@ export const Settings: React.FC<SettingsProps> = ({ settings, onUpdateSettings, 
     </div>
   );
 };
-    

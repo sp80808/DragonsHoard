@@ -51,6 +51,7 @@ export const getPlayerProfile = (): PlayerProfile => {
         if (!profile.seenHints) profile.seenHints = [];
         if (!profile.activeTilesetId) profile.activeTilesetId = 'DEFAULT';
         if (!profile.unlockedLore) profile.unlockedLore = [];
+        if (!profile.earnedMedals) profile.earnedMedals = {};
         
         // Check Daily Reset
         const today = new Date().toISOString().split('T')[0];
@@ -82,7 +83,8 @@ export const getPlayerProfile = (): PlayerProfile => {
     bossTutorialCompleted: false,
     seenHints: [],
     activeTilesetId: 'DEFAULT',
-    unlockedLore: []
+    unlockedLore: [],
+    earnedMedals: {}
   };
   saveProfile(newProfile);
   return newProfile;
@@ -118,6 +120,13 @@ export const unlockLore = (loreId: string) => {
     return false;
 };
 
+export const awardMedal = (medalId: string) => {
+    const profile = getPlayerProfile();
+    if (!profile.earnedMedals) profile.earnedMedals = {};
+    profile.earnedMedals[medalId] = (profile.earnedMedals[medalId] || 0) + 1;
+    saveProfile(profile);
+};
+
 // Forcefully unlock a class (used for victory rewards)
 export const unlockClass = (cls: HeroClass) => {
     const profile = getPlayerProfile();
@@ -129,7 +138,15 @@ export const unlockClass = (cls: HeroClass) => {
     return false; // Already unlocked
 };
 
-export const finalizeRun = (finalState: GameState): { profile: PlayerProfile, leveledUp: boolean, xpGained: number, bountiesCompleted: number } => {
+export interface UnlockReward {
+    type: 'CLASS' | 'FEATURE' | 'TILESET';
+    id: string;
+    label: string;
+    desc: string;
+    level: number;
+}
+
+export const finalizeRun = (finalState: GameState): { profile: PlayerProfile, leveledUp: boolean, xpGained: number, bountiesCompleted: number, newUnlocks: UnlockReward[] } => {
   const profile = getPlayerProfile();
   
   // 1. Calculate Base Run XP
@@ -173,67 +190,74 @@ export const finalizeRun = (finalState: GameState): { profile: PlayerProfile, le
 
   // 4. Check for Account Level Up & Class Unlocks
   let leveledUp = false;
+  const newUnlocks: UnlockReward[] = [];
   
+  // We simulate leveling up step by step to catch all rewards
   while (true) {
     const nextLevelXp = getXpForLevel(profile.accountLevel);
     if (profile.totalAccountXp >= nextLevelXp) {
         profile.accountLevel += 1;
         leveledUp = true;
-        
+        const level = profile.accountLevel;
+
         // Unlock Classes
-        if (profile.accountLevel >= 3 && !profile.unlockedClasses.includes(HeroClass.WARRIOR)) {
+        if (level >= 3 && !profile.unlockedClasses.includes(HeroClass.WARRIOR)) {
             profile.unlockedClasses.push(HeroClass.WARRIOR);
+            newUnlocks.push({ type: 'CLASS', id: HeroClass.WARRIOR, label: 'Warrior', desc: 'Starts with Bomb Scroll', level });
         }
-        if (profile.accountLevel >= 5 && !profile.unlockedClasses.includes(HeroClass.ROGUE)) {
+        if (level >= 5 && !profile.unlockedClasses.includes(HeroClass.ROGUE)) {
             profile.unlockedClasses.push(HeroClass.ROGUE);
+            newUnlocks.push({ type: 'CLASS', id: HeroClass.ROGUE, label: 'Rogue', desc: 'Starts with Reroll Token', level });
         }
-        if (profile.accountLevel >= 10 && !profile.unlockedClasses.includes(HeroClass.MAGE)) {
+        if (level >= 10 && !profile.unlockedClasses.includes(HeroClass.MAGE)) {
             profile.unlockedClasses.push(HeroClass.MAGE);
+            newUnlocks.push({ type: 'CLASS', id: HeroClass.MAGE, label: 'Mage', desc: 'Starts with XP Potion', level });
         }
-         if (profile.accountLevel >= 20 && !profile.unlockedClasses.includes(HeroClass.PALADIN)) {
+         if (level >= 20 && !profile.unlockedClasses.includes(HeroClass.PALADIN)) {
             profile.unlockedClasses.push(HeroClass.PALADIN);
+            newUnlocks.push({ type: 'CLASS', id: HeroClass.PALADIN, label: 'Paladin', desc: 'Starts with Golden Rune', level });
         }
 
         // Unlock Features
-        // Level 5: Hard Mode
-        if (profile.accountLevel >= 5 && !profile.unlockedFeatures.includes('HARD_MODE')) {
+        if (level >= 5 && !profile.unlockedFeatures.includes('HARD_MODE')) {
             profile.unlockedFeatures.push('HARD_MODE');
+            newUnlocks.push({ type: 'FEATURE', id: 'HARD_MODE', label: 'Hard Mode', desc: 'Higher risks, higher rewards.', level });
         }
-        // Level 8: Undead Tileset
-        if (profile.accountLevel >= 8 && !profile.unlockedFeatures.includes('TILESET_UNDEAD')) {
+        if (level >= 8 && !profile.unlockedFeatures.includes('TILESET_UNDEAD')) {
             profile.unlockedFeatures.push('TILESET_UNDEAD');
+            newUnlocks.push({ type: 'TILESET', id: 'TILESET_UNDEAD', label: 'Necrotic Rot', desc: 'New visual theme unlocked.', level });
         }
-        // Level 12: Boss Rush Mode
-        if (profile.accountLevel >= 12 && !profile.unlockedFeatures.includes('MODE_BOSS_RUSH')) {
+        if (level >= 12 && !profile.unlockedFeatures.includes('MODE_BOSS_RUSH')) {
             profile.unlockedFeatures.push('MODE_BOSS_RUSH');
+            newUnlocks.push({ type: 'FEATURE', id: 'MODE_BOSS_RUSH', label: 'Boss Rush', desc: 'Start at level 5 with boss waves.', level });
         }
-        // Level 15: Infernal Tileset
-        if (profile.accountLevel >= 15 && !profile.unlockedFeatures.includes('TILESET_INFERNAL')) {
+        if (level >= 15 && !profile.unlockedFeatures.includes('TILESET_INFERNAL')) {
             profile.unlockedFeatures.push('TILESET_INFERNAL');
+            newUnlocks.push({ type: 'TILESET', id: 'TILESET_INFERNAL', label: 'Infernal Core', desc: 'Magma visual theme.', level });
         }
-        // Level 25: Aquatic Tileset
-        if (profile.accountLevel >= 25 && !profile.unlockedFeatures.includes('TILESET_AQUATIC')) {
+        if (level >= 25 && !profile.unlockedFeatures.includes('TILESET_AQUATIC')) {
             profile.unlockedFeatures.push('TILESET_AQUATIC');
+            newUnlocks.push({ type: 'TILESET', id: 'TILESET_AQUATIC', label: 'Abyssal Depth', desc: 'Oceanic visual theme.', level });
         }
-        // Level 35: Cyberpunk Tileset
-        if (profile.accountLevel >= 35 && !profile.unlockedFeatures.includes('TILESET_CYBERPUNK')) {
+        if (level >= 35 && !profile.unlockedFeatures.includes('TILESET_CYBERPUNK')) {
             profile.unlockedFeatures.push('TILESET_CYBERPUNK');
+            newUnlocks.push({ type: 'TILESET', id: 'TILESET_CYBERPUNK', label: 'Neon City', desc: 'Futuristic visual theme.', level });
         }
-        // Level 45: Steampunk Tileset
-        if (profile.accountLevel >= 45 && !profile.unlockedFeatures.includes('TILESET_STEAMPUNK')) {
+        if (level >= 45 && !profile.unlockedFeatures.includes('TILESET_STEAMPUNK')) {
             profile.unlockedFeatures.push('TILESET_STEAMPUNK');
+            newUnlocks.push({ type: 'TILESET', id: 'TILESET_STEAMPUNK', label: 'Clockwork', desc: 'Steampunk visual theme.', level });
         }
-        // Level 50: Celestial Tileset
-        if (profile.accountLevel >= 50 && !profile.unlockedFeatures.includes('TILESET_CELESTIAL')) {
+        if (level >= 50 && !profile.unlockedFeatures.includes('TILESET_CELESTIAL')) {
             profile.unlockedFeatures.push('TILESET_CELESTIAL');
+            newUnlocks.push({ type: 'TILESET', id: 'TILESET_CELESTIAL', label: 'Divine Light', desc: 'Angelic visual theme.', level });
         }
-        // Level 55: Feudal Tileset
-        if (profile.accountLevel >= 55 && !profile.unlockedFeatures.includes('TILESET_FEUDAL')) {
+        if (level >= 55 && !profile.unlockedFeatures.includes('TILESET_FEUDAL')) {
             profile.unlockedFeatures.push('TILESET_FEUDAL');
+            newUnlocks.push({ type: 'TILESET', id: 'TILESET_FEUDAL', label: 'Ronin Path', desc: 'Samurai visual theme.', level });
         }
-        // Level 60: Candy Tileset
-        if (profile.accountLevel >= 60 && !profile.unlockedFeatures.includes('TILESET_CANDY')) {
+        if (level >= 60 && !profile.unlockedFeatures.includes('TILESET_CANDY')) {
             profile.unlockedFeatures.push('TILESET_CANDY');
+            newUnlocks.push({ type: 'TILESET', id: 'TILESET_CANDY', label: 'Sugar Rush', desc: 'Candy visual theme.', level });
         }
 
     } else {
@@ -242,7 +266,7 @@ export const finalizeRun = (finalState: GameState): { profile: PlayerProfile, le
   }
 
   saveProfile(profile);
-  return { profile, leveledUp, xpGained: runXp, bountiesCompleted: bountiesCompletedCount };
+  return { profile, leveledUp, xpGained: runXp, bountiesCompleted: bountiesCompletedCount, newUnlocks };
 };
 
 const saveProfile = (p: PlayerProfile) => localStorage.setItem(STORAGE_KEY, JSON.stringify(p));

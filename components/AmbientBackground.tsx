@@ -1,15 +1,20 @@
+
 import React, { useEffect, useRef } from 'react';
+import { GraphicsQuality } from '../types';
 
 interface AmbientBackgroundProps {
-  lowPerformanceMode: boolean;
+  lowPerformanceMode?: boolean; // Legacy
+  graphicsQuality?: GraphicsQuality;
 }
 
-export const AmbientBackground: React.FC<AmbientBackgroundProps> = React.memo(({ lowPerformanceMode }) => {
+export const AmbientBackground: React.FC<AmbientBackgroundProps> = React.memo(({ lowPerformanceMode, graphicsQuality = 'HIGH' }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const animationRef = useRef<number>(0);
 
+  const isDisabled = lowPerformanceMode === true || graphicsQuality !== 'HIGH';
+
   useEffect(() => {
-    if (lowPerformanceMode) return;
+    if (isDisabled) return;
 
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -73,9 +78,9 @@ export const AmbientBackground: React.FC<AmbientBackgroundProps> = React.memo(({
         window.removeEventListener('resize', handleResize);
         if (animationRef.current) cancelAnimationFrame(animationRef.current);
     };
-  }, [lowPerformanceMode]);
+  }, [isDisabled]);
 
-  if (lowPerformanceMode) return null;
+  if (isDisabled) return null;
 
   return (
     <canvas 

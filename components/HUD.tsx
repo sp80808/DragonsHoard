@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { getXpThreshold, getLevelRank } from '../constants';
 import { Trophy, Star, Store as StoreIcon, Coins, RefreshCw, Menu, Clover, Skull, Zap, Info, HelpCircle, Flame, Hammer, Moon, Sun, Waves, Gem, Calendar } from 'lucide-react';
@@ -198,6 +197,9 @@ export const HUD = React.memo(({
   const goldControls = useAnimation();
   const [activeTooltip, setActiveTooltip] = useState<string | null>(null);
 
+  // Derive graphics quality setting
+  const isLowQuality = settings.graphicsQuality === 'LOW';
+
   useEffect(() => {
       if (xpRef.current) registerTarget('XP', xpRef.current);
       if (goldRef.current) registerTarget('GOLD', goldRef.current);
@@ -261,7 +263,7 @@ export const HUD = React.memo(({
               {isOpen && (
                   <>
                     <div className="fixed inset-0 z-[90]" onClick={() => setActiveTooltip(null)}></div>
-                    <div className={`absolute top-full ${side === 'left' ? 'left-0' : 'right-0'} mt-2 w-56 bg-slate-900/95 border border-slate-700 rounded-lg p-3 shadow-2xl z-[100] ${settings.lowPerformanceMode ? 'bg-slate-900' : 'backdrop-blur-md'} text-left animate-in fade-in zoom-in-95 duration-200`}>
+                    <div className={`absolute top-full ${side === 'left' ? 'left-0' : 'right-0'} mt-2 w-56 bg-slate-900/95 border border-slate-700 rounded-lg p-3 shadow-2xl z-[100] ${isLowQuality ? 'bg-slate-900' : 'backdrop-blur-md'} text-left animate-in fade-in zoom-in-95 duration-200`}>
                         <h4 className="text-xs font-bold text-white mb-2 pb-2 border-b border-slate-800 flex items-center gap-2">{title}</h4>
                         <div className="text-[10px] text-slate-300 leading-relaxed font-sans">{content}</div>
                         <div className={`absolute -top-1 ${side === 'left' ? 'left-2' : 'right-2'} w-2 h-2 bg-slate-900 border-t border-l border-slate-700 transform rotate-45`}></div>
@@ -274,7 +276,7 @@ export const HUD = React.memo(({
 
   return (
     <div className="w-full mb-1 md:mb-2 space-y-1 md:space-y-2">
-      <div className={`flex flex-wrap justify-between items-center bg-slate-900/90 p-2 rounded-xl border border-slate-700 shadow-xl gap-2 ${settings.lowPerformanceMode ? '' : 'backdrop-blur-md'}`}>
+      <div className={`flex flex-wrap justify-between items-center bg-slate-900/90 p-2 rounded-xl border border-slate-700 shadow-xl gap-2 ${isLowQuality ? '' : 'backdrop-blur-md'}`}>
         <div className="flex items-center gap-2 md:gap-3 flex-1 min-w-[120px]">
             <button onClick={onMenu} className="p-1.5 md:p-2 -ml-1 md:-ml-2 hover:bg-white/10 rounded-lg transition-colors text-slate-400 hover:text-white">
                 <Menu size={18} className="md:w-5 md:h-5" />
@@ -327,7 +329,7 @@ export const HUD = React.memo(({
                   
                   {/* Active Buffs */}
                   {buffs.map(b => (
-                      <div key={b.id} className={`px-2 py-1 rounded border flex items-center gap-2 ${b.color} shadow-sm ${settings.lowPerformanceMode ? '' : 'backdrop-blur-sm'} whitespace-nowrap`}>
+                      <div key={b.id} className={`px-2 py-1 rounded border flex items-center gap-2 ${b.color} shadow-sm ${isLowQuality ? '' : 'backdrop-blur-sm'} whitespace-nowrap`}>
                           {b.icon}
                           <span className="text-[9px] font-bold text-slate-200 tracking-wide">{b.label}</span>
                           <span className="text-[10px] font-mono text-white bg-black/40 px-1 rounded">{b.count}</span>
@@ -365,11 +367,11 @@ export const HUD = React.memo(({
                     </div>
                     <div className="w-full h-2 md:h-4 bg-black/80 rounded-full border border-slate-700/80 relative overflow-hidden shadow-[inset_0_2px_4px_rgba(0,0,0,1)]">
                         <div className={`h-full bg-gradient-to-r ${barGradient} transition-all duration-700 ease-out relative shadow-[0_0_15px_rgba(255,255,255,0.1)]`} style={{ width: `${xpPercent}%` }}>
-                            {!settings.lowPerformanceMode && (
+                            {!isLowQuality && (
                                 <div className="absolute inset-0 w-full h-full opacity-50" style={{ background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.4) 50%, transparent)', animation: `shimmer ${shimmerDuration} infinite linear` }}></div>
                             )}
                         </div>
-                        {!settings.lowPerformanceMode && <div className="absolute inset-0 bg-gradient-to-b from-white/10 to-transparent pointer-events-none rounded-full"></div>}
+                        {!isLowQuality && <div className="absolute inset-0 bg-gradient-to-b from-white/10 to-transparent pointer-events-none rounded-full"></div>}
                     </div>
                 </div>
             </motion.div>

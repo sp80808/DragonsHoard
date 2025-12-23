@@ -148,6 +148,7 @@ export interface RunStats {
   bossesDefeated: number;
   mergesCount: number;
   itemsCrafted: number;
+  medalsEarned: string[]; // List of Medal IDs earned this run
 }
 
 export interface DailyBounty {
@@ -176,6 +177,7 @@ export interface PlayerProfile {
   seenHints: string[]; // IDs of hints player has already seen
   activeTilesetId: string;
   unlockedLore: string[]; // IDs of unlocked story fragments
+  earnedMedals: Record<string, number>; // Medal ID -> Count
 }
 
 export interface Achievement {
@@ -196,6 +198,8 @@ export interface StoryEntry {
     order: number;
 }
 
+export type GraphicsQuality = 'HIGH' | 'MEDIUM' | 'LOW';
+
 export interface InputSettings {
   enableKeyboard: boolean;
   enableSwipe: boolean;
@@ -205,7 +209,7 @@ export interface InputSettings {
   sensitivity: number; // 1-10 (For scroll/swipe threshold)
   enableTooltips: boolean;
   slideSpeed: number; // ms duration for tile movement
-  lowPerformanceMode: boolean; // Disables expensive CSS and particles
+  graphicsQuality: GraphicsQuality; // Replaces lowPerformanceMode
 }
 
 export interface ShopItemState {
@@ -224,6 +228,17 @@ export interface DailyModifier {
     description: string;
     icon: string;
     color: string;
+}
+
+// --- MEDALS SYSTEM ---
+export type MedalRarity = 'COMMON' | 'UNCOMMON' | 'RARE' | 'EPIC' | 'LEGENDARY';
+
+export interface Medal {
+    id: string;
+    name: string;
+    description: string;
+    icon: React.ReactNode;
+    rarity: MedalRarity;
 }
 
 export interface GameState {
@@ -262,6 +277,7 @@ export interface GameState {
   shop: ShopState;
   activeModifiers: DailyModifier[]; // New: List of active modifiers for Daily/Challenge runs
   lootEvents: LootEvent[];
+  lastTurnMedals: Medal[]; // Medals earned in the most recent move (cleared by UI)
 }
 
 export interface MoveResult {
@@ -278,6 +294,7 @@ export interface MoveResult {
   powerUpTriggered?: TileType;
   bossDefeated: boolean;
   lootEvents: LootEvent[];
+  medalsEarned: Medal[];
 }
 
 export interface LootResult {

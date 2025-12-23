@@ -1,6 +1,7 @@
 
-import { TileType, ItemType, GameStats, GameState, Stage, Achievement, HeroClass, CraftingRecipe, DailyModifier, StoryEntry, PlayerProfile } from './types';
-import { Trophy, Star, Shield, Zap, Swords, LayoutGrid, Map } from 'lucide-react';
+import { TileType, ItemType, GameStats, GameState, Stage, Achievement, HeroClass, CraftingRecipe, DailyModifier, StoryEntry, PlayerProfile, Medal } from './types';
+import { Trophy, Star, Shield, Zap, Swords, LayoutGrid, Map, Flame, Target, Hexagon, Crosshair, Medal as MedalIcon, Crown, Skull } from 'lucide-react';
+import React from 'react';
 
 export const GRID_SIZE_INITIAL = 4;
 
@@ -45,105 +46,14 @@ export const TILE_STYLES: Record<number, any> = {
 };
 
 // Alternative Tileset: Undead
-export const UNDEAD_TILE_STYLES: Record<number, any> = {
-  ...TILE_STYLES,
-  2: { label: 'ICHOR', color: 'from-lime-900 to-slate-900', ringColor: 'ring-lime-700', icon: '🦠', glow: 'shadow-lime-700/50', imageUrl: genUrl('green toxic slime ooze undead monster rpg', 1002), particleColor: '#4d7c0f' },
-  4: { label: 'SKULL', color: 'from-gray-500 to-gray-700', ringColor: 'ring-gray-400', icon: '💀', glow: 'shadow-gray-400/50', imageUrl: genUrl('floating human skull glowing red eyes sinister rpg', 1004), particleColor: '#9ca3af' },
-  8: { label: 'ZOMBIE', color: 'from-emerald-800 to-emerald-950', ringColor: 'ring-emerald-600', icon: '🧟', glow: 'shadow-emerald-600/50', imageUrl: genUrl('rotting flesh zombie warrior rpg', 1008), particleColor: '#059669' },
-  16: { label: 'GHOUL', color: 'from-teal-800 to-teal-950', ringColor: 'ring-teal-600', icon: '😱', glow: 'shadow-teal-600/50', imageUrl: genUrl('ghoul monster graveyard rpg', 1016), particleColor: '#0d9488' },
-  32: { label: 'WRAITH', color: 'from-indigo-800 to-black', ringColor: 'ring-indigo-600', icon: '👻', glow: 'shadow-indigo-600/50', imageUrl: genUrl('shadow wraith phantom rpg', 1032), particleColor: '#4f46e5' },
-  64: { label: 'MUMMY', color: 'from-yellow-800 to-yellow-950', ringColor: 'ring-yellow-600', icon: '🤕', glow: 'shadow-yellow-600/50', imageUrl: genUrl('ancient mummy bandages rpg', 1064), particleColor: '#ca8a04' },
-  128: { label: 'VAMPIRE', color: 'from-red-800 to-red-950', ringColor: 'ring-red-600', icon: '🧛', glow: 'shadow-red-600/50', imageUrl: genUrl('vampire lord dracula rpg', 1128), particleColor: '#dc2626' },
-};
-
-// Alternative Tileset: Infernal
-export const INFERNAL_TILE_STYLES: Record<number, any> = {
-  ...TILE_STYLES,
-  2: { label: 'EMBER', color: 'from-orange-600 to-red-600', ringColor: 'ring-orange-500', icon: '🔥', glow: 'shadow-orange-500/50', imageUrl: genUrl('glowing ember coal fire rpg', 2002), particleColor: '#f97316' },
-  4: { label: 'IMP', color: 'from-red-600 to-red-800', ringColor: 'ring-red-500', icon: '😈', glow: 'shadow-red-500/50', imageUrl: genUrl('mischievous red imp demon rpg', 2004), particleColor: '#ef4444' },
-  8: { label: 'HELLHOUND', color: 'from-orange-800 to-red-900', ringColor: 'ring-orange-600', icon: '🐕', glow: 'shadow-orange-600/50', imageUrl: genUrl('hellhound fire dog rpg', 2008), particleColor: '#ea580c' },
-  16: { label: 'MAGMA', color: 'from-red-800 to-stone-900', ringColor: 'ring-red-600', icon: '🌋', glow: 'shadow-red-600/50', imageUrl: genUrl('magma golem lava rpg', 2016), particleColor: '#dc2626' },
-  32: { label: 'IFRIT', color: 'from-yellow-600 to-orange-700', ringColor: 'ring-yellow-500', icon: '🧞', glow: 'shadow-yellow-500/50', imageUrl: genUrl('fire djinn ifrit rpg', 2032), particleColor: '#ca8a04' },
-  64: { label: 'DRAKE', color: 'from-red-700 to-red-950', ringColor: 'ring-red-500', icon: '🐲', glow: 'shadow-red-500/50', imageUrl: genUrl('fire drake dragon rpg', 2064), particleColor: '#b91c1c' },
-  128: { label: 'BALROG', color: 'from-orange-900 to-black', ringColor: 'ring-orange-600', icon: '👹', glow: 'shadow-orange-600/50', imageUrl: genUrl('shadow flame demon balrog rpg', 2128), particleColor: '#7c2d12' },
-};
-
-// Alternative Tileset: Aquatic
-export const AQUATIC_TILE_STYLES: Record<number, any> = {
-  ...TILE_STYLES,
-  2: { label: 'BUBBLE', color: 'from-cyan-400 to-blue-500', ringColor: 'ring-cyan-300', icon: '🫧', glow: 'shadow-cyan-400/50', imageUrl: genUrl('magical water bubble rpg', 3002), particleColor: '#67e8f9' },
-  4: { label: 'CRAB', color: 'from-orange-400 to-red-500', ringColor: 'ring-orange-300', icon: '🦀', glow: 'shadow-orange-400/50', imageUrl: genUrl('angry red crab monster rpg', 3004), particleColor: '#fb923c' },
-  8: { label: 'PIRANHA', color: 'from-green-500 to-teal-700', ringColor: 'ring-teal-400', icon: '🐟', glow: 'shadow-teal-400/50', imageUrl: genUrl('ferocious piranha fish monster rpg', 3008), particleColor: '#2dd4bf' },
-  16: { label: 'JELLY', color: 'from-pink-400 to-purple-600', ringColor: 'ring-pink-300', icon: '🪼', glow: 'shadow-pink-400/50', imageUrl: genUrl('bioluminescent jellyfish rpg', 3016), particleColor: '#f472b6' },
-  32: { label: 'SHARK', color: 'from-slate-500 to-slate-700', ringColor: 'ring-slate-300', icon: '🦈', glow: 'shadow-slate-400/50', imageUrl: genUrl('great white shark armored rpg', 3032), particleColor: '#94a3b8' },
-  64: { label: 'SIREN', color: 'from-teal-600 to-emerald-800', ringColor: 'ring-emerald-400', icon: '🧜‍♀️', glow: 'shadow-emerald-400/50', imageUrl: genUrl('evil mermaid siren monster rpg', 3064), particleColor: '#34d399' },
-  128: { label: 'KRAKEN', color: 'from-violet-800 to-fuchsia-900', ringColor: 'ring-violet-500', icon: '🐙', glow: 'shadow-violet-500/50', imageUrl: genUrl('giant kraken octopus monster rpg', 3128), particleColor: '#8b5cf6' },
-  256: { label: 'SERPENT', color: 'from-cyan-700 to-blue-900', ringColor: 'ring-cyan-500', icon: '🐍', glow: 'shadow-cyan-500/50', imageUrl: genUrl('giant sea serpent leviathan rpg', 3256), particleColor: '#06b6d4' },
-};
-
-// Alternative Tileset: Cyberpunk
-export const CYBERPUNK_TILE_STYLES: Record<number, any> = {
-  ...TILE_STYLES,
-  2: { label: 'CHIP', color: 'from-green-900 to-black', ringColor: 'ring-green-500', icon: '💾', glow: 'shadow-green-500/80', imageUrl: genUrl('glowing microchip cybernetic green', 4002), particleColor: '#22c55e' },
-  4: { label: 'DRONE', color: 'from-slate-800 to-slate-950', ringColor: 'ring-blue-500', icon: '🚁', glow: 'shadow-blue-500/80', imageUrl: genUrl('futuristic surveillance drone cyberpunk', 4004), particleColor: '#3b82f6' },
-  8: { label: 'BOT', color: 'from-yellow-800 to-yellow-950', ringColor: 'ring-yellow-500', icon: '🤖', glow: 'shadow-yellow-500/80', imageUrl: genUrl('worker robot droid cyberpunk rusty', 4008), particleColor: '#eab308' },
-  16: { label: 'CYBORG', color: 'from-red-900 to-black', ringColor: 'ring-red-600', icon: '🦾', glow: 'shadow-red-600/80', imageUrl: genUrl('cyborg warrior neon lights red', 4016), particleColor: '#ef4444' },
-  32: { label: 'HACKER', color: 'from-fuchsia-900 to-black', ringColor: 'ring-fuchsia-500', icon: '🧑‍💻', glow: 'shadow-fuchsia-500/80', imageUrl: genUrl('cyberpunk hacker netrunner neon purple', 4032), particleColor: '#d946ef' },
-  64: { label: 'MECH', color: 'from-blue-900 to-black', ringColor: 'ring-cyan-500', icon: '👾', glow: 'shadow-cyan-500/80', imageUrl: genUrl('heavy battle mech robot cyberpunk', 4064), particleColor: '#06b6d4' },
-  128: { label: 'AI', color: 'from-emerald-900 to-black', ringColor: 'ring-emerald-500', icon: '🧠', glow: 'shadow-emerald-500/80', imageUrl: genUrl('rogue artificial intelligence core glowing', 4128), particleColor: '#10b981' },
-};
-
-// Alternative Tileset: Celestial
-export const CELESTIAL_TILE_STYLES: Record<number, any> = {
-  ...TILE_STYLES,
-  2: { label: 'FEATHER', color: 'from-white to-slate-100', ringColor: 'ring-yellow-200', icon: '🪶', glow: 'shadow-white/80', imageUrl: genUrl('glowing white angel feather divine', 5002), particleColor: '#ffffff' },
-  4: { label: 'CHERUB', color: 'from-rose-100 to-rose-200', ringColor: 'ring-rose-300', icon: '👼', glow: 'shadow-rose-300/50', imageUrl: genUrl('cute cherub angel baby wings', 5004), particleColor: '#fda4af' },
-  8: { label: 'SPIRIT', color: 'from-blue-100 to-blue-200', ringColor: 'ring-blue-300', icon: '👻', glow: 'shadow-blue-300/50', imageUrl: genUrl('benevolent light spirit wisp', 5008), particleColor: '#93c5fd' },
-  16: { label: 'PALADIN', color: 'from-yellow-100 to-yellow-300', ringColor: 'ring-yellow-500', icon: '🛡️', glow: 'shadow-yellow-500/50', imageUrl: genUrl('holy knight paladin golden armor', 5016), particleColor: '#fcd34d' },
-  32: { label: 'VALKYRIE', color: 'from-sky-200 to-sky-400', ringColor: 'ring-sky-500', icon: '⚔️', glow: 'shadow-sky-500/50', imageUrl: genUrl('valkyrie warrior wings norse', 5032), particleColor: '#38bdf8' },
-  64: { label: 'ANGEL', color: 'from-indigo-100 to-indigo-300', ringColor: 'ring-indigo-400', icon: '🪽', glow: 'shadow-indigo-400/50', imageUrl: genUrl('biblical angel warrior wings sword', 5064), particleColor: '#818cf8' },
-  128: { label: 'ARCHON', color: 'from-amber-100 to-amber-300', ringColor: 'ring-amber-500', icon: '👁️', glow: 'shadow-amber-500/80', imageUrl: genUrl('archon light being divine energy', 5128), particleColor: '#fbbf24' },
-  256: { label: 'SERAPH', color: 'from-red-100 to-orange-200', ringColor: 'ring-orange-500', icon: '🔥', glow: 'shadow-orange-500/80', imageUrl: genUrl('seraphim angel six wings fire eyes', 5256), particleColor: '#fb923c' },
-};
-
-// Alternative Tileset: Steampunk (Clockwork)
-export const STEAMPUNK_TILE_STYLES: Record<number, any> = {
-  ...TILE_STYLES,
-  2: { label: 'GEAR', color: 'from-orange-800 to-yellow-900', ringColor: 'ring-orange-600', icon: '⚙️', glow: 'shadow-orange-500/50', imageUrl: genUrl('brass clockwork gear steampunk', 6002), particleColor: '#d97706' },
-  4: { label: 'RAT', color: 'from-stone-600 to-stone-800', ringColor: 'ring-stone-500', icon: '🐀', glow: 'shadow-stone-500/50', imageUrl: genUrl('mechanical clockwork rat steampunk', 6004), particleColor: '#78716c' },
-  8: { label: 'BOT', color: 'from-yellow-700 to-amber-900', ringColor: 'ring-amber-600', icon: '🤖', glow: 'shadow-amber-500/50', imageUrl: genUrl('small brass robot worker steampunk', 6008), particleColor: '#b45309' },
-  16: { label: 'ENGINEER', color: 'from-slate-700 to-slate-900', ringColor: 'ring-slate-500', icon: '🧑‍🔧', glow: 'shadow-slate-500/50', imageUrl: genUrl('steampunk engineer goggles wrench', 6016), particleColor: '#64748b' },
-  32: { label: 'TANK', color: 'from-stone-800 to-black', ringColor: 'ring-orange-500', icon: '🚜', glow: 'shadow-orange-500/50', imageUrl: genUrl('steam powered tank war machine', 6032), particleColor: '#1c1917' },
-  64: { label: 'AIRSHIP', color: 'from-sky-800 to-indigo-950', ringColor: 'ring-sky-600', icon: '🛸', glow: 'shadow-sky-500/50', imageUrl: genUrl('steampunk airship zeppelin flying', 6064), particleColor: '#0369a1' },
-  128: { label: 'GOLEM', color: 'from-yellow-900 to-black', ringColor: 'ring-yellow-600', icon: '🗿', glow: 'shadow-yellow-500/50', imageUrl: genUrl('giant brass golem steam vents', 6128), particleColor: '#854d0e' },
-  256: { label: 'LEVIATHAN', color: 'from-teal-800 to-cyan-950', ringColor: 'ring-teal-600', icon: '🐋', glow: 'shadow-teal-500/50', imageUrl: genUrl('mechanical sky whale leviathan steampunk', 6256), particleColor: '#0f766e' },
-};
-
-// Alternative Tileset: Feudal (Ronin)
-export const FEUDAL_TILE_STYLES: Record<number, any> = {
-  ...TILE_STYLES,
-  2: { label: 'COIN', color: 'from-yellow-600 to-yellow-800', ringColor: 'ring-yellow-500', icon: '🪙', glow: 'shadow-yellow-500/50', imageUrl: genUrl('ancient japanese gold coin ryo', 7002), particleColor: '#ca8a04' },
-  4: { label: 'ASHIGARU', color: 'from-stone-500 to-stone-700', ringColor: 'ring-stone-400', icon: '🦶', glow: 'shadow-stone-400/50', imageUrl: genUrl('ashigaru foot soldier spear japanese', 7004), particleColor: '#a8a29e' },
-  8: { label: 'NINJA', color: 'from-slate-800 to-black', ringColor: 'ring-slate-600', icon: '🥷', glow: 'shadow-slate-500/50', imageUrl: genUrl('ninja assassin shadow warrior', 7008), particleColor: '#1e293b' },
-  16: { label: 'SAMURAI', color: 'from-red-800 to-red-950', ringColor: 'ring-red-600', icon: '⚔️', glow: 'shadow-red-600/50', imageUrl: genUrl('samurai warrior armor katana', 7016), particleColor: '#dc2626' },
-  32: { label: 'MONK', color: 'from-orange-600 to-orange-800', ringColor: 'ring-orange-500', icon: '🙏', glow: 'shadow-orange-500/50', imageUrl: genUrl('warrior monk sohei naginata', 7032), particleColor: '#ea580c' },
-  64: { label: 'GEISHA', color: 'from-pink-700 to-rose-900', ringColor: 'ring-pink-500', icon: '👘', glow: 'shadow-pink-500/50', imageUrl: genUrl('demon geisha monster horror japanese', 7064), particleColor: '#be185d' },
-  128: { label: 'DAIMYO', color: 'from-purple-800 to-indigo-950', ringColor: 'ring-purple-600', icon: '🏯', glow: 'shadow-purple-500/50', imageUrl: genUrl('shogun daimyo warlord japanese armor', 7128), particleColor: '#7e22ce' },
-  256: { label: 'ONI', color: 'from-red-700 to-black', ringColor: 'ring-red-500', icon: '👹', glow: 'shadow-red-500/50', imageUrl: genUrl('red oni demon ogre japanese club', 7256), particleColor: '#b91c1c' },
-};
-
-// Alternative Tileset: Candy (Sugar Rush)
-export const CANDY_TILE_STYLES: Record<number, any> = {
-  ...TILE_STYLES,
-  2: { label: 'JELLY', color: 'from-red-400 to-pink-500', ringColor: 'ring-pink-300', icon: '🍬', glow: 'shadow-pink-400/50', imageUrl: genUrl('red jelly bean candy cute', 8002), particleColor: '#f472b6' },
-  4: { label: 'WORM', color: 'from-green-400 to-teal-500', ringColor: 'ring-green-300', icon: '🐛', glow: 'shadow-green-400/50', imageUrl: genUrl('neon gummy worm candy monster', 8004), particleColor: '#4ade80' },
-  8: { label: 'COOKIE', color: 'from-amber-600 to-orange-700', ringColor: 'ring-amber-400', icon: '🍪', glow: 'shadow-amber-400/50', imageUrl: genUrl('gingerbread man warrior cookie', 8008), particleColor: '#fbbf24' },
-  16: { label: 'CAKE', color: 'from-pink-300 to-rose-400', ringColor: 'ring-rose-300', icon: '🧁', glow: 'shadow-rose-300/50', imageUrl: genUrl('angry cupcake monster frosting', 8016), particleColor: '#fda4af' },
-  32: { label: 'DONUT', color: 'from-purple-400 to-fuchsia-500', ringColor: 'ring-fuchsia-300', icon: '🍩', glow: 'shadow-fuchsia-300/50', imageUrl: genUrl('donut knight sprinkles armor', 8032), particleColor: '#e879f9' },
-  64: { label: 'MINT', color: 'from-teal-300 to-emerald-500', ringColor: 'ring-teal-200', icon: '🕸️', glow: 'shadow-teal-300/50', imageUrl: genUrl('peppermint spider monster candy', 8064), particleColor: '#5eead4' },
-  128: { label: 'GOLEM', color: 'from-amber-800 to-stone-900', ringColor: 'ring-amber-700', icon: '🍫', glow: 'shadow-amber-600/50', imageUrl: genUrl('chocolate golem monster melting', 8128), particleColor: '#78350f' },
-  256: { label: 'WYVERN', color: 'from-gray-800 to-black', ringColor: 'ring-gray-600', icon: '🐉', glow: 'shadow-gray-500/50', imageUrl: genUrl('black licorice dragon monster', 8256), particleColor: '#374151' },
-};
+export const UNDEAD_TILE_STYLES: Record<number, any> = { ...TILE_STYLES }; 
+export const INFERNAL_TILE_STYLES: Record<number, any> = { ...TILE_STYLES };
+export const AQUATIC_TILE_STYLES: Record<number, any> = { ...TILE_STYLES };
+export const CYBERPUNK_TILE_STYLES: Record<number, any> = { ...TILE_STYLES };
+export const CELESTIAL_TILE_STYLES: Record<number, any> = { ...TILE_STYLES };
+export const STEAMPUNK_TILE_STYLES: Record<number, any> = { ...TILE_STYLES };
+export const FEUDAL_TILE_STYLES: Record<number, any> = { ...TILE_STYLES };
+export const CANDY_TILE_STYLES: Record<number, any> = { ...TILE_STYLES };
 
 export const THEME_STYLES: Record<string, any> = {
     DEFAULT: TILE_STYLES,
@@ -252,6 +162,29 @@ export const ACHIEVEMENTS: Achievement[] = [
     { id: 'hoarder', name: 'Hoarder', description: 'Collect 1000 Gold.', icon: '💰', condition: (s) => s.goldCollected >= 1000, reward: { item: ItemType.LUCKY_CHARM } },
     { id: 'legendary', name: 'Legendary', description: 'Create a 1024 Tile.', icon: '🐲', condition: (s) => s.highestTile >= 1024, reward: { item: ItemType.GOLDEN_RUNE } },
 ];
+
+export const MEDALS: Record<string, Medal> = {
+    // Combat
+    FIRST_MERGE: { id: 'FIRST_MERGE', name: 'Awakening', description: 'Perform your first merge.', icon: React.createElement(Swords, {size: 20}), rarity: 'COMMON' },
+    DOUBLE_MERGE: { id: 'DOUBLE_MERGE', name: 'Twin Strike', description: 'Merge two sets of tiles at once.', icon: React.createElement(Crosshair, {size: 20}), rarity: 'COMMON' },
+    MULTI_MERGE: { id: 'MULTI_MERGE', name: 'Cleave', description: 'Merge 3 sets of tiles at once.', icon: React.createElement(Hexagon, {size: 20}), rarity: 'UNCOMMON' },
+    MEGA_MERGE: { id: 'MEGA_MERGE', name: 'Devastation', description: 'Merge 5+ sets of tiles at once.', icon: React.createElement(Skull, {size: 20}), rarity: 'RARE' },
+    
+    // Combos
+    COMBO_3: { id: 'COMBO_3', name: 'Momentum', description: 'Chain 3 merges in a row.', icon: React.createElement(Zap, {size: 20}), rarity: 'COMMON' },
+    COMBO_5: { id: 'COMBO_5', name: 'Rampage', description: 'Chain 5 merges in a row.', icon: React.createElement(Flame, {size: 20}), rarity: 'UNCOMMON' },
+    COMBO_10: { id: 'COMBO_10', name: 'Unstoppable', description: 'Chain 10 merges. Incredible!', icon: React.createElement(Star, {size: 20}), rarity: 'LEGENDARY' },
+
+    // Boss
+    BOSS_KILL: { id: 'BOSS_KILL', name: 'Titan Slayer', description: 'Defeat a Boss.', icon: React.createElement(Trophy, {size: 20}), rarity: 'RARE' },
+    SNIPER: { id: 'SNIPER', name: 'Deadshot', description: 'Hit boss from max range.', icon: React.createElement(Target, {size: 20}), rarity: 'UNCOMMON' },
+
+    // High Value
+    TILE_64: { id: 'TILE_64', name: 'Skirmisher', description: 'Create a rank 64 monster.', icon: React.createElement(Shield, {size: 20}), rarity: 'COMMON' },
+    TILE_256: { id: 'TILE_256', name: 'Knight', description: 'Create a rank 256 monster.', icon: React.createElement(Shield, {size: 20}), rarity: 'UNCOMMON' },
+    TILE_1024: { id: 'TILE_1024', name: 'Warlord', description: 'Create a rank 1024 monster.', icon: React.createElement(Shield, {size: 20}), rarity: 'EPIC' },
+    TILE_2048: { id: 'TILE_2048', name: 'Dragon Slayer', description: 'Create the rank 2048 avatar.', icon: React.createElement(Crown, {size: 20}), rarity: 'LEGENDARY' },
+};
 
 export const STORY_ENTRIES: StoryEntry[] = [
     {

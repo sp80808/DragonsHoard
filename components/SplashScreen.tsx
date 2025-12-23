@@ -1,11 +1,10 @@
 
-import React, { useEffect, useState, useRef } from 'react';
-import { HeroClass, GameMode, PlayerProfile, DailyBounty, Difficulty } from '../types';
-import { Trophy, Settings, BookOpen, Swords, Play, Maximize, Minimize, CheckCircle, Circle, Skull, RefreshCw, Calendar, Zap, LayoutGrid, Ghost, Star, Palette } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { HeroClass, GameMode, PlayerProfile, Difficulty } from '../types';
+import { Trophy, Settings, Swords, Play, Skull, Palette, Grid, HelpCircle, Star, Calendar, RefreshCcw, ChevronRight, Users, ChevronDown, Gamepad2, Award } from 'lucide-react';
 import { getPlayerProfile, getNextLevelXp } from '../services/storageService';
-import { DAILY_MODIFIERS } from '../constants';
 import { generateDailyModifiers } from '../services/gameLogic';
-import { useLootSystem } from './LootSystem';
+import { AnimatePresence, motion } from 'framer-motion';
 
 interface SplashScreenProps {
   onStart: (heroClass: HeroClass, mode: GameMode, seed?: number, difficulty?: Difficulty, tileset?: string) => void;
@@ -17,342 +16,199 @@ interface SplashScreenProps {
   hasSave: boolean;
 }
 
-const SecondaryBtn = ({ icon, label, onClick }: { icon: React.ReactNode, label: string, onClick: () => void }) => (
-    <button 
-        onClick={onClick}
-        className="flex-1 py-3 bg-slate-900/40 hover:bg-slate-800/60 border border-slate-800/50 rounded-lg text-slate-400 hover:text-white flex flex-col items-center justify-center gap-1 transition-all group backdrop-blur-sm hover:border-slate-600"
-    >
-        <span className="group-hover:scale-110 transition-transform relative z-10 opacity-80 group-hover:opacity-100">{icon}</span>
-        <span className="text-[9px] font-bold uppercase tracking-widest relative z-10">{label}</span>
-    </button>
-);
-
-const TexturedButton = ({ 
-    onClick, 
-    gradient, 
-    border, 
-    shadow, 
-    icon: Icon, 
-    label, 
-    subLabel 
-}: { 
-    onClick: () => void, 
-    gradient: string, 
-    border: string, 
-    shadow: string, 
-    icon?: any, 
-    label: string, 
-    subLabel?: string 
-}) => (
-    <button 
-        onClick={onClick}
-        className={`w-full relative group overflow-hidden rounded-xl border ${border} ${shadow} transition-all hover:scale-[1.01] active:scale-[0.99]`}
-    >
-        {/* Background Gradient */}
-        <div className={`absolute inset-0 bg-gradient-to-r ${gradient} opacity-80 transition-opacity group-hover:opacity-100`}></div>
-        
-        {/* Texture Overlay - Reduced Opacity */}
-        <div className="absolute inset-0 opacity-10 bg-[url('https://www.transparenttextures.com/patterns/binding-dark.png')] mix-blend-overlay pointer-events-none"></div>
-        
-        {/* Shine Animation */}
-        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent skew-x-12 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000 ease-in-out pointer-events-none"></div>
-        
-        {/* Content */}
-        <div className="relative z-10 py-4 px-6 flex flex-col items-center justify-center gap-0.5">
-            <div className="flex items-center gap-3 text-white font-black text-lg tracking-wide uppercase drop-shadow-md">
-                {Icon && <Icon size={20} className="filter drop-shadow-sm opacity-90" />} 
-                {label}
+const MenuButton = ({ onClick, label, icon, primary = false, subtitle, color = 'blue' }: { onClick: () => void, label: string, icon: React.ReactNode, primary?: boolean, subtitle?: string, color?: string }) => {
+    const baseColor = primary ? 'bg-yellow-600 border-yellow-500 text-white' : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700 hover:text-white';
+    const hoverColor = primary ? 'hover:bg-yellow-500' : '';
+    
+    return (
+        <button 
+            onClick={onClick}
+            className={`w-full group relative flex items-center p-4 rounded-xl border-2 transition-all duration-300 transform active:scale-[0.98] shadow-lg
+                ${baseColor} ${hoverColor}
+            `}
+        >
+            <div className={`p-2 rounded-lg bg-black/20 mr-4 transition-transform group-hover:scale-110 group-hover:rotate-3`}>
+                {icon}
             </div>
-            {subLabel && (
-                <div className="text-[10px] text-white/60 font-serif tracking-[0.25em] uppercase font-bold pt-1">
-                    {subLabel}
-                </div>
-            )}
-        </div>
-    </button>
-);
+            <div className="flex flex-col items-start flex-1">
+                <span className="font-black uppercase tracking-wide text-sm md:text-base leading-none mb-1">{label}</span>
+                {subtitle && <span className="text-[10px] font-bold opacity-60 uppercase tracking-wider">{subtitle}</span>}
+            </div>
+            <ChevronRight size={16} className="opacity-0 group-hover:opacity-100 transition-opacity -translate-x-2 group-hover:translate-x-0" />
+        </button>
+    );
+};
 
 export const SplashScreen: React.FC<SplashScreenProps> = ({ onStart, onContinue, onOpenLeaderboard, onOpenSettings, onOpenHelp, onOpenGrimoire, hasSave }) => {
-  const [isFullscreen, setIsFullscreen] = useState(false);
   const [profile, setProfile] = useState<PlayerProfile | null>(null);
-  const [dailyModifiers, setDailyModifiers] = useState<any[]>([]);
-  const [dailySeed, setDailySeed] = useState(0);
+  const [showProfileStats, setShowProfileStats] = useState(false);
   
-  // Game Setup State
-  const [difficulty, setDifficulty] = useState<Difficulty>('NORMAL');
-  
-  // Tileset is now managed via Grimoire/Profile, but we can default to what's in profile
-  const [activeTileset, setActiveTileset] = useState<string>('DEFAULT');
-
-  // Loot System for Bounty Claims
-  const { spawnLoot } = useLootSystem();
-
   useEffect(() => {
-    // Load profile
-    const p = getPlayerProfile();
-    setProfile(p);
-    setActiveTileset(p.activeTilesetId || 'DEFAULT');
-
-    // Generate Daily Seed
-    const today = new Date();
-    const seed = parseInt(`${today.getFullYear()}${today.getMonth() + 1}${today.getDate()}`);
-    setDailySeed(seed);
-    setDailyModifiers(generateDailyModifiers(seed));
-
-    const handleFullscreenChange = () => {
-      setIsFullscreen(!!document.fullscreenElement);
-    };
-    document.addEventListener('fullscreenchange', handleFullscreenChange);
-    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
+    setProfile(getPlayerProfile());
   }, []);
 
-  const toggleFullscreen = () => {
-    if (!document.fullscreenElement) {
-      document.documentElement.requestFullscreen();
-    } else if (document.exitFullscreen) {
-      document.exitFullscreen();
-    }
+  const handleStartGame = () => {
+      onStart(HeroClass.ADVENTURER, 'RPG', undefined, 'NORMAL', profile?.activeTilesetId);
   };
 
-  const handleClaimBounty = (e: React.MouseEvent, bountyId: string, rewardXp: number) => {
-    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    spawnLoot('XP', rect, 8);
+  const handleDaily = () => {
+      const today = new Date();
+      const seed = parseInt(`${today.getFullYear()}${today.getMonth() + 1}${today.getDate()}`);
+      onStart(HeroClass.ADVENTURER, 'DAILY', seed, 'NORMAL', profile?.activeTilesetId);
   };
 
-  const unlockedHardMode = profile?.unlockedFeatures?.includes('HARD_MODE');
-  const unlockedBossRush = profile?.unlockedFeatures?.includes('MODE_BOSS_RUSH');
-
-  // XP Calc
-  const nextXp = profile ? getNextLevelXp(profile.accountLevel) : 1000;
-  const prevXp = profile && profile.accountLevel > 1 ? getNextLevelXp(profile.accountLevel - 1) : 0;
-  const currentXp = profile ? profile.totalAccountXp : 0;
-  const progressPercent = Math.min(100, Math.max(0, ((currentXp - prevXp) / (nextXp - prevXp)) * 100)) || 0;
+  const handleVersus = () => {
+      onStart(HeroClass.ADVENTURER, 'VERSUS', undefined, 'NORMAL', profile?.activeTilesetId);
+  };
 
   return (
-    <div className="absolute inset-0 z-50 flex flex-col items-center justify-center p-4 overflow-hidden bg-black">
-      {/* Background Image Layer with Blend */}
-      <div 
-        className="absolute inset-0 opacity-30 bg-cover bg-center mix-blend-overlay animate-[pulse_10s_ease-in-out_infinite]"
-        style={{ backgroundImage: `url('https://image.pollinations.ai/prompt/dark%20fantasy%20dungeon%20entrance%20torches%20stone%20walls%20rpg?width=1024&height=1024&nologo=true&seed=999')` }}
-      ></div>
+    <div className="absolute inset-0 z-50 flex bg-[#050505] overflow-hidden font-sans">
       
-      {/* Texture Overlay */}
-      <div className="absolute inset-0 opacity-5 bg-[url('https://www.transparenttextures.com/patterns/dark-matter.png')]"></div>
-      
-      {/* Vignette */}
-      <div className="absolute inset-0 bg-gradient-to-b from-slate-950/95 via-slate-900/80 to-black/95"></div>
-      
-      {/* Fullscreen Toggle */}
-      <button 
-        onClick={toggleFullscreen}
-        className="absolute top-4 right-4 z-50 p-2 text-slate-500 hover:text-white bg-black/20 hover:bg-black/40 rounded-full transition-colors border border-white/5"
-      >
-        {isFullscreen ? <Minimize size={20} /> : <Maximize size={20} />}
-      </button>
-
-      {/* Decorative Runes */}
-      <div className="absolute inset-0 pointer-events-none opacity-[0.02]">
-         <div className="absolute top-10 left-10 text-8xl animate-pulse font-serif">ᚠ</div>
-         <div className="absolute bottom-20 right-10 text-8xl animate-pulse delay-700 font-serif">ᚢ</div>
-      </div>
-
-      <div className="relative z-10 w-full max-w-md flex flex-col items-center gap-6 animate-in fade-in zoom-in duration-700 max-h-full overflow-y-auto overflow-x-hidden pb-10 no-scrollbar">
+      {/* LEFT COLUMN: HERO ART (Desktop) / HEADER (Mobile) */}
+      <div className="flex-1 md:flex-[1.2] relative overflow-hidden bg-slate-900 flex flex-col items-center justify-center p-8">
+          {/* Animated Background - Using Textless Prompt */}
+          <div 
+            className="absolute inset-0 bg-cover bg-center opacity-60 transition-transform duration-[40s] scale-110 animate-[pulse_15s_ease-in-out_infinite]"
+            style={{ backgroundImage: `url('https://image.pollinations.ai/prompt/mysterious%20dark%20fantasy%20dungeon%20entrance%20environment%20art%20no%20text%20scenery?width=1024&height=1024&nologo=true&seed=99')` }}
+          ></div>
+          <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-black/60 md:bg-gradient-to-r md:from-transparent md:to-[#0b0f15]"></div>
           
-          {/* Logo / Header */}
-          <div className="text-center mt-8 relative shrink-0 p-4 pb-0">
-              <div className="absolute -inset-10 bg-orange-500/5 blur-3xl rounded-full pointer-events-none"></div>
+          {/* Logo Content */}
+          <div className="relative z-10 text-center flex flex-col items-center">
+              <div className="mb-6 relative">
+                  <Skull size={80} className="text-red-600 relative z-10 drop-shadow-[0_0_30px_rgba(220,38,38,0.8)] animate-float" />
+                  <div className="absolute inset-0 bg-red-500 blur-3xl opacity-20 animate-pulse"></div>
+              </div>
               
-              <h1 className="text-5xl md:text-7xl font-black text-transparent bg-clip-text bg-gradient-to-b from-yellow-100 via-orange-300 to-red-500 fantasy-font tracking-tight filter drop-shadow-xl relative z-10 pb-2">
+              <h1 className="text-5xl md:text-7xl lg:text-8xl font-black text-transparent bg-clip-text bg-gradient-to-b from-yellow-100 via-orange-400 to-red-700 fantasy-font tracking-tighter drop-shadow-2xl leading-[0.8]">
                   DRAGON'S<br/>HOARD
               </h1>
               
-              <div className="h-px w-32 bg-gradient-to-r from-transparent via-orange-500/50 to-transparent mx-auto my-4"></div>
+              <div className="h-1.5 w-32 bg-gradient-to-r from-transparent via-orange-500 to-transparent mt-6 mb-3 rounded-full shadow-[0_0_15px_orange]"></div>
               
-              <p className="text-slate-400 font-serif italic text-xs tracking-[0.4em] uppercase opacity-70">
+              <p className="text-orange-200/70 font-serif italic text-sm md:text-lg tracking-[0.4em] uppercase drop-shadow-md">
                   Roguelike Puzzle RPG
               </p>
+
+              {/* Version Tag */}
+              <div className="mt-8 text-[10px] text-slate-500 font-mono border border-slate-700/50 px-2 py-1 rounded bg-black/40 backdrop-blur-sm">
+                  v0.9.7 BETA
+              </div>
           </div>
 
-          {/* Profile Card */}
-          {profile && (
-              <div className="w-full px-2 shrink-0 animate-in slide-in-from-bottom-2 delay-100">
-                  <div className="bg-[#0f121a]/80 border border-slate-800 rounded-xl p-3 flex items-center gap-4 shadow-xl relative overflow-hidden group backdrop-blur-md">
-                      
-                      {/* Level Hexagon */}
-                      <div className="relative shrink-0">
-                          <div className="w-12 h-12 bg-gradient-to-br from-indigo-600 to-blue-900 rounded-lg transform rotate-3 group-hover:rotate-6 transition-transform shadow-lg flex items-center justify-center border border-indigo-400/30">
-                              <span className="font-black text-xl text-white transform -rotate-3 group-hover:-rotate-6 transition-transform">{profile.accountLevel}</span>
-                          </div>
-                          <div className="absolute -bottom-2 -right-2 bg-slate-900 border border-slate-700 text-[8px] px-1.5 py-0.5 rounded text-slate-400 font-bold uppercase shadow-sm">
-                              LVL
-                          </div>
-                      </div>
+          {/* Footer - Restored */}
+          <div className="absolute bottom-4 text-center z-10">
+              <a href="https://instagram.com/sp8m8" target="_blank" rel="noopener noreferrer" className="text-[10px] text-slate-600 hover:text-red-400 transition-colors font-bold uppercase tracking-widest opacity-70 hover:opacity-100">
+                  Made with &lt;3 by Sp8
+              </a>
+          </div>
+      </div>
 
-                      {/* Stats */}
-                      <div className="flex-1 min-w-0">
-                          <div className="flex justify-between items-end mb-1.5">
-                              <span className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1">
-                                  <Star size={10} className="text-indigo-400" fill="currentColor"/> Account
-                              </span>
-                              <span className="text-[10px] font-mono text-indigo-300">
-                                  {Math.floor(profile.totalAccountXp).toLocaleString()} XP
-                              </span>
-                          </div>
-                          
-                          {/* Progress Bar */}
-                          <div className="h-2 bg-slate-900 rounded-full overflow-hidden relative border border-slate-800">
-                              <div 
-                                  className="h-full bg-gradient-to-r from-indigo-600 to-blue-400 shadow-[0_0_10px_rgba(99,102,241,0.5)]" 
-                                  style={{ width: `${progressPercent}%` }}
-                              ></div>
-                          </div>
-                          
-                          <div className="flex justify-between mt-1.5 opacity-60">
-                              <div className="flex items-center gap-1.5 text-[9px] text-slate-400 font-medium">
-                                  <Trophy size={10} className="text-yellow-600" />
-                                  <span>High Score: {profile.highScore.toLocaleString()}</span>
-                              </div>
-                              <div className="text-[9px] text-slate-500 font-mono">
-                                  Goal: {nextXp.toLocaleString()}
-                              </div>
-                          </div>
-                      </div>
-                  </div>
-              </div>
-          )}
-
-          {/* Hard Mode Toggle */}
-          {unlockedHardMode && (
-              <div className="w-full bg-slate-900/30 border border-slate-800/50 rounded-xl p-3 backdrop-blur-sm flex justify-center gap-4 shrink-0">
-                  <button 
-                    onClick={() => setDifficulty(d => d === 'NORMAL' ? 'HARD' : 'NORMAL')}
-                    className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-bold transition-all ${difficulty === 'HARD' ? 'bg-red-900/50 border-red-500 text-red-100' : 'bg-slate-800/50 border-slate-700 text-slate-400'}`}
-                  >
-                      <Skull size={14} /> {difficulty === 'HARD' ? 'HARD MODE' : 'NORMAL'}
-                  </button>
-              </div>
-          )}
-
-          {/* Daily Bounties */}
-          {profile && (
-              <div className="w-full bg-slate-900/30 border border-slate-800/50 rounded-xl p-4 backdrop-blur-sm animate-in slide-in-from-bottom-2 shrink-0">
-                  <div className="flex items-center justify-between mb-3 pb-2 border-b border-white/5">
-                      <span className="text-[10px] font-bold text-yellow-500/80 uppercase tracking-widest flex items-center gap-2">
-                          <Skull size={12} /> Daily Bounties
-                      </span>
-                      <span className="text-[9px] text-slate-600 font-mono">Resets in 24h</span>
-                  </div>
-                  <div className="space-y-2">
-                      {profile.activeBounties.map((bounty: DailyBounty) => (
-                          <div key={bounty.id} className="flex items-center justify-between text-xs group">
-                              <span className={`flex items-center gap-3 ${bounty.isCompleted ? 'text-slate-500 line-through' : 'text-slate-300 group-hover:text-slate-200 transition-colors'}`}>
-                                  {bounty.isCompleted ? <CheckCircle size={12} className="text-green-500/70"/> : <Circle size={12} className="text-slate-700"/>}
-                                  {bounty.description}
-                              </span>
-                              {bounty.isCompleted ? (
-                                  <button 
-                                    className="text-[10px] text-green-500/50 font-mono cursor-default"
-                                    onClick={(e) => handleClaimBounty(e, bounty.id, bounty.rewardXp)} 
-                                  >
-                                    Claimed
-                                  </button>
-                              ) : (
-                                  <span className="text-[10px] text-yellow-500/60 font-mono">+{bounty.rewardXp} XP</span>
-                              )}
-                          </div>
-                      ))}
-                  </div>
-              </div>
-          )}
-
-          {/* Main Actions */}
-          <div className="w-full space-y-4 px-2 shrink-0 pb-6">
-              {hasSave && (
-                  <TexturedButton 
-                      onClick={onContinue}
-                      label="Continue Journey"
-                      subLabel="Resume Game"
-                      icon={Play}
-                      gradient="from-emerald-900 to-emerald-800"
-                      border="border-emerald-500/30"
-                      shadow="shadow-[0_0_20px_rgba(16,185,129,0.1)]"
-                  />
-              )}
-
-              <TexturedButton 
-                  onClick={() => onStart(HeroClass.ADVENTURER, 'RPG', undefined, difficulty, activeTileset)}
-                  label="New Adventure"
-                  subLabel="Enter the Dungeon"
-                  icon={Swords}
-                  gradient="from-red-900 to-orange-900"
-                  border="border-red-500/30"
-                  shadow="shadow-[0_0_20px_rgba(220,38,38,0.1)]"
-              />
-              
-              {/* Daily Dungeon */}
-              <button 
-                  onClick={() => onStart(HeroClass.ADVENTURER, 'DAILY', dailySeed, difficulty, activeTileset)}
-                  className="w-full relative group overflow-hidden rounded-xl border border-indigo-500/30 shadow-lg hover:shadow-indigo-500/10 transition-all bg-slate-900/60 hover:bg-slate-800"
-              >
-                  <div className="absolute inset-0 bg-gradient-to-r from-indigo-900/20 to-purple-900/20 opacity-0 group-hover:opacity-100 transition-opacity"></div>
-                  <div className="relative z-10 py-3 px-5 flex items-center justify-between">
-                      <div className="flex flex-col items-start">
-                          <div className="flex items-center gap-2 text-indigo-200 font-bold text-sm uppercase tracking-wide group-hover:text-white transition-colors">
-                              <Calendar size={16} className="text-indigo-400" /> Daily Dungeon
-                          </div>
-                          <div className="text-[9px] text-indigo-400/60 font-mono mt-1 flex gap-2">
-                              {dailyModifiers.slice(0,2).map((mod: any) => (
-                                  <span key={mod.id} className="flex items-center gap-1">
-                                      {mod.icon} {mod.name}
-                                  </span>
-                              ))}
-                          </div>
-                      </div>
-                      <div className="text-indigo-500/30 group-hover:text-indigo-400 group-hover:translate-x-1 transition-all">
-                          <Zap size={18} />
-                      </div>
-                  </div>
-              </button>
-
-              <div className="grid grid-cols-2 gap-3 pt-2">
-                  <button 
-                    onClick={() => onStart(HeroClass.ADVENTURER, 'CLASSIC', undefined, difficulty, activeTileset)}
-                    className="group py-4 bg-slate-900/40 hover:bg-slate-800 border border-slate-700/50 rounded-xl transition-all flex flex-col items-center justify-center gap-1"
-                  >
-                      <span className="text-slate-400 font-bold text-xs group-hover:text-white transition-colors">CLASSIC</span>
-                      <span className="text-[9px] text-slate-600 tracking-wider">NO RPG</span>
-                  </button>
-
-                  {unlockedBossRush ? (
+      {/* RIGHT COLUMN: MENU */}
+      <div className="flex-1 relative bg-[#0b0f15] flex flex-col border-l border-slate-800 shadow-2xl z-20">
+          
+          {/* Profile Header */}
+          <div className="relative border-b border-slate-800/50 bg-slate-900/50 z-20">
+              <div className="p-6 flex justify-between items-center">
+                  {profile && (
                       <button 
-                        onClick={() => onStart(HeroClass.ADVENTURER, 'BOSS_RUSH', undefined, difficulty, activeTileset)}
-                        className="group py-4 bg-red-900/20 hover:bg-red-900/30 border border-red-500/30 rounded-xl transition-all flex flex-col items-center justify-center gap-1"
+                        onClick={() => setShowProfileStats(!showProfileStats)}
+                        className="flex items-center gap-3 text-left hover:bg-slate-800/50 -ml-2 p-2 rounded-xl transition-all group"
                       >
-                          <span className="text-red-300 font-bold text-xs group-hover:text-white transition-colors flex items-center gap-1">
-                              <Skull size={12}/> BOSS RUSH
-                          </span>
-                          <span className="text-[9px] text-red-500/60 tracking-wider">ARENA</span>
-                      </button>
-                  ) : (
-                      <button 
-                        onClick={() => onStart(HeroClass.ADVENTURER, 'VERSUS')}
-                        className="group py-4 bg-purple-900/20 hover:bg-purple-900/30 border border-purple-500/30 rounded-xl transition-all flex flex-col items-center justify-center gap-1"
-                      >
-                          <span className="text-purple-300 font-bold text-xs group-hover:text-white transition-colors flex items-center gap-1">
-                              <Swords size={12}/> VERSUS
-                          </span>
-                          <span className="text-[9px] text-purple-500/60 tracking-wider">LOCAL PVP</span>
+                          <div className="w-12 h-12 rounded-full bg-gradient-to-br from-indigo-600 to-blue-900 flex items-center justify-center border-2 border-slate-700 shadow-inner group-hover:border-indigo-400 transition-colors relative">
+                              <span className="font-black text-lg text-white">{profile.accountLevel}</span>
+                              {showProfileStats && <div className="absolute inset-0 bg-white/20 rounded-full animate-ping"></div>}
+                          </div>
+                          <div className="flex flex-col">
+                              <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider flex items-center gap-1 group-hover:text-indigo-300">
+                                Account Level <ChevronDown size={10} className={`transition-transform ${showProfileStats ? 'rotate-180' : ''}`} />
+                              </span>
+                              <span className="text-xs font-mono text-white font-bold">{Math.floor(profile.totalAccountXp).toLocaleString()} XP</span>
+                          </div>
                       </button>
                   )}
+                  <div className="flex gap-2">
+                      <button onClick={onOpenSettings} className="p-2 hover:bg-slate-800 rounded-full text-slate-400 hover:text-white transition-colors">
+                          <Settings size={20} />
+                      </button>
+                  </div>
               </div>
 
-              {/* Secondary Actions */}
-              <div className="flex gap-2 w-full pt-4 border-t border-white/5">
-                  <SecondaryBtn icon={<Trophy size={14} />} label="Legends" onClick={onOpenLeaderboard} />
-                  <SecondaryBtn icon={<Settings size={14} />} label="Config" onClick={onOpenSettings} />
-                  <SecondaryBtn icon={<BookOpen size={14} />} label="Codex" onClick={onOpenHelp} />
-                  <SecondaryBtn icon={<Palette size={14} />} label="Customize" onClick={onOpenGrimoire} />
+              {/* Collapsible Stats Panel */}
+              <AnimatePresence>
+                  {showProfileStats && profile && (
+                      <motion.div 
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: 'auto', opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        className="bg-slate-950/80 border-t border-slate-800 overflow-hidden"
+                      >
+                          <div className="p-4 grid grid-cols-2 gap-4">
+                              <div className="col-span-2">
+                                  <div className="flex justify-between text-[10px] uppercase font-bold text-slate-500 mb-1">
+                                      <span>Progress to Level {profile.accountLevel + 1}</span>
+                                      <span>{Math.floor((profile.totalAccountXp / getNextLevelXp(profile.accountLevel)) * 100)}%</span>
+                                  </div>
+                                  <div className="h-2 bg-slate-900 rounded-full overflow-hidden border border-slate-800">
+                                      <div 
+                                        className="h-full bg-gradient-to-r from-indigo-600 to-blue-500" 
+                                        style={{ width: `${(profile.totalAccountXp / getNextLevelXp(profile.accountLevel)) * 100}%` }}
+                                      ></div>
+                                  </div>
+                              </div>
+                              <div className="bg-slate-900 p-2 rounded-lg border border-slate-800 flex items-center gap-3">
+                                  <Gamepad2 size={16} className="text-slate-500" />
+                                  <div>
+                                      <div className="text-[10px] text-slate-500 uppercase font-bold">Games Played</div>
+                                      <div className="text-sm font-mono text-white font-bold">{profile.gamesPlayed}</div>
+                                  </div>
+                              </div>
+                              <div className="bg-slate-900 p-2 rounded-lg border border-slate-800 flex items-center gap-3">
+                                  <Award size={16} className="text-yellow-600" />
+                                  <div>
+                                      <div className="text-[10px] text-slate-500 uppercase font-bold">High Score</div>
+                                      <div className="text-sm font-mono text-white font-bold">{profile.highScore.toLocaleString()}</div>
+                                  </div>
+                              </div>
+                          </div>
+                      </motion.div>
+                  )}
+              </AnimatePresence>
+          </div>
+
+          {/* Menu Items */}
+          <div className="flex-1 overflow-y-auto p-6 md:p-10 flex flex-col justify-center gap-4">
+              
+              {hasSave ? (
+                  <MenuButton onClick={onContinue} label="Continue Journey" icon={<Play fill="currentColor" />} primary subtitle="Resume your last run" />
+              ) : (
+                  <MenuButton onClick={handleStartGame} label="New Adventure" icon={<Swords />} primary subtitle="Start a fresh run" />
+              )}
+
+              <div className="grid grid-cols-2 gap-3 mt-2">
+                  <button onClick={handleDaily} className="bg-indigo-900/20 hover:bg-indigo-900/40 border border-indigo-500/30 hover:border-indigo-500/60 p-4 rounded-xl flex flex-col items-center gap-2 transition-all group">
+                      <Calendar size={24} className="text-indigo-400 group-hover:scale-110 transition-transform" />
+                      <span className="text-xs font-bold text-indigo-100 uppercase">Daily Run</span>
+                  </button>
+                  <button onClick={handleVersus} className="bg-red-900/20 hover:bg-red-900/40 border border-red-500/30 hover:border-red-500/60 p-4 rounded-xl flex flex-col items-center gap-2 transition-all group">
+                      <Users size={24} className="text-red-400 group-hover:scale-110 transition-transform" />
+                      <span className="text-xs font-bold text-red-100 uppercase">Versus</span>
+                  </button>
               </div>
+
+              <div className="h-px bg-slate-800 w-full my-2"></div>
+
+              <MenuButton onClick={onOpenLeaderboard} label="Hall of Heroes" icon={<Trophy />} subtitle="Global Leaderboards" />
+              
+              <div className="flex gap-3">
+                  <button onClick={onOpenGrimoire} className="flex-1 bg-slate-900 border border-slate-800 hover:border-slate-600 p-3 rounded-xl flex items-center justify-center gap-2 text-slate-400 hover:text-white transition-all text-xs font-bold uppercase">
+                      <Palette size={16} /> Collection
+                  </button>
+                  <button onClick={onOpenHelp} className="flex-1 bg-slate-900 border border-slate-800 hover:border-slate-600 p-3 rounded-xl flex items-center justify-center gap-2 text-slate-400 hover:text-white transition-all text-xs font-bold uppercase">
+                      <HelpCircle size={16} /> Codex
+                  </button>
+              </div>
+
           </div>
       </div>
     </div>

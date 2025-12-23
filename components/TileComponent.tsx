@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo } from 'react';
-import { Tile, TileType } from '../types';
+import { Tile, TileType, GraphicsQuality } from '../types';
 import { getTileStyle, BOSS_STYLE, FALLBACK_STYLE, RUNE_STYLES, BOSS_DEFINITIONS, STONE_STYLE } from '../constants';
 
 interface TileProps {
@@ -8,11 +8,16 @@ interface TileProps {
   gridSize: number;
   slideSpeed: number;
   themeId?: string;
-  lowPerformanceMode?: boolean;
+  graphicsQuality?: GraphicsQuality;
   tilesetId?: string;
+  lowPerformanceMode?: boolean; // Legacy prop
 }
 
-export const TileComponent = React.memo(({ tile, gridSize, slideSpeed, themeId, lowPerformanceMode, tilesetId = 'DEFAULT' }: TileProps) => {
+export const TileComponent = React.memo(({ tile, gridSize, slideSpeed, themeId, graphicsQuality = 'HIGH', tilesetId = 'DEFAULT', lowPerformanceMode }: TileProps) => {
+  // Backward compatibility
+  const isLowQuality = graphicsQuality === 'LOW' || lowPerformanceMode === true;
+  const isHighQuality = graphicsQuality === 'HIGH' && !lowPerformanceMode;
+
   const style = useMemo(() => {
       let s = getTileStyle(tile.value, themeId, tilesetId);
       
@@ -36,7 +41,7 @@ export const TileComponent = React.memo(({ tile, gridSize, slideSpeed, themeId, 
   const xPos = tile.x * 100;
   const yPos = tile.y * 100;
 
-  const isNewClass = !lowPerformanceMode && tile.isNew ? 'tile-animation-enter' : '';
+  const isNewClass = !isLowQuality && tile.isNew ? 'tile-animation-enter' : '';
   
   let mergeClass = '';
   let shakeClass = '';
@@ -46,10 +51,10 @@ export const TileComponent = React.memo(({ tile, gridSize, slideSpeed, themeId, 
   if (tile.mergedFrom) {
       if (tile.mergedFrom[0] === 'damage') {
           mergeClass = 'hit-flash'; 
-          shakeClass = !lowPerformanceMode ? 'animate-shake-md' : '';
+          shakeClass = !isLowQuality ? 'animate-shake-md' : '';
       } else {
           // Tiered Merge Animations
-          if (!lowPerformanceMode) {
+          if (!isLowQuality) {
               if (tile.value < 32) {
                   // Low tier pop
                   mergeClass = 'tile-animation-pop-small';
@@ -60,12 +65,12 @@ export const TileComponent = React.memo(({ tile, gridSize, slideSpeed, themeId, 
                   shakeClass = 'animate-shake-sm';
 
                   if (tile.value >= 32) {
-                      showShockwave = true;
+                      showShockwave = isHighQuality;
                       shakeClass = 'animate-shake-md';
                   }
 
                   if (tile.value >= 512) {
-                      showGodwave = true;
+                      showGodwave = isHighQuality;
                       shakeClass = 'animate-shake-lg';
                   }
               }
@@ -75,19 +80,19 @@ export const TileComponent = React.memo(({ tile, gridSize, slideSpeed, themeId, 
 
   const ringColorClass = style.ringColor || 'ring-cyan-400';
   const isCascadeClass = tile.isCascade 
-    ? `ring-2 ${ringColorClass} ring-offset-1 ring-offset-black ${lowPerformanceMode ? '' : 'animate-pulse'}` 
+    ? `ring-2 ${ringColorClass} ring-offset-1 ring-offset-black ${isLowQuality ? '' : 'animate-pulse'}` 
     : '';
 
   const isSlash = tile.mergedFrom && tile.value >= 32 && tile.mergedFrom[0] !== 'damage' ? 'slash-effect' : '';
   const healthPercent = tile.maxHealth ? Math.max(0, (tile.health || 0) / tile.maxHealth) * 100 : 0;
-  const isHighTier = tile.value >= 128 && !lowPerformanceMode;
-  const isGodTier = tile.value >= 2048 && !lowPerformanceMode;
+  const isHighTier = tile.value >= 128 && !isLowQuality;
+  const isGodTier = tile.value >= 2048 && !isLowQuality;
   const isMetallic = tile.value >= 128; // Add gradient text for 128+
 
   const shadowColor = style.particleColor || '#000000';
   
-  // Enhanced 3D Bezel with Color Depth
-  const boxDepthStyle = {
+  // Enhanced 3D Bezel with Color Depth (Only High/Med)
+  const boxDepthStyle = isLowQuality ? {} : {
       boxShadow: isHighTier 
         ? `0 0 15px ${shadowColor}30, inset 0 1px 0 rgba(255, 255, 255, 0.25), inset 0 -2px 0 rgba(0, 0, 0, 0.4)`
         : `0 4px 12px ${shadowColor}40, inset 0 1px 0 rgba(255, 255, 255, 0.25), inset 0 -2px 0 rgba(0, 0, 0, 0.4)`
@@ -99,12 +104,12 @@ export const TileComponent = React.memo(({ tile, gridSize, slideSpeed, themeId, 
 
   const textStyle = {
       filter: isMetallic ? 'drop-shadow(0 2px 2px rgba(0,0,0,0.8))' : 'drop-shadow(0 3px 3px rgba(0,0,0,0.8))',
-      WebkitTextStroke: isMetallic ? '0px' : '1px rgba(0,0,0,0.4)', // Remove stroke if gradient is applied for cleanliness
+      WebkitTextStroke: isMetallic ? '0px' : '1px rgba(0,0,0,0.4)', 
       paintOrder: 'stroke fill'
   };
 
   // Living Tile Animation Class
-  const livingClass = isGodTier ? 'animate-living-fast' : isHighTier ? 'animate-living-slow' : '';
+  const livingClass = isHighQuality ? (isGodTier ? 'animate-living-fast' : isHighTier ? 'animate-living-slow' : '') : '';
 
   return (
     <div
@@ -133,7 +138,7 @@ export const TileComponent = React.memo(({ tile, gridSize, slideSpeed, themeId, 
             >
                 
                 {/* Dynamic Shine/Facets for High Tiers */}
-                {isHighTier && (
+                {isHighQuality && isHighTier && (
                     <>
                         <div className="absolute inset-0 z-20 pointer-events-none facet-overlay rounded-lg"></div>
                         <div className="absolute inset-0 border border-white/20 rounded-lg z-20"></div>
@@ -141,12 +146,12 @@ export const TileComponent = React.memo(({ tile, gridSize, slideSpeed, themeId, 
                 )}
 
                 {/* God Tier Pulse */}
-                {isGodTier && (
+                {isHighQuality && isGodTier && (
                     <div className="absolute inset-0 z-10 bg-gradient-to-t from-yellow-500/30 to-transparent animate-pulse mix-blend-overlay"></div>
                 )}
 
                 {/* Glow Container */}
-                {!lowPerformanceMode && (
+                {isHighQuality && (
                     <div className={`absolute inset-0 transition-opacity duration-300 ${style.glow} opacity-30 group-hover:opacity-60`}></div>
                 )}
 
@@ -173,7 +178,7 @@ export const TileComponent = React.memo(({ tile, gridSize, slideSpeed, themeId, 
                         <>
                             <div className="flex-1 flex items-center justify-center pt-2 relative">
                                 {/* Back Glow for Text readability */}
-                                <div className="absolute inset-0 bg-radial-gradient from-black/60 to-transparent opacity-60 blur-md scale-75"></div>
+                                {isHighQuality && <div className="absolute inset-0 bg-radial-gradient from-black/60 to-transparent opacity-60 blur-md scale-75"></div>}
                                 
                                 <span 
                                     className={`fantasy-font font-black text-4xl sm:text-5xl lg:text-6xl leading-none z-20 tracking-wide ${textGradientClass}`}
@@ -183,7 +188,7 @@ export const TileComponent = React.memo(({ tile, gridSize, slideSpeed, themeId, 
                                 </span>
                             </div>
                             <div className="w-full flex justify-center pb-1">
-                                <div className={`px-2 py-0.5 rounded-full ${lowPerformanceMode ? 'bg-black/80' : 'bg-black/60 backdrop-blur-sm'} border border-white/10 shadow-lg`}>
+                                <div className={`px-2 py-0.5 rounded-full ${isLowQuality ? 'bg-black/80' : 'bg-black/60 backdrop-blur-sm'} border border-white/10 shadow-lg`}>
                                     <span className="block text-[7px] sm:text-[8px] font-serif font-bold text-slate-200 uppercase tracking-[0.2em] leading-none text-shadow-sm">
                                         {style.label}
                                     </span>
@@ -211,7 +216,7 @@ export const TileComponent = React.memo(({ tile, gridSize, slideSpeed, themeId, 
                     )}
                 </div>
 
-                {!lowPerformanceMode && (
+                {isHighQuality && (
                     <div className="absolute inset-0 bg-gradient-to-b from-white/15 via-transparent to-black/30 pointer-events-none rounded-lg"></div>
                 )}
             </div>
