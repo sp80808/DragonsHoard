@@ -100,19 +100,36 @@ const StatDisplay = ({ value, className, prefix = '', suffix = '' }: { value: nu
     );
 };
 
+// Revamped Combo Meter - Positioned Right
 const ComboMeter = ({ combo }: { combo: number }) => {
     if (combo < 2) return null;
+    
     return (
-        <div className="absolute top-0 left-0 right-0 z-20 flex justify-center -mt-6 pointer-events-none">
-            <div className="bg-slate-900/90 px-4 py-1 rounded-full border border-yellow-500/50 shadow-[0_0_15px_rgba(234,179,8,0.3)] flex items-baseline gap-2 transform -rotate-2 animate-in slide-in-from-top-4 duration-200">
-                <span className="fantasy-font text-xl font-black text-transparent bg-clip-text bg-gradient-to-b from-white via-yellow-200 to-yellow-500 drop-shadow-sm filter">
-                    x{combo}
-                </span>
-                <span className="text-[10px] font-black italic tracking-[0.2em] text-yellow-600 uppercase">
-                    COMBO
-                </span>
+        <motion.div 
+            key={combo} 
+            initial={{ scale: 1.5, opacity: 0, x: 20, rotate: 10 }}
+            animate={{ scale: 1, opacity: 1, x: 0, rotate: -5 }}
+            exit={{ scale: 0.5, opacity: 0, x: 20, transition: { duration: 0.2 } }}
+            className="absolute right-0 top-[4.5rem] z-50 pointer-events-none origin-right"
+        >
+            <div className="relative group">
+                {/* Fire Effect behind */}
+                <div className="absolute inset-0 bg-orange-600 blur-xl opacity-40 animate-pulse rounded-full"></div>
+                
+                <div className="bg-gradient-to-l from-slate-900/95 to-slate-800/90 pl-5 pr-3 py-1 rounded-l-2xl border-y-2 border-l-2 border-orange-500 shadow-[0_4px_20px_rgba(249,115,22,0.4)] flex items-center gap-3 transform skew-x-12 backdrop-blur-md">
+                    <div className="flex flex-col items-end -skew-x-12">
+                        <span className="text-4xl font-black text-transparent bg-clip-text bg-gradient-to-b from-yellow-300 via-orange-500 to-red-600 fantasy-font leading-[0.8] drop-shadow-sm filter">
+                            {combo}<span className="text-2xl text-orange-300 ml-0.5">x</span>
+                        </span>
+                    </div>
+                    <div className="h-8 w-px bg-white/10 -skew-x-12 mx-1"></div>
+                    <div className="flex flex-col -skew-x-12 leading-none">
+                        <span className="text-[9px] font-bold text-orange-200 uppercase opacity-80 tracking-widest">Combo</span>
+                        <span className="text-[9px] font-black text-white uppercase tracking-widest">Chain</span>
+                    </div>
+                </div>
             </div>
-        </div>
+        </motion.div>
     );
 };
 
@@ -261,7 +278,6 @@ export const HUD = React.memo(({
 
   useEffect(() => {
     if (xp > prevXp.current) {
-        // More reactive animation: Bulge out
         xpControls.start({ 
             scale: [1, 1.05, 1], 
             filter: ["brightness(1)", "brightness(1.5)", "brightness(1)"],
@@ -315,12 +331,12 @@ export const HUD = React.memo(({
             <button 
                 onClick={canReroll ? onReroll : undefined} 
                 disabled={!canReroll} 
-                className={`w-10 h-10 md:w-12 md:h-12 relative flex flex-col items-center justify-center rounded-lg border transition-all duration-75 shrink-0
+                className={`w-12 h-12 md:w-14 md:h-14 relative flex flex-col items-center justify-center rounded-lg border transition-all duration-75 shrink-0
                     ${!canReroll ? 'bg-slate-900/30 border-slate-800 opacity-50 cursor-not-allowed' : 
                     'bg-purple-900/20 border-purple-500/30 hover:bg-purple-900/40 hover:border-purple-400 active:scale-95 text-purple-200 shadow-lg'}
                 `}
             >
-                <RefreshCw size={14} className={canReroll ? "mb-0.5" : "opacity-50 mb-0.5"} />
+                <RefreshCw size={16} className={canReroll ? "mb-0.5" : "opacity-50 mb-0.5"} />
                 <span className="text-[7px] font-bold uppercase tracking-wider leading-none">
                     {rerolls > 0 ? `${rerolls}` : '50G'}
                 </span>
@@ -329,23 +345,29 @@ export const HUD = React.memo(({
   }
 
   return (
-    <div className="w-full mb-1 md:mb-2 space-y-1 md:space-y-2">
-      <div className={`flex flex-wrap justify-between items-center bg-slate-900/90 p-2 rounded-xl border border-slate-700 shadow-xl gap-2 ${isLowQuality ? '' : 'backdrop-blur-md'}`}>
-        <div className="flex items-center gap-2 md:gap-3 flex-1 min-w-[120px]">
-            <button onClick={onMenu} className="p-1.5 md:p-2 -ml-1 md:-ml-2 hover:bg-white/10 rounded-lg transition-colors text-slate-400 hover:text-white">
-                <Menu size={18} className="md:w-5 md:h-5" />
+    <div className="w-full mb-1 md:mb-2 space-y-3 md:space-y-4 relative z-20">
+      
+      {/* Moved Combo Meter to be absolute relative to this container but top-level to avoid inner clipping */}
+      <AnimatePresence>
+          {combo >= 2 && <ComboMeter combo={combo} />}
+      </AnimatePresence>
+
+      <div className={`flex flex-wrap justify-between items-center bg-slate-900/90 p-3 rounded-xl border border-slate-700 shadow-xl gap-2 ${isLowQuality ? '' : 'backdrop-blur-md'}`}>
+        <div className="flex items-center gap-3 flex-1 min-w-[120px]">
+            <button onClick={onMenu} className="p-2 hover:bg-white/10 rounded-lg transition-colors text-slate-400 hover:text-white">
+                <Menu size={20} />
             </button>
             <div>
                 <div className="flex items-center">
-                    <h1 className="text-xs sm:text-lg md:text-xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-yellow-200 via-orange-400 to-red-500 fantasy-font drop-shadow-sm whitespace-nowrap">
+                    <h1 className="text-base sm:text-xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-yellow-200 via-orange-400 to-red-500 fantasy-font drop-shadow-sm whitespace-nowrap">
                         {gameMode === 'DAILY' ? 'Daily Run' : isClassic ? "Classic" : "Dragon's Hoard"}
                     </h1>
                 </div>
-                <div className="flex items-center gap-3 text-[9px] md:text-xs text-slate-400 mt-0.5 md:mt-1">
-                    <span className="flex items-center gap-1"><Trophy size={10} /> <CountUp value={bestScore} /></span>
+                <div className="flex items-center gap-3 text-xs text-slate-400 mt-1">
+                    <span className="flex items-center gap-1"><Trophy size={12} /> <CountUp value={bestScore} /></span>
                     {!isClassic && (
                         <motion.span ref={goldRef} animate={goldControls} className="flex items-center gap-1 text-yellow-400 font-bold inline-block">
-                            <Coins size={10} /> <StatDisplay value={gold} suffix=" G" />
+                            <Coins size={12} /> <StatDisplay value={gold} suffix=" G" />
                         </motion.span>
                     )}
                 </div>
@@ -357,7 +379,7 @@ export const HUD = React.memo(({
                   <div className="text-[9px] text-red-400 uppercase tracking-wider font-black mb-0.5 drop-shadow-md flex items-center gap-1">
                       <Target size={10} /> BEAT {challengeTarget.name.toUpperCase()}
                   </div>
-                  <div className="text-xs text-slate-300 font-mono font-bold">
+                  <div className="text-sm text-slate-300 font-mono font-bold">
                       {challengeTarget.score.toLocaleString()}
                   </div>
               </div>
@@ -371,11 +393,10 @@ export const HUD = React.memo(({
       </div>
 
       {!isClassic && (
-          <div className="relative">
-              <ComboMeter combo={combo} />
-              <div className="flex flex-wrap gap-2 justify-center animate-in fade-in slide-in-from-top-1 overflow-x-auto p-1 no-scrollbar mt-1">
+          <div className="relative flex justify-center">
+              <div className="flex flex-wrap gap-2 justify-center animate-in fade-in slide-in-from-top-1 overflow-x-auto p-1 no-scrollbar mt-1 h-6">
                   {activeModifiers && activeModifiers.map(mod => (
-                      <div key={mod.id} className="flex items-center gap-1 bg-slate-800/80 px-2 py-1 rounded text-[8px] md:text-[10px] border border-slate-700">
+                      <div key={mod.id} className="flex items-center gap-1 bg-slate-800/80 px-2 py-1 rounded text-[10px] border border-slate-700">
                           <span>{mod.icon}</span>
                           <span className={`font-bold ${mod.color}`}>{mod.name}</span>
                       </div>
@@ -390,15 +411,15 @@ export const HUD = React.memo(({
               <div key={buff.id} className={`flex items-center gap-1 px-1.5 py-0.5 rounded-md border ${buff.color} animate-in zoom-in`}>
                   {buff.icon}
                   <div className="flex flex-col leading-none">
-                      <span className="text-[6px] md:text-[8px] font-bold opacity-70">{buff.label}</span>
-                      <span className="text-[8px] md:text-[10px] font-black">{buff.count}</span>
+                      <span className="text-[8px] font-bold opacity-70">{buff.label}</span>
+                      <span className="text-[10px] font-black">{buff.count}</span>
                   </div>
               </div>
           ))}
       </div>
 
       {/* Inventory Bar */}
-      <div className="flex gap-2 w-full mt-1">
+      <div className="flex gap-2 w-full mt-2">
           {Array.from({ length: 3 }).map((_, i) => (
               <InventorySlot 
                   key={i} 
@@ -415,7 +436,7 @@ export const HUD = React.memo(({
                   ${pulse ? 'animate-badge-pulse ring-2 ring-yellow-400 ring-offset-2 ring-offset-black' : ''}
               `}
           >
-              <StoreIcon size={20} className="text-white drop-shadow-md group-hover:scale-110 transition-transform" />
+              <StoreIcon size={22} className="text-white drop-shadow-md group-hover:scale-110 transition-transform" />
               <span className="text-[7px] md:text-[8px] font-black text-white uppercase mt-0.5 tracking-wider">Shop</span>
               
               {/* Notification Badge */}

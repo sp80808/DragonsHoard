@@ -55,8 +55,9 @@ export const MedalFeed: React.FC<MedalFeedProps> = ({ queue }) => {
     const displayQueue = queue.slice(0, 1);
 
     // Z-index 30 puts it below HUD header (40) and Combo Meter
+    // Moved down to top-36 to avoid clashing with the lower parts of the HUD
     return (
-        <div className="fixed top-28 left-1/2 -translate-x-1/2 z-30 pointer-events-none flex flex-col items-center w-auto">
+        <div className="fixed top-36 left-1/2 -translate-x-1/2 z-30 pointer-events-none flex flex-col items-center w-auto">
             <AnimatePresence mode="wait">
                 {displayQueue.map(({ id, medal }) => (
                     <MedalItem key={id} medal={medal} />

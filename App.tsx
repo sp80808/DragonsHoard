@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useReducer, useRef, useCallback } from 'react';
 import { GameState, Direction, HeroClass, GameMode, Difficulty, FeedbackEvent, InventoryItem, LootEvent, Medal, View, AbilityType, InputSettings } from './types';
 import { initializeGame, moveGrid, isGameOver, useInventoryItem, executeAutoCascade, checkAchievements, checkLoreUnlocks, spawnTile, executePowerupAction, updateCooldowns, saveHighscore, processPassiveAbilities, createId } from './services/gameLogic';
@@ -662,7 +661,7 @@ const GameContent: React.FC = () => {
                     </div>
 
                     <div className="relative w-full h-full max-w-lg mx-auto flex flex-col p-2 md:p-4 z-10">
-                        <div className="relative z-10 flex flex-col h-full">
+                        <div className="relative z-10 flex flex-col h-full gap-4">
                             <HUD 
                                 score={state.score}
                                 bestScore={Math.max(state.score, state.bestScore)}
@@ -749,13 +748,11 @@ const GameContent: React.FC = () => {
 };
 
 const App: React.FC = () => {
-  return (
-    <div className="fixed inset-0 bg-[#050505] text-slate-200 font-sans overflow-hidden select-none">
+    return (
         <LootProvider>
             <GameContent />
         </LootProvider>
-    </div>
-  );
+    );
 };
 
 export default App;
