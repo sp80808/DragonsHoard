@@ -1,10 +1,9 @@
 
 import { Direction, GameState, Tile, TileType, MoveResult, LootResult, ItemType, InventoryItem, Stage, LeaderboardEntry, GameStats, Achievement, HeroClass, CraftingRecipe, DailyModifier, StoryEntry, PlayerProfile, Medal, AbilityType, AbilityState, Difficulty, LootEvent, ShopState, GameMode, RunStats } from '../types';
 import { GRID_SIZE_INITIAL, SHOP_ITEMS, getXpThreshold, getStage, getStageBackground, ACHIEVEMENTS, TILE_STYLES, FALLBACK_STYLE, getItemDefinition, BOSS_DEFINITIONS, SHOP_CONFIG, DAILY_MODIFIERS, STORY_ENTRIES, MEDALS } from '../constants';
-import { v4 as uuidv4 } from 'uuid';
-import { rng } from '../utils/rng';
+import { RNG, rng, generateId } from '../utils/rng';
 
-const createId = () => uuidv4();
+export const createId = () => generateId();
 const LEADERBOARD_KEY = 'dragon_hoard_leaderboard';
 const ACHIEVEMENTS_STORAGE_KEY = 'dragon_hoard_unlocked_achievements';
 const PROFILE_STORAGE_KEY = 'dragons_hoard_profile';
@@ -132,7 +131,7 @@ const getInitialShopState = (modifiers?: DailyModifier[]): ShopState => {
 };
 
 export const generateDailyModifiers = (seed: number): DailyModifier[] => {
-    const dayRng = new (rng.constructor as any)();
+    const dayRng = new RNG();
     dayRng.setSeed(seed);
     
     const shuffled = [...DAILY_MODIFIERS];
@@ -160,7 +159,6 @@ export const initializeGame = (restart = false, heroClass: HeroClass = HeroClass
     if (saved) {
         try {
             const parsed = JSON.parse(saved);
-            // Ensure abilities are present
             if (!parsed.abilities) {
                 parsed.abilities = {
                     'SCORCH': { id: 'SCORCH', isUnlocked: false, charges: 1, maxCharges: 1, cooldown: 30, currentCooldown: 30 },
@@ -168,20 +166,16 @@ export const initializeGame = (restart = false, heroClass: HeroClass = HeroClass
                     'GOLDEN_EGG': { id: 'GOLDEN_EGG', isUnlocked: false, charges: 1, maxCharges: 1, cooldown: 50, currentCooldown: 50 }
                 };
             }
-            // Sync unlocks
             Object.keys(parsed.abilities).forEach(key => {
                 if (profile.unlockedPowerups && profile.unlockedPowerups.includes(key as AbilityType)) {
                     parsed.abilities[key].isUnlocked = true;
                 }
             });
-            
-            // Ensure new settings fields exist
             if (parsed.settings) {
                 if (parsed.settings.enableScreenShake === undefined) parsed.settings.enableScreenShake = true;
                 if (parsed.settings.enableParticles === undefined) parsed.settings.enableParticles = true;
                 if (parsed.settings.reduceMotion === undefined) parsed.settings.reduceMotion = false;
             }
-
             parsed.grid = parsed.grid.filter((t: Tile) => !t.isDying);
             return parsed;
         } catch (e) { console.error("Save corrupted", e); }
@@ -241,7 +235,6 @@ export const initializeGame = (restart = false, heroClass: HeroClass = HeroClass
   let initialGrid = spawnTile([], GRID_SIZE_INITIAL, startLevel, { isClassic: mode === 'CLASSIC', modifiers: activeModifiers, difficulty });
   initialGrid = spawnTile(initialGrid, GRID_SIZE_INITIAL, startLevel, { isClassic: mode === 'CLASSIC', modifiers: activeModifiers, difficulty });
 
-  // Passive Cooldowns Initial State
   const abilities: Record<AbilityType, AbilityState> = {
       'SCORCH': { id: 'SCORCH', isUnlocked: profile.unlockedPowerups?.includes('SCORCH'), charges: 1, maxCharges: 1, cooldown: 30, currentCooldown: 30 },
       'DRAGON_BREATH': { id: 'DRAGON_BREATH', isUnlocked: profile.unlockedPowerups?.includes('DRAGON_BREATH'), charges: 1, maxCharges: 1, cooldown: 60, currentCooldown: 60 },
@@ -365,7 +358,6 @@ export const moveGrid = (
         if (nextTile.type === TileType.BOSS) {
             const projectileValue = tile.value;
             let siegeMultiplier = (effectCounters['SIEGE_BREAKER'] || 0) > 0 ? 3 : 1;
-            
             if (hasMod(modifiers, 'GLASS_CANNON')) siegeMultiplier *= 2;
 
             const baseDmg = Math.max(1, Math.floor(projectileValue / 2));
@@ -394,18 +386,15 @@ export const moveGrid = (
                     xpGained += 5000;
                     goldGained += 300;
                 }
-                
                 medalsEarned.push(MEDALS.BOSS_KILL);
             } else {
                 const dist = Math.abs(cell.x - nextTile.x) + Math.abs(cell.y - nextTile.y);
                 if (dist >= 3) medalsEarned.push(MEDALS.SNIPER);
             }
-            
             moved = true;
             return;
         }
 
-        // RUNE COLLECTION LOGIC
         if ((nextTile.type as any).startsWith('RUNE_')) {
              if (nextTile.type === TileType.RUNE_MIDAS) {
                  goldGained += 50;
@@ -417,12 +406,8 @@ export const moveGrid = (
                  score += 500;
                  lootEvents.push({ id: createId(), x: nextTile.x, y: nextTile.y, type: 'XP', value: 500, icon: '⚫' });
              }
-             
-             // Consume the Rune
              nextTile.isDying = true;
              powerUpTriggered = nextTile.type;
-             
-             // Move tile into the Rune's spot and continue
              cell.x = next.x;
              cell.y = next.y;
              next = { x: cell.x + vector.x, y: cell.y + vector.y };
@@ -696,8 +681,7 @@ export const generateFallbackStory = (gameState: GameState): string => {
     const cls = gameState.selectedClass;
     const loc = gameState.currentStage.name;
     const reason = gameState.runStats.bossesDefeated > 2 ? "battle fatigue" : "bad luck";
-    
-    return `The ${cls} fell in ${loc}, consumed by ${cause}. Leaving behind ${gameState.runStats.goldEarned} gold coins as a warning to others. Overcome by ${reason}, their legend fades into the dark.`;
+    return `The ${cls} fell in ${loc}, consumed by ${cause}. Leaving behind ${gameState.runStats.goldEarned} gold coins.`;
 };
 
 export const checkAchievements = (state: GameState): string[] => {
@@ -769,18 +753,15 @@ export const checkLoreUnlocks = (state: GameState, profile: PlayerProfile): Stor
 };
 
 export const executePowerupAction = (state: GameState, tileId: string, row?: number): Partial<GameState> | null => {
-    // Only used for manual triggers if any exist (currently none)
     return null;
 };
 
-// --- PASSIVE ABILITIES LOGIC ---
 export const processPassiveAbilities = (state: GameState): { grid: Tile[], abilities: Record<AbilityType, AbilityState>, triggered: string[] } => {
     let { grid, abilities } = state;
     const triggered: string[] = [];
     const newAbilities = { ...abilities };
     let newGrid = [...grid];
 
-    // SCORCH: Destroys the lowest non-boss tile
     if (newAbilities['SCORCH'].isUnlocked && newAbilities['SCORCH'].currentCooldown <= 0) {
         const targets = newGrid.filter(t => (t.type as any) !== TileType.BOSS).sort((a, b) => a.value - b.value);
         if (targets.length > 0) {
@@ -791,15 +772,12 @@ export const processPassiveAbilities = (state: GameState): { grid: Tile[], abili
         }
     }
 
-    // DRAGON BREATH: Clears a random row (prioritizes rows with many tiles)
     if (newAbilities['DRAGON_BREATH'].isUnlocked && newAbilities['DRAGON_BREATH'].currentCooldown <= 0) {
-        // Group by row
         const rows: Record<number, Tile[]> = {};
         newGrid.forEach(t => {
             if (!rows[t.y]) rows[t.y] = [];
             rows[t.y].push(t);
         });
-        // Find row with most tiles
         const targetRow = Object.keys(rows).sort((a, b) => rows[parseInt(b)].length - rows[parseInt(a)].length)[0];
         if (targetRow) {
             const y = parseInt(targetRow);
@@ -809,12 +787,10 @@ export const processPassiveAbilities = (state: GameState): { grid: Tile[], abili
         }
     }
 
-    // GOLDEN EGG: Upgrades random non-boss tile
     if (newAbilities['GOLDEN_EGG'].isUnlocked && newAbilities['GOLDEN_EGG'].currentCooldown <= 0) {
         const targets = newGrid.filter(t => (t.type as any) !== TileType.BOSS);
         if (targets.length > 0) {
             const target = targets[Math.floor(Math.random() * targets.length)];
-            // In-place update works because we modify copy
             const idx = newGrid.indexOf(target);
             if (idx > -1) {
                 newGrid[idx] = { ...target, value: target.value * 2, isNew: true };

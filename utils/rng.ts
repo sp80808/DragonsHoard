@@ -1,5 +1,5 @@
 
-class RNG {
+export class RNG {
     private seed: number;
     private useSeeded: boolean = false;
 
@@ -58,3 +58,11 @@ class RNG {
 }
 
 export const rng = new RNG();
+
+// Simple UUID v4 replacement to avoid import errors in some environments
+export const generateId = (): string => {
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+        var r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+        return v.toString(16);
+    });
+};

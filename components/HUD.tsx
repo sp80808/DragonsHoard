@@ -374,4 +374,64 @@ export const HUD = React.memo(({
           <div className="relative">
               <ComboMeter combo={combo} />
               <div className="flex flex-wrap gap-2 justify-center animate-in fade-in slide-in-from-top-1 overflow-x-auto p-1 no-scrollbar mt-1">
-                  {activeModifiers && activeModifiers.map(
+                  {activeModifiers && activeModifiers.map(mod => (
+                      <div key={mod.id} className="flex items-center gap-1 bg-slate-800/80 px-2 py-1 rounded text-[8px] md:text-[10px] border border-slate-700">
+                          <span>{mod.icon}</span>
+                          <span className={`font-bold ${mod.color}`}>{mod.name}</span>
+                      </div>
+                  ))}
+              </div>
+          </div>
+      )}
+
+      {/* Buff Bar */}
+      <div className="flex gap-1 justify-center min-h-[20px]">
+          {buffs.map(buff => (
+              <div key={buff.id} className={`flex items-center gap-1 px-1.5 py-0.5 rounded-md border ${buff.color} animate-in zoom-in`}>
+                  {buff.icon}
+                  <div className="flex flex-col leading-none">
+                      <span className="text-[6px] md:text-[8px] font-bold opacity-70">{buff.label}</span>
+                      <span className="text-[8px] md:text-[10px] font-black">{buff.count}</span>
+                  </div>
+              </div>
+          ))}
+      </div>
+
+      {/* Inventory Bar */}
+      <div className="flex gap-2 w-full mt-1">
+          {Array.from({ length: 3 }).map((_, i) => (
+              <InventorySlot 
+                  key={i} 
+                  index={i} 
+                  item={inventory[i]} 
+                  onUseItem={onUseItem} 
+                  itemFeedback={itemFeedback}
+              />
+          ))}
+          <RerollButton />
+          <button 
+              onClick={onOpenStore}
+              className={`w-12 h-12 md:w-14 md:h-14 bg-gradient-to-br from-amber-600 to-yellow-600 rounded-xl border-2 border-yellow-400/50 shadow-lg flex flex-col items-center justify-center relative group active:scale-95 transition-all
+                  ${pulse ? 'animate-badge-pulse ring-2 ring-yellow-400 ring-offset-2 ring-offset-black' : ''}
+              `}
+          >
+              <StoreIcon size={20} className="text-white drop-shadow-md group-hover:scale-110 transition-transform" />
+              <span className="text-[7px] md:text-[8px] font-black text-white uppercase mt-0.5 tracking-wider">Shop</span>
+              
+              {/* Notification Badge */}
+              <AnimatePresence>
+                  {badgeCount > 0 && (
+                      <motion.div 
+                          key="badge"
+                          initial={{ scale: 0 }} animate={{ scale: 1 }} exit={{ scale: 0 }}
+                          className="absolute -top-1.5 -right-1.5 bg-red-600 text-white text-[9px] font-bold w-4 h-4 flex items-center justify-center rounded-full border border-slate-900 shadow-sm"
+                      >
+                          {badgeCount}
+                      </motion.div>
+                  )}
+              </AnimatePresence>
+          </button>
+      </div>
+    </div>
+  );
+});

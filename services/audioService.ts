@@ -44,6 +44,10 @@ class AudioService {
     if (this.isInitialized) return;
     try {
       const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioContextClass) {
+          console.warn("AudioContext not supported in this environment.");
+          return;
+      }
       this.ctx = new AudioContextClass();
       
       this.masterGain = this.ctx!.createGain();

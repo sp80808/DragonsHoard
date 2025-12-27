@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { ArrowLeft, Lock, CheckCircle, Palette, Flame, Ghost, Grid, Droplets, Zap, Star, Settings, Sword, Heart, Medal as MedalIcon } from 'lucide-react';
 import { PlayerProfile, Medal } from '../types';
@@ -32,7 +33,7 @@ export const Grimoire: React.FC<GrimoireProps> = ({ profile, onBack, onSelectTil
       onSelectTileset(id);
   };
 
-  const medalsList = Object.values(MEDALS);
+  const medalsList = Object.keys(MEDALS).map(key => MEDALS[key]);
 
   return (
     <div className="absolute inset-0 z-50 flex flex-col items-center bg-slate-950 text-slate-200 p-4 overflow-hidden bg-[url('https://www.transparenttextures.com/patterns/dark-matter.png')]">
@@ -146,7 +147,7 @@ export const Grimoire: React.FC<GrimoireProps> = ({ profile, onBack, onSelectTil
                             <MedalIcon size={20} className="text-yellow-400"/> Service Record
                         </h3>
                         <div className="text-xs font-bold text-slate-500 uppercase tracking-widest">
-                            Total Earned: {Object.values(profile.earnedMedals || {}).reduce((a: number, b: number) => a + b, 0)}
+                            Total Earned: {Object.keys(profile.earnedMedals || {}).reduce((a: number, key: string) => a + (profile.earnedMedals?.[key] || 0), 0)}
                         </div>
                     </div>
 

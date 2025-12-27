@@ -26,10 +26,14 @@ export const HelpScreen: React.FC<HelpScreenProps> = ({ onBack }) => {
   const consumables = SHOP_ITEMS.filter(i => i.category === 'CONSUMABLE');
 
   // Generate Monster List from Tile Styles (Powers of 2)
-  const monsters = Object.entries(TILE_STYLES).map(([val, style]) => ({
-      value: parseInt(val),
-      ...style
-  })).sort((a,b) => a.value - b.value);
+  const monsters = Object.keys(TILE_STYLES).map(key => {
+      const val = parseInt(key);
+      const style = TILE_STYLES[val];
+      return {
+          value: val,
+          ...style
+      };
+  }).sort((a,b) => a.value - b.value);
 
   const TabButton = ({ id, label, icon }: { id: TabType, label: string, icon: React.ReactNode }) => (
       <button 

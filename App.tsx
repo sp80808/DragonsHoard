@@ -1,6 +1,7 @@
+
 import React, { useState, useEffect, useReducer, useRef, useCallback } from 'react';
 import { GameState, Direction, HeroClass, GameMode, Difficulty, FeedbackEvent, InventoryItem, LootEvent, Medal, View, AbilityType, InputSettings } from './types';
-import { initializeGame, moveGrid, isGameOver, useInventoryItem, executeAutoCascade, checkAchievements, checkLoreUnlocks, spawnTile, executePowerupAction, updateCooldowns, saveHighscore, processPassiveAbilities } from './services/gameLogic';
+import { initializeGame, moveGrid, isGameOver, useInventoryItem, executeAutoCascade, checkAchievements, checkLoreUnlocks, spawnTile, executePowerupAction, updateCooldowns, saveHighscore, processPassiveAbilities, createId } from './services/gameLogic';
 import { audioService } from './services/audioService';
 import { Grid } from './components/Grid';
 import { HUD } from './components/HUD';
@@ -27,7 +28,6 @@ import { facebookService } from './services/facebookService';
 import { AnimatePresence, motion } from 'framer-motion';
 import { GRID_SIZE_INITIAL, SHOP_ITEMS } from './constants';
 import { getStage } from './constants';
-import { v4 as uuidv4 } from 'uuid';
 import { Lightbulb, Sparkles } from 'lucide-react';
 
 // Define Action Types
@@ -144,7 +144,7 @@ const gameReducer = (state: GameState, action: Action): GameState => {
         case 'BUY_ITEM': {
             if (state.gold < action.item.price) return state;
             const item = { 
-                id: uuidv4(), 
+                id: createId(), 
                 type: action.item.id, 
                 name: action.item.name, 
                 description: action.item.desc, 
@@ -158,7 +158,7 @@ const gameReducer = (state: GameState, action: Action): GameState => {
         }
         case 'CRAFT_ITEM': {
              const newItem = {
-                 id: uuidv4(),
+                 id: createId(),
                  type: action.recipe.resultId,
                  name: action.recipe.name,
                  description: action.recipe.description,
@@ -347,7 +347,7 @@ const GameContent: React.FC = () => {
           setBountyClaimed(true);
           dispatch({ type: 'CLAIM_BOUNTY', reward: 50 });
           setFeedbackQueue(prev => [...prev, {
-              id: uuidv4(),
+              id: createId(),
               type: 'UNLOCK',
               title: "BOUNTY CLAIMED",
               subtitle: `You beat ${challengeTarget.name}! +50 Gold`
@@ -361,7 +361,6 @@ const GameContent: React.FC = () => {
   useEffect(() => {
       const init = async () => {
           // Failsafe: If assets take longer than 8 seconds, force start the game
-          // This prevents the game from hanging on 0% or mid-way if a resource 404s
           const failsafeTimer = setTimeout(() => {
               if (loading) {
                   console.warn("Asset loading timed out, forcing start...");
@@ -391,7 +390,7 @@ const GameContent: React.FC = () => {
                   if (entry && entry.score) {
                       setChallengeTarget({ score: entry.score, name: entry.challenger || "Challenger" });
                       setFeedbackQueue(prev => [...prev, {
-                          id: uuidv4(),
+                          id: createId(),
                           type: 'UNLOCK', 
                           title: "BOUNTY ACCEPTED",
                           subtitle: `Beat ${entry.challenger}'s score of ${entry.score}!`
@@ -566,25 +565,25 @@ const GameContent: React.FC = () => {
             case '1': 
                 if (state.inventory[0]) {
                     dispatch({ type: 'USE_ITEM', item: state.inventory[0] });
-                    setItemFeedback({ slot: 0, status: 'SUCCESS', id: uuidv4() });
+                    setItemFeedback({ slot: 0, status: 'SUCCESS', id: createId() });
                 } else {
-                    setItemFeedback({ slot: 0, status: 'ERROR', id: uuidv4() });
+                    setItemFeedback({ slot: 0, status: 'ERROR', id: createId() });
                 }
                 break;
             case '2': 
                 if (state.inventory[1]) {
                     dispatch({ type: 'USE_ITEM', item: state.inventory[1] });
-                    setItemFeedback({ slot: 1, status: 'SUCCESS', id: uuidv4() });
+                    setItemFeedback({ slot: 1, status: 'SUCCESS', id: createId() });
                 } else {
-                    setItemFeedback({ slot: 1, status: 'ERROR', id: uuidv4() });
+                    setItemFeedback({ slot: 1, status: 'ERROR', id: createId() });
                 }
                 break;
             case '3': 
                 if (state.inventory[2]) {
                     dispatch({ type: 'USE_ITEM', item: state.inventory[2] });
-                    setItemFeedback({ slot: 2, status: 'SUCCESS', id: uuidv4() });
+                    setItemFeedback({ slot: 2, status: 'SUCCESS', id: createId() });
                 } else {
-                    setItemFeedback({ slot: 2, status: 'ERROR', id: uuidv4() });
+                    setItemFeedback({ slot: 2, status: 'ERROR', id: createId() });
                 }
                 break;
         }
@@ -597,7 +596,7 @@ const GameContent: React.FC = () => {
   useEffect(() => {
       if (state.lastTurnMedals && state.lastTurnMedals.length > 0) {
           state.lastTurnMedals.forEach(m => {
-              setMedalQueue(prev => [...prev, { id: uuidv4(), medal: m }]);
+              setMedalQueue(prev => [...prev, { id: createId(), medal: m }]);
               awardMedal(m.id);
           });
       }
@@ -606,7 +605,7 @@ const GameContent: React.FC = () => {
       const lore = checkLoreUnlocks(state, profile);
       lore.forEach(l => {
           if (unlockLore(l.id)) {
-             setFeedbackQueue(prev => [...prev, { id: uuidv4(), type: 'LORE_UNLOCK', title: l.title }]);
+             setFeedbackQueue(prev => [...prev, { id: createId(), type: 'LORE_UNLOCK', title: l.title }]);
           }
       });
   }, [state.lastTurnMedals, state.stats]);
@@ -685,7 +684,7 @@ const GameContent: React.FC = () => {
                                 onOpenStore={() => setShowStore(true)}
                                 onUseItem={(item) => {
                                     const idx = state.inventory.indexOf(item);
-                                    if (idx > -1) setItemFeedback({ slot: idx, status: 'SUCCESS', id: uuidv4() });
+                                    if (idx > -1) setItemFeedback({ slot: idx, status: 'SUCCESS', id: createId() });
                                     dispatch({ type: 'USE_ITEM', item });
                                 }}
                                 onReroll={() => dispatch({ type: 'REROLL' })}

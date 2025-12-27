@@ -38,6 +38,8 @@ const retryOperation = async (operation: () => Promise<void>, label: string, max
                 await new Promise(r => setTimeout(r, 500)); // Wait before retry
             } else {
                 console.warn(`Failed to load ${label} after retries. Continuing without it.`);
+                // We resolve successfully (return void) so Promise.all doesn't reject.
+                return;
             }
         }
     }
@@ -59,6 +61,9 @@ const loadImage = (url: string): Promise<void> => {
     return promise;
 };
 
+// Helper for ES2017 Object.values compatibility
+const getValues = (obj: any) => Object.keys(obj).map(key => obj[key]);
+
 // Loads essential assets needed for the Splash Screen and immediate Gameplay start
 export const loadCriticalAssets = async (onProgress: (percent: number) => void, startThemeId: string = 'DEFAULT') => {
     let loadedCount = 0;
@@ -77,15 +82,15 @@ export const loadCriticalAssets = async (onProgress: (percent: number) => void, 
         'https://www.transparenttextures.com/patterns/foggy-birds.png', // Used for fog layer
 
         // GAME ASSETS
-        ...Object.values(TILE_STYLES).map(s => s.imageUrl),
+        ...getValues(TILE_STYLES).map((s: any) => s.imageUrl),
         BOSS_STYLE.imageUrl,
-        ...Object.values(RUNE_STYLES).map(s => s.imageUrl),
+        ...getValues(RUNE_STYLES).map((s: any) => s.imageUrl),
         ...STAGES.map(s => getStageBackground(s.name)).filter(url => !!url)
     ].filter(Boolean);
 
     // If starting in a specific theme, ensure those assets are loaded critically
     if (startThemeId !== 'DEFAULT' && THEME_STYLES[startThemeId]) {
-        const themeAssets = Object.values(THEME_STYLES[startThemeId]).map((s: any) => s.imageUrl).filter(Boolean);
+        const themeAssets = getValues(THEME_STYLES[startThemeId]).map((s: any) => s.imageUrl).filter(Boolean);
         imagesToLoad.push(...themeAssets);
     }
 
@@ -106,7 +111,9 @@ export const loadCriticalAssets = async (onProgress: (percent: number) => void, 
         .then(updateProgress)
     );
 
-    await Promise.allSettled([...imagePromises]);
+    // Use Promise.all instead of allSettled for better compatibility.
+    // retryOperation ensures promises resolve even on error, so Promise.all is safe.
+    await Promise.all(imagePromises);
     
     // Ensure 100% at end regardless of failures
     onProgress(100);
@@ -114,12 +121,16 @@ export const loadCriticalAssets = async (onProgress: (percent: number) => void, 
 
 // Loads ALL theme assets in the background
 export const loadBackgroundAssets = async () => {
-    const allThemeImages = Object.values(THEME_STYLES).flatMap(theme => 
-        Object.values(theme).map((s: any) => s.imageUrl).filter(Boolean)
-    );
+    // Replace flatMap with reduce for compatibility
+    // Replace Object.values with helper
+    const allThemeImages = getValues(THEME_STYLES).reduce((acc: string[], theme: any) => {
+        const urls = getValues(theme).map((s: any) => s.imageUrl).filter((url: any) => typeof url === 'string' && !!url);
+        return acc.concat(urls as string[]);
+    }, []);
 
-    const visualPromises = allThemeImages.map(url => retryOperation(() => loadImage(url), 'theme_asset'));
+    const visualPromises = allThemeImages.map((url: string) => retryOperation(() => loadImage(url), 'theme_asset'));
 
-    await Promise.allSettled(visualPromises);
+    // Use Promise.all instead of allSettled for compatibility
+    await Promise.all(visualPromises);
     console.log("Background assets loaded.");
 };

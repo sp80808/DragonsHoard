@@ -2,7 +2,7 @@
 import React, { createContext, useContext, useState, useRef, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Coins, Star } from 'lucide-react';
-import { v4 as uuidv4 } from 'uuid';
+import { generateId } from '../utils/rng';
 
 type LootType = 'GOLD' | 'XP';
 
@@ -51,7 +51,7 @@ export const LootProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const startY = sourceRect.top + sourceRect.height / 2;
 
     const newParticles: LootParticle[] = Array.from({ length: count }).map(() => ({
-      id: uuidv4(),
+      id: generateId(),
       type,
       startX,
       startY,
