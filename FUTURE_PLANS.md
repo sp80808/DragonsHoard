@@ -67,18 +67,31 @@ An upgrade tree dedicated specifically to the Auto-Cascade mechanic, allowing pl
 
 ---
 
-# Future Feature: Juicy XP Feedback
+# Future Feature: Phase 2 Visual Polish
 
-To make gaining XP feel more rewarding, we need better visual and auditory feedback.
+To make the game feel truly premium, the next phase of development should focus on "Juice" and micro-interactions.
 
-## Visual Improvements
-1.  **Floating XP Numbers:** When a merge happens, spawn a small floating text `+50 XP` near the tile, drifting towards the XP bar.
-2.  **Bar Physics:** When a large chunk of XP is gained (e.g., Boss Kill), the XP bar should fill up rapidly, glow white, and shake the UI slightly.
-3.  **Level Up Moment:** Freeze frame for 0.5s, darken the background, and have the "LEVEL UP" text slam onto the screen with a shockwave.
+## 1. 3D Card Tilt Effects
+*   **Concept:** When hovering over Store Cards or Grimoire Themes, the card should tilt in 3D space relative to the mouse cursor position.
+*   **Tech:** `transform: rotateX(...) rotateY(...)` calculated via mouse position.
 
-## Audio Improvements
-1.  **Pitch Shifting:** Consecutive merges (combos) should play the XP gain sound at progressively higher pitches (do-re-mi-fa-so...).
-2.  **Liquid Fill Sound:** A subtle liquid pouring sound while the XP bar fills up.
+## 2. Contextual Particle Systems
+*   **Concept:** Different screens should have different ambient particles.
+    *   **Store:** Golden dust falling from the top.
+    *   **Combat:** Embers rising from the bottom.
+    *   **Inventory:** Tiny sparkles around the active item slots.
+
+## 3. UI Sound Design Integration
+*   **Concept:** Every major UI interaction needs a dedicated sound.
+    *   **Hover:** Very faint, high-pitch "tick".
+    *   **Click:** Satisfying "thud" or "click" based on material (wood/stone).
+    *   **Scroll:** Paper rustling sounds when scrolling through the Codex.
+
+## 4. Boss Entrance Sequences
+*   **Concept:** Instead of just appearing, the Boss tile should have a "Warning" animation.
+    *   The grid shakes violently.
+    *   A warning siren sound plays.
+    *   The tile spawns with a lightning strike effect.
 
 ---
 

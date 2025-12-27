@@ -1,6 +1,5 @@
-
 import React, { useState } from 'react';
-import { ArrowLeft, Volume2, VolumeX, Trash2, AlertCircle, Music, Keyboard, MousePointer, Monitor, MessageSquare, Gauge, Zap, Sparkles, Database, Save, Activity, Layers, Image as ImageIcon, Box } from 'lucide-react';
+import { ArrowLeft, Volume2, VolumeX, Trash2, AlertCircle, Music, Keyboard, MousePointer, Monitor, MessageSquare, Gauge, Zap, Sparkles, Database, Save, Activity, Layers, Image as ImageIcon, Box, Smartphone, Eye, EyeOff, Move } from 'lucide-react';
 import { audioService } from '../services/audioService';
 import { clearSaveData } from '../services/gameLogic';
 import { InputSettings, GraphicsQuality } from '../types';
@@ -33,7 +32,7 @@ const SettingRow = ({ label, desc, icon, control }: { label: string, desc: strin
             <div className="mt-1 text-slate-500">{icon}</div>
             <div>
                 <div className="text-sm font-bold text-slate-200">{label}</div>
-                <div className="text-xs text-slate-500 leading-tight mt-0.5">{desc}</div>
+                <div className="text-xs text-slate-500 leading-tight mt-0.5 max-w-[200px]">{desc}</div>
             </div>
         </div>
         {control}
@@ -91,7 +90,19 @@ export const Settings: React.FC<SettingsProps> = ({ settings, onUpdateSettings, 
   };
 
   const handleQualityChange = (q: GraphicsQuality) => {
-      onUpdateSettings({ ...settings, graphicsQuality: q });
+      // When quality changes, set defaults for that tier
+      const updates: Partial<InputSettings> = { graphicsQuality: q };
+      if (q === 'LOW') {
+          updates.enableScreenShake = false;
+          updates.enableParticles = false;
+      } else if (q === 'MEDIUM') {
+          updates.enableScreenShake = true;
+          updates.enableParticles = true;
+      } else {
+          updates.enableScreenShake = true;
+          updates.enableParticles = true;
+      }
+      onUpdateSettings({ ...settings, ...updates });
   };
 
   const handleSlideSpeedChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -116,7 +127,7 @@ export const Settings: React.FC<SettingsProps> = ({ settings, onUpdateSettings, 
 
   return (
     <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/95 backdrop-blur-md p-4 animate-in fade-in duration-300">
-      <div className="w-full max-w-2xl bg-[#0b0f19] border border-slate-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
+      <div className="w-full max-w-2xl bg-[#0b0f19] border border-slate-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
         
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-slate-800 bg-slate-900/50">
@@ -130,21 +141,21 @@ export const Settings: React.FC<SettingsProps> = ({ settings, onUpdateSettings, 
 
         {/* Tabs */}
         <div className="flex p-2 border-b border-slate-800 bg-slate-950 gap-2 overflow-x-auto">
-            <TabButton id="GAMEPLAY" icon={<Monitor size={16}/>} label="Gameplay & Graphics" />
+            <TabButton id="GAMEPLAY" icon={<Monitor size={16}/>} label="Gameplay" />
             <TabButton id="AUDIO" icon={<Volume2 size={16}/>} label="Audio" />
             <TabButton id="DATA" icon={<Database size={16}/>} label="Data" />
         </div>
 
         {/* Content Area */}
-        <div className="flex-1 overflow-y-auto p-6 bg-[url('https://www.transparenttextures.com/patterns/dark-matter.png')]">
+        <div className="flex-1 overflow-y-auto p-6 bg-[url('https://www.transparenttextures.com/patterns/dark-matter.png')] custom-scrollbar">
             
             {activeTab === 'GAMEPLAY' && (
                 <div className="space-y-6 animate-in slide-in-from-right-4 duration-300">
                     
                     {/* Visual Quality Section */}
-                    <Section title="Visual Quality" icon={<Layers size={18} className="text-green-400"/>}>
-                        <div className="bg-slate-900/80 border border-slate-700 rounded-xl p-4">
-                            <div className="flex gap-2 mb-4">
+                    <Section title="Graphics Profile" icon={<Layers size={18} className="text-green-400"/>}>
+                        <div className="bg-slate-900/80 border border-slate-700 rounded-xl p-4 mb-4">
+                            <div className="flex gap-2 mb-2">
                                 <QualityButton 
                                     value="LOW" 
                                     label="Performance" 
@@ -155,7 +166,7 @@ export const Settings: React.FC<SettingsProps> = ({ settings, onUpdateSettings, 
                                 <QualityButton 
                                     value="MEDIUM" 
                                     label="Balanced" 
-                                    desc="Standard look. No blur." 
+                                    desc="Standard look." 
                                     current={settings.graphicsQuality} 
                                     onClick={handleQualityChange} 
                                 />
@@ -167,9 +178,36 @@ export const Settings: React.FC<SettingsProps> = ({ settings, onUpdateSettings, 
                                     onClick={handleQualityChange} 
                                 />
                             </div>
-                            <div className="text-[10px] text-slate-500 text-center italic">
-                                Note: Changing quality may require a reload to fully apply all shaders.
-                            </div>
+                        </div>
+                    </Section>
+
+                    {/* Detailed Visual Settings */}
+                    <Section title="Visual Effects" icon={<Eye size={18} className="text-cyan-400"/>}>
+                        <div className="space-y-3">
+                            <SettingRow 
+                                label="Screen Shake" 
+                                desc="Enable camera shake on impacts."
+                                icon={<Activity size={16} />}
+                                control={<Toggle checked={settings.enableScreenShake} onChange={() => toggleSetting('enableScreenShake')} />}
+                            />
+                            <SettingRow 
+                                label="Particle Effects" 
+                                desc="Show sparks and magic dust."
+                                icon={<Sparkles size={16} />}
+                                control={<Toggle checked={settings.enableParticles} onChange={() => toggleSetting('enableParticles')} />}
+                            />
+                        </div>
+                    </Section>
+
+                    {/* Accessibility */}
+                    <Section title="Accessibility" icon={<EyeOff size={18} className="text-pink-400"/>}>
+                        <div className="space-y-3">
+                            <SettingRow 
+                                label="Reduced Motion" 
+                                desc="Disable flashing lights and intense motions."
+                                icon={<Move size={16} />}
+                                control={<Toggle checked={settings.reduceMotion} onChange={() => toggleSetting('reduceMotion')} />}
+                            />
                         </div>
                     </Section>
 
@@ -177,16 +215,10 @@ export const Settings: React.FC<SettingsProps> = ({ settings, onUpdateSettings, 
                     <Section title="Controls" icon={<Keyboard size={18} className="text-blue-400"/>}>
                         <div className="space-y-3">
                             <SettingRow 
-                                label="Keyboard Controls" 
-                                desc="Use Arrow Keys or WASD to move."
-                                icon={<Keyboard size={16} />}
-                                control={<Toggle checked={settings.enableKeyboard} onChange={() => toggleSetting('enableKeyboard')} />}
-                            />
-                            <SettingRow 
-                                label="Touch / Mouse Swipe" 
-                                desc="Swipe on screen to move tiles."
-                                icon={<MousePointer size={16} />}
-                                control={<Toggle checked={settings.enableSwipe} onChange={() => toggleSetting('enableSwipe')} />}
+                                label="Haptic Feedback" 
+                                desc="Vibrate on moves and impact."
+                                icon={<Smartphone size={16} />}
+                                control={<Toggle checked={settings.enableHaptics} onChange={() => toggleSetting('enableHaptics')} />}
                             />
                             {settings.enableSwipe && (
                                 <div className="pl-12 pr-2">
@@ -196,12 +228,6 @@ export const Settings: React.FC<SettingsProps> = ({ settings, onUpdateSettings, 
                                     </div>
                                 </div>
                             )}
-                            <SettingRow 
-                                label="Trackpad Scroll" 
-                                desc="Use two-finger scroll to move."
-                                icon={<Monitor size={16} />}
-                                control={<Toggle checked={settings.enableScroll} onChange={() => toggleSetting('enableScroll')} />}
-                            />
                         </div>
                     </Section>
 

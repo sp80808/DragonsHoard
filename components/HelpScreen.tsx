@@ -4,6 +4,7 @@ import { ArrowLeft, Zap, Skull, Swords, Scroll, Coins, Trophy, Sparkles, Package
 import { SHOP_ITEMS, TILE_STYLES, STORY_ENTRIES } from '../constants';
 import { TileType } from '../types';
 import { getPlayerProfile } from '../services/storageService';
+import { motion } from 'framer-motion';
 
 interface HelpScreenProps {
   onBack: () => void;
@@ -78,20 +79,26 @@ export const HelpScreen: React.FC<HelpScreenProps> = ({ onBack }) => {
                         <Swords size={20} className="text-blue-400" /> Core Mechanics
                     </h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="bg-slate-800/50 p-4 rounded-xl border border-white/5">
+                        <motion.div 
+                            initial={{ opacity: 0, y: 10 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}
+                            className="bg-slate-800/50 p-4 rounded-xl border border-white/5"
+                        >
                             <h4 className="font-bold text-slate-200 mb-2">Move & Merge</h4>
                             <p className="text-sm text-slate-400 leading-relaxed">
                                 Swipe or use Arrow Keys to move tiles. Merge matching monsters to <strong>EVOLVE</strong> them into stronger forms.
                                 <br/><br/>
                                 <span className="text-xs font-mono bg-black/30 p-1 rounded">Slime (2) + Slime (2) = Goblin (4)</span>
                             </p>
-                        </div>
-                        <div className="bg-slate-800/50 p-4 rounded-xl border border-white/5">
+                        </motion.div>
+                        <motion.div 
+                            initial={{ opacity: 0, y: 10 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: 0.1 }}
+                            className="bg-slate-800/50 p-4 rounded-xl border border-white/5"
+                        >
                             <h4 className="font-bold text-slate-200 mb-2">The Goal</h4>
                             <p className="text-sm text-slate-400 leading-relaxed">
                                 Build your score, earn Gold, and survive long enough to summon the <strong>Dragon God (2048)</strong>.
                             </p>
-                        </div>
+                        </motion.div>
                     </div>
                 </section>
 
@@ -100,24 +107,33 @@ export const HelpScreen: React.FC<HelpScreenProps> = ({ onBack }) => {
                         <Sparkles size={20} className="text-purple-400" /> RPG Progression
                     </h3>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <div className="bg-slate-800/50 p-4 rounded-xl border border-white/5">
+                        <motion.div 
+                             initial={{ opacity: 0, scale: 0.9 }} whileInView={{ opacity: 1, scale: 1 }} viewport={{ once: true }} transition={{ delay: 0.2 }}
+                             className="bg-slate-800/50 p-4 rounded-xl border border-white/5"
+                        >
                             <div className="text-indigo-400 font-bold mb-1 flex items-center gap-2"><Trophy size={16}/> XP & Levels</div>
                             <p className="text-xs text-slate-400">
                                 Merges grant XP. Leveling up unlocks perks and expands the grid.
                             </p>
-                        </div>
-                        <div className="bg-slate-800/50 p-4 rounded-xl border border-white/5">
+                        </motion.div>
+                        <motion.div 
+                             initial={{ opacity: 0, scale: 0.9 }} whileInView={{ opacity: 1, scale: 1 }} viewport={{ once: true }} transition={{ delay: 0.3 }}
+                             className="bg-slate-800/50 p-4 rounded-xl border border-white/5"
+                        >
                             <div className="text-yellow-400 font-bold mb-1 flex items-center gap-2"><Coins size={16}/> Gold & Shop</div>
                             <p className="text-xs text-slate-400">
                                 Collect gold from high-level merges. Spend it on Runes and Potions.
                             </p>
-                        </div>
-                        <div className="bg-slate-800/50 p-4 rounded-xl border border-white/5">
+                        </motion.div>
+                        <motion.div 
+                             initial={{ opacity: 0, scale: 0.9 }} whileInView={{ opacity: 1, scale: 1 }} viewport={{ once: true }} transition={{ delay: 0.4 }}
+                             className="bg-slate-800/50 p-4 rounded-xl border border-white/5"
+                        >
                             <div className="text-cyan-400 font-bold mb-1 flex items-center gap-2"><Zap size={16}/> Cascades</div>
                             <p className="text-xs text-slate-400">
                                 (Lvl 10+) Chain reactions trigger combos for bonus multipliers.
                             </p>
-                        </div>
+                        </motion.div>
                     </div>
                 </section>
             </div>
@@ -125,15 +141,22 @@ export const HelpScreen: React.FC<HelpScreenProps> = ({ onBack }) => {
 
           {/* TAB: BESTIARY */}
           {activeTab === 'BESTIARY' && (
-              <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+              <div className="space-y-6">
                   <div className="text-center mb-6">
                       <h3 className="text-2xl font-black text-white fantasy-font">Monster Log</h3>
                       <p className="text-slate-400 text-sm">Know your enemy.</p>
                   </div>
                   
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-                      {monsters.map((m) => (
-                          <div key={m.value} className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden group hover:border-slate-600 transition-colors">
+                      {monsters.map((m, idx) => (
+                          <motion.div 
+                            key={m.value} 
+                            initial={{ opacity: 0, y: 20 }}
+                            whileInView={{ opacity: 1, y: 0 }}
+                            viewport={{ once: true, margin: "-50px" }}
+                            transition={{ delay: idx * 0.05, type: "spring", stiffness: 100 }}
+                            className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden group hover:border-slate-600 transition-colors"
+                          >
                               <div className={`h-24 bg-gradient-to-br ${m.color} relative overflow-hidden flex items-center justify-center`}>
                                    {m.imageUrl && (
                                        <img src={m.imageUrl} alt={m.label} className="absolute inset-0 w-full h-full object-cover opacity-60 mix-blend-overlay group-hover:scale-110 transition-transform duration-500" />
@@ -151,7 +174,7 @@ export const HelpScreen: React.FC<HelpScreenProps> = ({ onBack }) => {
                                        m.value >= 64 ? "Dangerous Foe." : "Common Monster."}
                                   </div>
                               </div>
-                          </div>
+                          </motion.div>
                       ))}
                   </div>
               </div>
@@ -159,21 +182,25 @@ export const HelpScreen: React.FC<HelpScreenProps> = ({ onBack }) => {
 
           {/* TAB: ITEMS */}
           {activeTab === 'ITEMS' && (
-              <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+              <div className="space-y-6">
                  {/* Battle Items */}
                  <div className="space-y-2">
                      <h4 className="text-xs font-bold text-red-400 uppercase tracking-widest flex items-center gap-2 border-b border-red-900/30 pb-2 mb-3">
                         <Sword size={14}/> Battle Gear
                      </h4>
                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                         {battleItems.map(item => (
-                             <div key={item.id} className="bg-slate-900/60 p-2 rounded-lg border border-slate-800 flex items-start gap-3 hover:border-red-900/50 transition-colors">
+                         {battleItems.map((item, idx) => (
+                             <motion.div 
+                                key={item.id} 
+                                initial={{ opacity: 0, x: -10 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }} transition={{ delay: idx * 0.05 }}
+                                className="bg-slate-900/60 p-2 rounded-lg border border-slate-800 flex items-start gap-3 hover:border-red-900/50 transition-colors"
+                             >
                                  <div className="text-2xl mt-0.5">{item.icon}</div>
                                  <div>
                                      <div className="font-bold text-slate-200 text-xs">{item.name}</div>
                                      <div className="text-[10px] text-slate-500 leading-tight mt-0.5">{item.desc}</div>
                                  </div>
-                             </div>
+                             </motion.div>
                          ))}
                      </div>
                  </div>
@@ -184,14 +211,18 @@ export const HelpScreen: React.FC<HelpScreenProps> = ({ onBack }) => {
                         <MagicIcon size={14}/> Arcane Magic
                      </h4>
                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                         {magicItems.map(item => (
-                             <div key={item.id} className="bg-slate-900/60 p-2 rounded-lg border border-slate-800 flex items-start gap-3 hover:border-purple-900/50 transition-colors">
+                         {magicItems.map((item, idx) => (
+                             <motion.div 
+                                key={item.id} 
+                                initial={{ opacity: 0, x: -10 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }} transition={{ delay: idx * 0.05 }}
+                                className="bg-slate-900/60 p-2 rounded-lg border border-slate-800 flex items-start gap-3 hover:border-purple-900/50 transition-colors"
+                             >
                                  <div className="text-2xl mt-0.5">{item.icon}</div>
                                  <div>
                                      <div className="font-bold text-slate-200 text-xs">{item.name}</div>
                                      <div className="text-[10px] text-slate-500 leading-tight mt-0.5">{item.desc}</div>
                                  </div>
-                             </div>
+                             </motion.div>
                          ))}
                      </div>
                  </div>
@@ -202,14 +233,18 @@ export const HelpScreen: React.FC<HelpScreenProps> = ({ onBack }) => {
                         <Package size={14}/> Consumables
                      </h4>
                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                         {consumables.map(item => (
-                             <div key={item.id} className="bg-slate-900/60 p-2 rounded-lg border border-slate-800 flex items-start gap-3 hover:border-blue-900/50 transition-colors">
+                         {consumables.map((item, idx) => (
+                             <motion.div 
+                                key={item.id} 
+                                initial={{ opacity: 0, x: -10 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }} transition={{ delay: idx * 0.05 }}
+                                className="bg-slate-900/60 p-2 rounded-lg border border-slate-800 flex items-start gap-3 hover:border-blue-900/50 transition-colors"
+                             >
                                  <div className="text-2xl mt-0.5">{item.icon}</div>
                                  <div>
                                      <div className="font-bold text-slate-200 text-xs">{item.name}</div>
                                      <div className="text-[10px] text-slate-500 leading-tight mt-0.5">{item.desc}</div>
                                  </div>
-                             </div>
+                             </motion.div>
                          ))}
                      </div>
                  </div>
@@ -218,31 +253,46 @@ export const HelpScreen: React.FC<HelpScreenProps> = ({ onBack }) => {
 
           {/* TAB: LORE */}
           {activeTab === 'LORE' && (
-              <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+              <div className="space-y-6">
                   <div className="text-center mb-6">
                       <h3 className="text-2xl font-black text-white fantasy-font">Adventurer's Journal</h3>
                       <p className="text-slate-400 text-sm">Secrets of the hoard.</p>
                   </div>
                   
                   <div className="space-y-4">
-                      {STORY_ENTRIES.sort((a,b) => a.order - b.order).map(entry => {
+                      {STORY_ENTRIES.sort((a,b) => a.order - b.order).map((entry, idx) => {
                           const isUnlocked = unlockedLore.includes(entry.id);
                           return (
-                              <div key={entry.id} className={`p-4 rounded-xl border ${isUnlocked ? 'bg-slate-900/60 border-slate-700' : 'bg-slate-950/40 border-slate-800 border-dashed opacity-60'}`}>
-                                  <div className="flex justify-between items-center mb-2">
-                                      <h4 className={`font-bold font-serif text-lg ${isUnlocked ? 'text-amber-200' : 'text-slate-600'}`}>
-                                          {isUnlocked ? entry.title : "???"}
-                                      </h4>
-                                      {isUnlocked ? (
-                                          <Feather size={14} className="text-amber-500 opacity-50"/>
-                                      ) : (
-                                          <div className="text-[9px] text-slate-600 uppercase tracking-widest font-bold">LOCKED</div>
-                                      )}
+                              <motion.div 
+                                key={entry.id} 
+                                initial={{ opacity: 0, rotateX: -15 }}
+                                whileInView={{ opacity: 1, rotateX: 0 }}
+                                viewport={{ once: true }}
+                                transition={{ duration: 0.4, delay: idx * 0.1 }}
+                                className={`rounded-xl border overflow-hidden ${isUnlocked ? 'bg-slate-900/60 border-slate-700' : 'bg-slate-950/40 border-slate-800 border-dashed opacity-60'}`}
+                              >
+                                  {isUnlocked && entry.imageUrl && (
+                                      <div className="h-32 w-full relative overflow-hidden bg-black/50">
+                                          <img src={entry.imageUrl} alt={entry.title} className="w-full h-full object-cover opacity-60 hover:scale-105 transition-transform duration-700" />
+                                          <div className="absolute inset-0 bg-gradient-to-t from-slate-900 to-transparent"></div>
+                                      </div>
+                                  )}
+                                  <div className="p-4">
+                                    <div className="flex justify-between items-center mb-2">
+                                        <h4 className={`font-bold font-serif text-lg ${isUnlocked ? 'text-amber-200' : 'text-slate-600'}`}>
+                                            {isUnlocked ? entry.title : "???"}
+                                        </h4>
+                                        {isUnlocked ? (
+                                            <Feather size={14} className="text-amber-500 opacity-50"/>
+                                        ) : (
+                                            <div className="text-[9px] text-slate-600 uppercase tracking-widest font-bold">LOCKED</div>
+                                        )}
+                                    </div>
+                                    <div className={`text-sm leading-relaxed font-serif ${isUnlocked ? 'text-slate-300' : 'text-slate-700 blur-sm select-none'}`}>
+                                        {isUnlocked ? entry.text : "The text is faded and unreadable. You must delve deeper to decipher it."}
+                                    </div>
                                   </div>
-                                  <div className={`text-sm leading-relaxed font-serif ${isUnlocked ? 'text-slate-300' : 'text-slate-700 blur-sm select-none'}`}>
-                                      {isUnlocked ? entry.text : "The text is faded and unreadable. You must delve deeper to decipher it."}
-                                  </div>
-                              </div>
+                              </motion.div>
                           );
                       })}
                   </div>

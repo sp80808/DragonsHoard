@@ -15,9 +15,13 @@ export const STAGES: Stage[] = [
     { name: 'Dungeon Entrance', minLevel: 1, backgroundUrl: genUrl('dark dungeon entrance torches stone walls rpg', 101), colorTheme: 'text-slate-200', barColor: 'from-slate-600 to-slate-500', themeId: 'DEFAULT' },
     { name: 'Fungal Caverns', minLevel: 5, backgroundUrl: genUrl('glowing mushroom cave bioluminescent purple green rpg', 102), colorTheme: 'text-purple-300', barColor: 'from-purple-600 to-green-500', themeId: 'FUNGAL' },
     { name: 'Molten Depths', minLevel: 10, backgroundUrl: genUrl('lava cave volcano magma fire rpg', 103), colorTheme: 'text-red-300', barColor: 'from-red-600 to-orange-500', themeId: 'MAGMA' },
+    { name: 'Whispering Library', minLevel: 15, backgroundUrl: genUrl('ancient magical library floating books fantasy rpg', 201), colorTheme: 'text-amber-200', barColor: 'from-amber-700 to-yellow-600', themeId: 'LIBRARY' },
     { name: 'Crystal Spire', minLevel: 20, backgroundUrl: genUrl('ice crystal cave blue frozen magical rpg', 104), colorTheme: 'text-cyan-300', barColor: 'from-cyan-600 to-blue-500', themeId: 'CRYSTAL' },
+    { name: 'Sunken Tomb', minLevel: 25, backgroundUrl: genUrl('underwater ruins glowing runes atlantis rpg', 202), colorTheme: 'text-teal-300', barColor: 'from-teal-800 to-emerald-600', themeId: 'AQUATIC' },
     { name: 'Void Realm', minLevel: 30, backgroundUrl: genUrl('cosmic void space stars nebula purple dark rpg', 105), colorTheme: 'text-fuchsia-300', barColor: 'from-fuchsia-900 to-purple-800', themeId: 'VOID' },
-    { name: 'Celestial Citadel', minLevel: 40, backgroundUrl: genUrl('heavenly clouds golden gates divine light rpg', 106), colorTheme: 'text-yellow-200', barColor: 'from-yellow-400 to-amber-200', themeId: 'HEAVEN' }
+    { name: 'Iron Fortress', minLevel: 35, backgroundUrl: genUrl('steampunk industrial fortress gears lava rpg', 203), colorTheme: 'text-orange-300', barColor: 'from-orange-800 to-red-700', themeId: 'STEAMPUNK' },
+    { name: 'Celestial Citadel', minLevel: 40, backgroundUrl: genUrl('heavenly clouds golden gates divine light rpg', 106), colorTheme: 'text-yellow-200', barColor: 'from-yellow-400 to-amber-200', themeId: 'HEAVEN' },
+    { name: 'Astral Nexus', minLevel: 45, backgroundUrl: genUrl('cosmic galaxy stars nebula magic rpg', 204), colorTheme: 'text-indigo-200', barColor: 'from-indigo-600 to-violet-500', themeId: 'COSMIC' }
 ];
 
 export const getStage = (level: number) => {
@@ -191,6 +195,7 @@ export const STORY_ENTRIES: StoryEntry[] = [
         id: 'intro',
         title: 'The Entrance',
         text: "They said the hoard was infinite. They didn't say the dungeon was alive. It inhales greed and exhales monsters. I am not the first to enter, but I intend to be the first to leave.",
+        imageUrl: genUrl('dark dungeon entrance gates ominous', 301),
         order: 1,
         unlockCondition: (s, g, p) => p.gamesPlayed >= 1
     },
@@ -198,6 +203,7 @@ export const STORY_ENTRIES: StoryEntry[] = [
         id: 'first_blood',
         title: 'Alchemy of Flesh',
         text: "The slimes quiver when they touch, binding together to form something... viler. Is this biology, or heresy? The dungeon seems to reward this consolidation of power.",
+        imageUrl: genUrl('slime monster mutating evolving fantasy art', 302),
         order: 2,
         unlockCondition: (s, g, p) => s.totalMerges >= 50
     },
@@ -205,6 +211,7 @@ export const STORY_ENTRIES: StoryEntry[] = [
         id: 'guardian',
         title: 'The Gatekeeper',
         text: "A guardian blocks the path. It does not speak; it only kills. It stands as a test: do I have the strength to claim what lies deeper?",
+        imageUrl: genUrl('giant stone guardian golem blocking path', 303),
         order: 3,
         unlockCondition: (s, g, p) => s.bossesDefeated >= 1
     },
@@ -212,6 +219,7 @@ export const STORY_ENTRIES: StoryEntry[] = [
         id: 'gold_curse',
         title: 'Golden Weight',
         text: "The gold here glitters in the torchlight, but it feels cold to the touch. It wants to be held. It whispers promises of power, but I feel lighter only when I spend it.",
+        imageUrl: genUrl('cursed pile of gold coins skulls fantasy', 304),
         order: 4,
         unlockCondition: (s, g, p) => s.goldCollected >= 1000
     },
@@ -219,6 +227,7 @@ export const STORY_ENTRIES: StoryEntry[] = [
         id: 'cycle',
         title: 'Eternal Return',
         text: "Death is not the end here. The dungeon simply resets the board. I awake at the entrance, memories intact, but my pockets empty. The cycle continues.",
+        imageUrl: genUrl('time loop hourglass magic swirling', 305),
         order: 5,
         unlockCondition: (s, g, p) => p.gamesPlayed >= 3
     },
@@ -226,6 +235,7 @@ export const STORY_ENTRIES: StoryEntry[] = [
         id: 'dragon_sight',
         title: 'The God',
         text: "I saw it. A god of scales and fire. It does not hoard gold; it hoards souls. We are not intruders; we are livestock, fattening ourselves on its treasures until we are ripe for the harvest.",
+        imageUrl: genUrl('giant dragon eye opening darkness', 306),
         order: 6,
         unlockCondition: (s, g, p) => s.highestTile >= 1024
     },
@@ -233,6 +243,7 @@ export const STORY_ENTRIES: StoryEntry[] = [
         id: 'ascension',
         title: 'Part of the Walls',
         text: "I have spent so long in the dark that the light burns my eyes. I am no longer just an adventurer. I am a function of this dungeon. A variable in its equation.",
+        imageUrl: genUrl('transcendent being glowing light fantasy', 307),
         order: 7,
         unlockCondition: (s, g, p) => p.accountLevel >= 10
     }
@@ -242,9 +253,13 @@ export const BOSS_DEFINITIONS: Record<string, any> = {
     'DEFAULT': { baseHealth: 50, imageUrl: BOSS_STYLE.imageUrl },
     'FUNGAL': { baseHealth: 80, imageUrl: genUrl('giant mushroom monster boss rpg', 900), color: 'from-purple-900 to-green-900', ringColor: 'ring-purple-500', particleColor: '#a855f7' },
     'MAGMA': { baseHealth: 150, imageUrl: genUrl('magma golem boss rpg fire', 901), color: 'from-orange-900 to-red-900', ringColor: 'ring-orange-500', particleColor: '#ea580c' },
+    'LIBRARY': { baseHealth: 220, imageUrl: genUrl('arcane book golem magic runes boss rpg', 905), color: 'from-amber-900 to-yellow-800', ringColor: 'ring-amber-500', particleColor: '#f59e0b' },
     'CRYSTAL': { baseHealth: 300, imageUrl: genUrl('crystal ice dragon boss rpg', 902), color: 'from-cyan-900 to-blue-900', ringColor: 'ring-cyan-500', particleColor: '#06b6d4' },
+    'AQUATIC': { baseHealth: 450, imageUrl: genUrl('kraken sea monster boss rpg', 906), color: 'from-teal-900 to-cyan-900', ringColor: 'ring-teal-500', particleColor: '#14b8a6' },
     'VOID': { baseHealth: 600, imageUrl: genUrl('void eldritch horror boss rpg', 903), color: 'from-fuchsia-950 to-black', ringColor: 'ring-fuchsia-600', particleColor: '#d946ef' },
-    'HEAVEN': { baseHealth: 1000, imageUrl: genUrl('biblical angel warrior boss rpg', 904), color: 'from-yellow-100 to-amber-500', ringColor: 'ring-yellow-400', particleColor: '#facc15' }
+    'STEAMPUNK': { baseHealth: 800, imageUrl: genUrl('giant clockwork mechanical dragon boss rpg', 907), color: 'from-orange-950 to-red-950', ringColor: 'ring-orange-600', particleColor: '#ea580c' },
+    'HEAVEN': { baseHealth: 1000, imageUrl: genUrl('biblical angel warrior boss rpg', 904), color: 'from-yellow-100 to-amber-500', ringColor: 'ring-yellow-400', particleColor: '#facc15' },
+    'COSMIC': { baseHealth: 1500, imageUrl: genUrl('galaxy cosmic entity god boss rpg', 908), color: 'from-indigo-950 to-violet-950', ringColor: 'ring-indigo-500', particleColor: '#6366f1' }
 };
 
 export const DAILY_MODIFIERS: DailyModifier[] = [
@@ -255,19 +270,6 @@ export const DAILY_MODIFIERS: DailyModifier[] = [
     { id: 'VOLATILE_ALCHEMY', name: 'Volatile Alchemy', description: 'Potions are 50% off, but have a 10% chance to fail.', icon: '⚗️', color: 'text-green-400' },
     { id: 'CHAOS_THEORY', name: 'Chaos Theory', description: 'Rune spawn rate is tripled.', icon: '🌀', color: 'text-purple-400' },
 ];
-
-export const MUSIC_PATHS = {
-    // Dragons Horde Splash - Epic Intro
-    SPLASH: 'https://cdn.pixabay.com/audio/2022/03/24/audio_33a7e4e116.mp3', 
-    // Sad Death Theme
-    DEATH: 'https://cdn.pixabay.com/audio/2021/08/30/audio_c3c3325257.mp3', 
-    // Gameplay Ambience - 3 Distinct Tracks
-    GAMEPLAY: [
-        'https://cdn.pixabay.com/audio/2022/01/18/audio_d0a13f69d2.mp3', // Gameplay 1
-        'https://cdn.pixabay.com/audio/2021/09/06/audio_9c08796850.mp3', // Gameplay 2
-        'https://cdn.pixabay.com/audio/2021/08/08/audio_88447e769f.mp3'  // Gameplay 3
-    ]
-};
 
 export const getLevelRank = (level: number) => {
     if (level < 5) return { title: 'Novice', icon: Trophy, bg: 'from-slate-600 to-slate-800', color: 'text-slate-200' };

@@ -1,7 +1,5 @@
 
-// services/gameLogic.ts
-
-import { Direction, GameState, Tile, TileType, MoveResult, LootResult, ItemType, InventoryItem, Stage, LeaderboardEntry, GameStats, Achievement, InputSettings, RunStats, HeroClass, GameMode, PlayerProfile, ShopState, DailyModifier, Difficulty, LootEvent, StoryEntry, Medal } from '../types';
+import { Direction, GameState, Tile, TileType, MoveResult, LootResult, ItemType, InventoryItem, Stage, LeaderboardEntry, GameStats, Achievement, HeroClass, CraftingRecipe, DailyModifier, StoryEntry, PlayerProfile, Medal, AbilityType, AbilityState, Difficulty, LootEvent, ShopState, GameMode, RunStats } from '../types';
 import { GRID_SIZE_INITIAL, SHOP_ITEMS, getXpThreshold, getStage, getStageBackground, ACHIEVEMENTS, TILE_STYLES, FALLBACK_STYLE, getItemDefinition, BOSS_DEFINITIONS, SHOP_CONFIG, DAILY_MODIFIERS, STORY_ENTRIES, MEDALS } from '../constants';
 import { v4 as uuidv4 } from 'uuid';
 import { rng } from '../utils/rng';
@@ -15,7 +13,7 @@ export const getEmptyCells = (grid: Tile[], size: number) => {
   const cells: { x: number; y: number }[] = [];
   for (let x = 0; x < size; x++) {
     for (let y = 0; y < size; y++) {
-      if (!grid.find((tile) => tile.x === x && tile.y === y)) {
+      if (!grid.find((tile) => tile.x === x && tile.y === y && !tile.isDying)) {
         cells.push({ x, y });
       }
     }
@@ -57,13 +55,22 @@ export const spawnTile = (grid: Tile[], size: number, level: number, options?: S
   if (opts.forcedValue) value = opts.forcedValue;
   if (opts.type) type = opts.type;
 
+  if (!opts.forcedValue && !opts.type && !opts.isClassic) {
+      const isBossRush = hasMod(opts.modifiers, 'BOSS_RUSH');
+      if (isBossRush || level >= 4) {
+          const bossChance = isBossRush ? 0.05 : 0.002; 
+          if (rng.next() < bossChance) {
+              type = TileType.BOSS;
+          }
+      }
+  }
+
   let runeChance = 0.01 + (opts.powerUpChanceBonus || 0);
-  
   if (hasMod(opts.modifiers, 'CHAOS_THEORY')) {
       runeChance *= 3;
   }
 
-  if (!opts.forcedValue && !opts.type && !opts.isClassic && rng.next() < runeChance) {
+  if (type === TileType.NORMAL && !opts.forcedValue && !opts.type && !opts.isClassic && rng.next() < runeChance) {
       const roll = rng.next();
       if (roll < 0.4) type = TileType.RUNE_MIDAS;
       else if (roll < 0.7) type = TileType.RUNE_CHRONOS;
@@ -72,7 +79,7 @@ export const spawnTile = (grid: Tile[], size: number, level: number, options?: S
   }
 
   if (type === TileType.BOSS) {
-      if (grid.some(t => t.type === TileType.BOSS)) {
+      if (grid.some(t => t.type === TileType.BOSS && !t.isDying)) {
           type = TileType.NORMAL;
           value = 2;
       } else {
@@ -85,7 +92,7 @@ export const spawnTile = (grid: Tile[], size: number, level: number, options?: S
           if (hasMod(opts.modifiers, 'GOLD_RUSH')) hpMult = 1.5;
           if (opts.difficulty === 'HARD') hpMult *= 1.5;
 
-          maxHealth = Math.floor(bossDef.baseHealth * Math.pow(1.5, bossScale) * hpMult); 
+          maxHealth = Math.floor(bossDef.baseHealth * Math.pow(1.55, bossScale) * hpMult); 
           health = maxHealth;
           bossThemeId = stage.themeId;
       }
@@ -145,34 +152,37 @@ export const initializeGame = (restart = false, heroClass: HeroClass = HeroClass
       rng.disableSeeded();
   }
 
+  const profileStr = localStorage.getItem(PROFILE_STORAGE_KEY);
+  const profile: PlayerProfile = profileStr ? JSON.parse(profileStr) : { accountLevel: 1, unlockedPowerups: [] };
+
   if (!restart && mode !== 'DAILY') {
     const saved = localStorage.getItem('2048_rpg_state_v3');
     if (saved) {
         try {
             const parsed = JSON.parse(saved);
-            if (!parsed.effectCounters) parsed.effectCounters = {};
-            if (!parsed.gameMode) parsed.gameMode = 'RPG';
-            if (!parsed.difficulty) parsed.difficulty = 'NORMAL';
-            if (!parsed.tilesetId) parsed.tilesetId = 'DEFAULT';
-            if (!parsed.settings.slideSpeed) parsed.settings.slideSpeed = 150;
-            if (parsed.justLeveledUp === undefined) parsed.justLeveledUp = false;
+            // Ensure abilities are present
+            if (!parsed.abilities) {
+                parsed.abilities = {
+                    'SCORCH': { id: 'SCORCH', isUnlocked: false, charges: 1, maxCharges: 1, cooldown: 30, currentCooldown: 30 },
+                    'DRAGON_BREATH': { id: 'DRAGON_BREATH', isUnlocked: false, charges: 1, maxCharges: 1, cooldown: 60, currentCooldown: 60 },
+                    'GOLDEN_EGG': { id: 'GOLDEN_EGG', isUnlocked: false, charges: 1, maxCharges: 1, cooldown: 50, currentCooldown: 50 }
+                };
+            }
+            // Sync unlocks
+            Object.keys(parsed.abilities).forEach(key => {
+                if (profile.unlockedPowerups && profile.unlockedPowerups.includes(key as AbilityType)) {
+                    parsed.abilities[key].isUnlocked = true;
+                }
+            });
             
-            // Graphics Migration
-            if (parsed.settings.graphicsQuality === undefined) {
-                // Map old setting if present, otherwise default High
-                parsed.settings.graphicsQuality = parsed.settings.lowPerformanceMode ? 'LOW' : 'HIGH';
-                delete parsed.settings.lowPerformanceMode;
+            // Ensure new settings fields exist
+            if (parsed.settings) {
+                if (parsed.settings.enableScreenShake === undefined) parsed.settings.enableScreenShake = true;
+                if (parsed.settings.enableParticles === undefined) parsed.settings.enableParticles = true;
+                if (parsed.settings.reduceMotion === undefined) parsed.settings.reduceMotion = false;
             }
 
-            if (!parsed.lootEvents) parsed.lootEvents = [];
-            if (!parsed.shop) parsed.shop = getInitialShopState();
-            if (!parsed.activeModifiers) parsed.activeModifiers = [];
-            if (parsed.victory === undefined) parsed.victory = false;
-            if (parsed.gameWon === undefined) parsed.gameWon = false;
-            if (!parsed.lastTurnMedals) parsed.lastTurnMedals = [];
-            
-            if (!parsed.runStats.medalsEarned) parsed.runStats.medalsEarned = [];
-
+            parsed.grid = parsed.grid.filter((t: Tile) => !t.isDying);
             return parsed;
         } catch (e) { console.error("Save corrupted", e); }
     }
@@ -214,11 +224,6 @@ export const initializeGame = (restart = false, heroClass: HeroClass = HeroClass
       highestTile: 0, highestMonster: 'Slime', stageReached: stage.name, turnCount: 0, powerUpsUsed: 0, goldEarned: 0, cascadesTriggered: 0, startTime: Date.now(), bossesDefeated: 0, mergesCount: 0, itemsCrafted: 0, medalsEarned: []
   };
 
-  const storedAchievements = localStorage.getItem(ACHIEVEMENTS_STORAGE_KEY);
-  const achievements = storedAchievements ? JSON.parse(storedAchievements) : [];
-  const profileStr = localStorage.getItem(PROFILE_STORAGE_KEY);
-  const profile = profileStr ? JSON.parse(profileStr) : { accountLevel: 1 };
-
   let activeModifiers: DailyModifier[] = [];
   if (mode === 'DAILY' && seed) {
       activeModifiers = generateDailyModifiers(seed);
@@ -226,14 +231,22 @@ export const initializeGame = (restart = false, heroClass: HeroClass = HeroClass
 
   let startLevel = 1;
   let startGold = mode === 'CLASSIC' ? 0 : 0;
-  
   if (mode === 'BOSS_RUSH') {
       startLevel = 5; 
       startGold = 500;
+      const bossMod = DAILY_MODIFIERS.find(m => m.id === 'BOSS_RUSH');
+      if (bossMod) activeModifiers.push(bossMod);
   }
 
   let initialGrid = spawnTile([], GRID_SIZE_INITIAL, startLevel, { isClassic: mode === 'CLASSIC', modifiers: activeModifiers, difficulty });
   initialGrid = spawnTile(initialGrid, GRID_SIZE_INITIAL, startLevel, { isClassic: mode === 'CLASSIC', modifiers: activeModifiers, difficulty });
+
+  // Passive Cooldowns Initial State
+  const abilities: Record<AbilityType, AbilityState> = {
+      'SCORCH': { id: 'SCORCH', isUnlocked: profile.unlockedPowerups?.includes('SCORCH'), charges: 1, maxCharges: 1, cooldown: 30, currentCooldown: 30 },
+      'DRAGON_BREATH': { id: 'DRAGON_BREATH', isUnlocked: profile.unlockedPowerups?.includes('DRAGON_BREATH'), charges: 1, maxCharges: 1, cooldown: 60, currentCooldown: 60 },
+      'GOLDEN_EGG': { id: 'GOLDEN_EGG', isUnlocked: profile.unlockedPowerups?.includes('GOLDEN_EGG'), charges: 1, maxCharges: 1, cooldown: 50, currentCooldown: 50 }
+  };
 
   return {
     grid: initialGrid,
@@ -248,24 +261,28 @@ export const initializeGame = (restart = false, heroClass: HeroClass = HeroClass
     victory: false,
     gameWon: false,
     combo: 0,
-    logs: ['Welcome, hero.', mode === 'CLASSIC' ? 'Classic Mode Active.' : mode === 'DAILY' ? 'Daily Challenge Started!' : `Class: ${heroClass}`, difficulty === 'HARD' ? 'Hard Mode Active!' : ''],
+    logs: ['Welcome, hero.'],
     activeEffects: [],
     effectCounters: {},
     currentStage: initialStage,
     rerolls: 0,
     stats,
     runStats,
-    achievements,
+    achievements: [],
     settings: { 
         enableKeyboard: true, 
         enableSwipe: true, 
-        enableScroll: true, 
+        enableScroll: true,
+        enableHaptics: true,
         invertSwipe: false, 
         invertScroll: false, 
         sensitivity: 5, 
         enableTooltips: true, 
         slideSpeed: 150,
-        graphicsQuality: 'HIGH' 
+        graphicsQuality: 'HIGH',
+        enableScreenShake: true,
+        enableParticles: true,
+        reduceMotion: false
     },
     selectedClass: heroClass,
     gameMode: mode,
@@ -276,7 +293,9 @@ export const initializeGame = (restart = false, heroClass: HeroClass = HeroClass
     shop: getInitialShopState(activeModifiers),
     activeModifiers,
     lootEvents: [],
-    lastTurnMedals: []
+    lastTurnMedals: [],
+    abilities,
+    targetingMode: null
   };
 };
 
@@ -290,18 +309,19 @@ export const moveGrid = (
     difficulty: Difficulty = 'NORMAL',
     stats?: GameStats
 ): MoveResult => {
-  let newGrid = grid.map(t => ({...t}));
+  let newGrid = grid.filter(t => !t.isDying).map(t => ({...t}));
   let score = 0;
   let xpGained = 0;
   let goldGained = 0;
   let itemsFound: InventoryItem[] = [];
   let moved = false;
-  let mergedIds: string[] = [];
+  let mergedIds: string[];
   let powerUpTriggered: TileType | undefined;
   let bossDefeated = false;
   let lootEvents: LootEvent[] = [];
   const logs: string[] = [];
   const medalsEarned: Medal[] = [];
+  const abilitiesTriggered: string[] = [];
 
   newGrid.forEach(t => { delete t.isNew; delete t.isCascade; delete t.mergedFrom; });
 
@@ -320,10 +340,11 @@ export const moveGrid = (
 
   let combo = 0;
   let mergedCount = 0;
+  mergedIds = [];
 
   traversalX.forEach(x => {
     traversalY.forEach(y => {
-      const tile = newGrid.find(t => t.x === x && t.y === y);
+      const tile = newGrid.find(t => t.x === x && t.y === y && !t.isDying);
       if (!tile) return;
 
       const cell = { x: tile.x, y: tile.y };
@@ -332,7 +353,7 @@ export const moveGrid = (
       if (tile.type === TileType.BOSS) return;
 
       while (next.x >= 0 && next.x < size && next.y >= 0 && next.y < size) {
-        const nextTile = newGrid.find(t => t.x === next.x && t.y === next.y);
+        const nextTile = newGrid.find(t => t.x === next.x && t.y === next.y && !t.isDying);
         
         if (!nextTile) {
           cell.x = next.x;
@@ -353,10 +374,14 @@ export const moveGrid = (
             nextTile.health = Math.max(0, (nextTile.health || 0) - damage);
             nextTile.mergedFrom = ['damage']; 
 
+            tile.x = next.x;
+            tile.y = next.y;
+            tile.isDying = true; 
+            
             lootEvents.push({ id: createId(), x: next.x, y: next.y, type: 'XP', value: damage });
 
-            if (nextTile.health <= 0) {
-                newGrid = newGrid.filter(t => t.id !== nextTile.id);
+            if ((nextTile.health || 0) <= 0) {
+                nextTile.isDying = true; 
                 score += 500;
                 xpGained += 2000;
                 goldGained += 100;
@@ -372,32 +397,37 @@ export const moveGrid = (
                 
                 medalsEarned.push(MEDALS.BOSS_KILL);
             } else {
-                const dist = Math.abs(tile.x - nextTile.x) + Math.abs(tile.y - nextTile.y);
+                const dist = Math.abs(cell.x - nextTile.x) + Math.abs(cell.y - nextTile.y);
                 if (dist >= 3) medalsEarned.push(MEDALS.SNIPER);
             }
             
-            newGrid = newGrid.filter(t => t.id !== tile.id);
             moved = true;
             return;
         }
 
-        const isTileRune = tile.type.startsWith('RUNE_');
-        const isNextRune = nextTile.type.startsWith('RUNE_');
-
-        if (isTileRune || isNextRune) {
-            const runeType = isTileRune ? tile.type : nextTile.type;
-            powerUpTriggered = runeType as TileType;
-            
-            if (isTileRune) {
-                newGrid = newGrid.filter(t => t.id !== tile.id);
-                moved = true;
-            } else {
-                newGrid = newGrid.filter(t => t.id !== nextTile.id);
-                tile.x = next.x;
-                tile.y = next.y;
-                moved = true;
-            }
-            return;
+        // RUNE COLLECTION LOGIC
+        if ((nextTile.type as any).startsWith('RUNE_')) {
+             if (nextTile.type === TileType.RUNE_MIDAS) {
+                 goldGained += 50;
+                 lootEvents.push({ id: createId(), x: nextTile.x, y: nextTile.y, type: 'GOLD', value: 50 });
+             } else if (nextTile.type === TileType.RUNE_CHRONOS) {
+                 xpGained += 250;
+                 lootEvents.push({ id: createId(), x: nextTile.x, y: nextTile.y, type: 'XP', value: 250 });
+             } else if (nextTile.type === TileType.RUNE_VOID) {
+                 score += 500;
+                 lootEvents.push({ id: createId(), x: nextTile.x, y: nextTile.y, type: 'XP', value: 500, icon: '⚫' });
+             }
+             
+             // Consume the Rune
+             nextTile.isDying = true;
+             powerUpTriggered = nextTile.type;
+             
+             // Move tile into the Rune's spot and continue
+             cell.x = next.x;
+             cell.y = next.y;
+             next = { x: cell.x + vector.x, y: cell.y + vector.y };
+             moved = true;
+             continue;
         }
 
         if (nextTile.value === tile.value && !nextTile.mergedFrom) {
@@ -409,7 +439,8 @@ export const moveGrid = (
             value: mergedValue,
             type: TileType.NORMAL,
             mergedFrom: [tile.id, nextTile.id],
-            health: undefined, maxHealth: undefined
+            health: undefined, maxHealth: undefined,
+            isNew: true
           };
 
           if (tile.type === TileType.GOLDEN || nextTile.type === TileType.GOLDEN) {
@@ -418,13 +449,21 @@ export const moveGrid = (
               lootEvents.push({ id: createId(), x: next.x, y: next.y, type: 'GOLD', value: mergedValue });
           }
 
-          newGrid = newGrid.filter(t => t.id !== tile.id && t.id !== nextTile.id);
+          tile.x = next.x;
+          tile.y = next.y;
+          tile.isDying = true; 
+          nextTile.isDying = true; 
+
           newGrid.push(mergedTile);
 
           score += mergedValue;
           xpGained += mergedValue;
           
           lootEvents.push({ id: createId(), x: next.x, y: next.y, type: 'XP', value: mergedValue });
+
+          if (mode !== 'CLASSIC' && rng.next() < 0.05) {
+               goldGained += Math.floor(mergedValue / 5); 
+          }
 
           const goldMult = (effectCounters['MIDAS_POTION'] || 0) > 0 ? 2 : 1;
           const basicGold = Math.floor((mergedValue / 10) * goldMult);
@@ -481,7 +520,6 @@ export const moveGrid = (
         break;
       }
       
-      // Update position only if it actually changed
       if (tile.x !== cell.x || tile.y !== cell.y) {
           tile.x = cell.x;
           tile.y = cell.y;
@@ -490,7 +528,6 @@ export const moveGrid = (
     });
   });
 
-  // Calculate medals based on move performance
   if (moved) {
       if (stats && stats.totalMerges === 0 && mergedCount > 0) medalsEarned.push(MEDALS.FIRST_MERGE);
       if (mergedCount === 2) medalsEarned.push(MEDALS.DOUBLE_MERGE);
@@ -516,225 +553,309 @@ export const moveGrid = (
       powerUpTriggered,
       bossDefeated,
       lootEvents,
-      medalsEarned
+      medalsEarned,
+      abilitiesTriggered
   };
 };
 
 export const isGameOver = (grid: Tile[], size: number): boolean => {
-  if (getEmptyCells(grid, size).length > 0) return false;
+    if (grid.length < size * size) return false;
 
-  for (let x = 0; x < size; x++) {
-    for (let y = 0; y < size; y++) {
-      const tile = grid.find(t => t.x === x && t.y === y);
-      if (!tile) continue;
+    const map: Record<string, Tile> = {};
+    grid.forEach(t => { map[`${t.x},${t.y}`] = t; });
 
-      if (x < size - 1) {
-        const right = grid.find(t => t.x === x + 1 && t.y === y);
-        if (right && right.value === tile.value) return false;
-      }
-      if (y < size - 1) {
-        const down = grid.find(t => t.x === x && t.y === y + 1);
-        if (down && down.value === tile.value) return false;
-      }
+    for (let x = 0; x < size; x++) {
+        for (let y = 0; y < size; y++) {
+            const current = map[`${x},${y}`];
+            if (!current) return false; 
+            if (current.type === TileType.BOSS) continue;
+
+            const right = map[`${x + 1},${y}`];
+            if (right && right.value === current.value && right.type !== TileType.BOSS) return false;
+
+            const down = map[`${x},${y + 1}`];
+            if (down && down.value === current.value && down.type !== TileType.BOSS) return false;
+        }
     }
-  }
-  return true;
+
+    return true;
 };
 
 export const useInventoryItem = (state: GameState, item: InventoryItem): Partial<GameState> | null => {
-    let newGrid = [...state.grid];
-    let newEffectCounters = { ...state.effectCounters };
-    let newLogs = [...state.logs];
-    let newGold = state.gold;
-    let newXp = state.xp;
-    let used = false;
-    let newInventory = state.inventory.filter(i => i.id !== item.id);
+    const { grid, score, xp, gold, inventory, gridSize, effectCounters } = state;
+    const newInventory = inventory.filter(i => i.id !== item.id);
+    const newEffectCounters = { ...effectCounters };
+    let newGrid = [...grid];
+    let newGold = gold;
+    let newXp = xp;
+    let logs = [...state.logs];
 
-    switch(item.type) {
+    switch (item.type) {
         case ItemType.XP_POTION:
             newXp += 1000;
-            newLogs.push("Used XP Potion: +1000 XP");
-            used = true;
+            logs.push("Used XP Potion (+1000 XP)");
             break;
         case ItemType.GREATER_XP_POTION:
             newXp += 2500;
-            newLogs.push("Used Greater XP Potion: +2500 XP");
-            used = true;
+            logs.push("Used Greater XP Potion (+2500 XP)");
             break;
         case ItemType.GRANDMASTER_BREW:
             newXp += 5000;
-            newEffectCounters['FLOW_STATE'] = 20;
-            newLogs.push("Grandmaster Brew Consumed!");
-            used = true;
+            newEffectCounters['FLOW_STATE'] = (newEffectCounters['FLOW_STATE'] || 0) + 50;
+            logs.push("Used Grandmaster Brew (+5000 XP, Flow State)");
             break;
-        case ItemType.REROLL_TOKEN:
-             newGrid = spawnTile(spawnTile([], state.gridSize, state.level), state.gridSize, state.level);
-             newLogs.push("Board Rerolled!");
-             used = true;
+        case ItemType.BOMB_SCROLL: {
+            const targets = newGrid.filter(t => t.type === TileType.NORMAL && t.value > 0).sort((a, b) => a.value - b.value).slice(0, 3);
+            if (targets.length === 0) return null; 
+            newGrid = newGrid.filter(t => !targets.includes(t));
+            logs.push(`Bomb Scroll destroyed ${targets.length} tiles.`);
+            break;
+        }
+        case ItemType.CATACLYSM_SCROLL: {
+             const targets = newGrid.filter(t => (t.type as any) !== TileType.BOSS);
+             const count = Math.floor(targets.length / 2);
+             for (let i = targets.length - 1; i > 0; i--) {
+                 const j = Math.floor(Math.random() * (i + 1));
+                 [targets[i], targets[j]] = [targets[j], targets[i]];
+             }
+             const toDestroy = targets.slice(0, count);
+             newGrid = newGrid.filter(t => !toDestroy.includes(t));
+             logs.push(`Cataclysm purged ${count} tiles.`);
              break;
-        case ItemType.BOMB_SCROLL:
-            {
-                const tiles = newGrid.filter(t => t.type !== TileType.BOSS && t.value > 0).sort((a,b) => a.value - b.value);
-                if (tiles.length > 0) {
-                    const toRemove = tiles.slice(0, 3);
-                    newGrid = newGrid.filter(t => !toRemove.includes(t));
-                    newLogs.push("Bomb Scroll: Destroyed 3 weak tiles");
-                    used = true;
-                }
-            }
-            break;
-        case ItemType.CATACLYSM_SCROLL:
-            {
-                 const tiles = newGrid.filter(t => t.type !== TileType.BOSS).sort((a,b) => a.value - b.value);
-                 const toRemoveCount = Math.floor(tiles.length / 2);
-                 const toRemove = tiles.slice(0, toRemoveCount);
-                 newGrid = newGrid.filter(t => !toRemove.includes(t));
-                 newLogs.push("Cataclysm! Half the board purged.");
-                 used = true;
-            }
-            break;
+        }
+        case ItemType.THUNDER_SCROLL: {
+            return {
+                inventory: newInventory,
+                isCascading: true,
+                cascadeStep: 0,
+                logs: [...logs, "Thunder Scroll triggered a cascade!"]
+            };
+        }
         case ItemType.GOLDEN_RUNE:
             newEffectCounters['GOLDEN_SPAWN'] = 1;
-            newLogs.push("Golden Rune Active: Next spawn is Golden");
-            used = true;
+            logs.push("Golden Rune active (Next spawn is Gold)");
+            break;
+        case ItemType.ASCENDANT_RUNE:
+            newEffectCounters['ASCENDANT_SPAWN'] = 5;
+            logs.push("Ascendant Rune active (Next 5 spawns upgraded)");
+            break;
+        case ItemType.REROLL_TOKEN:
+            newGrid = spawnTile(spawnTile([], gridSize, state.level), gridSize, state.level);
+            logs.push("Board Rerolled.");
             break;
         case ItemType.LUCKY_CHARM:
-            newEffectCounters['LUCKY_LOOT'] = 50; 
-            newLogs.push("Lucky Charm: Loot chance increased");
-            used = true;
-            break;
-        case ItemType.LUCKY_DICE:
-            newEffectCounters['LUCKY_DICE'] = 30;
-            newLogs.push("Lucky Dice: Fate favors you.");
-            used = true;
-            break;
-        case ItemType.MIDAS_POTION:
-            newEffectCounters['MIDAS_POTION'] = 50;
-            newLogs.push("Midas Potion: Gold x2 for 50 turns");
-            used = true;
-            break;
-        case ItemType.SIEGE_BREAKER:
-            newEffectCounters['SIEGE_BREAKER'] = 5;
-            newLogs.push("Siege Breaker: Boss Damage x3");
-            used = true;
+            newEffectCounters['LUCKY_LOOT'] = (newEffectCounters['LUCKY_LOOT'] || 0) + 50; 
+            logs.push("Lucky Charm active.");
             break;
         case ItemType.CHAIN_CATALYST:
             newEffectCounters['CHAIN_CATALYST'] = 10;
-            newLogs.push("Chain Catalyst: Cascades Enabled");
-            used = true;
+            logs.push("Chain Catalyst active.");
             break;
-         case ItemType.VOID_STONE:
+        case ItemType.LUCKY_DICE:
+            newEffectCounters['LUCKY_DICE'] = (newEffectCounters['LUCKY_DICE'] || 0) + 20;
+            logs.push("Lucky Dice active.");
+            break;
+        case ItemType.MIDAS_POTION:
+            newEffectCounters['MIDAS_POTION'] = 50;
+            logs.push("Midas Potion active.");
+            break;
+        case ItemType.SIEGE_BREAKER:
+            newEffectCounters['SIEGE_BREAKER'] = 1; 
+            logs.push("Siege Breaker ready.");
+            break;
+        case ItemType.VOID_STONE:
             newEffectCounters['VOID_STONE'] = 10;
-            newLogs.push("Void Stone: Consuming weak tiles...");
-            used = true;
+            logs.push("Void Stone active.");
             break;
-         case ItemType.RADIANT_AURA:
+        case ItemType.RADIANT_AURA:
             newEffectCounters['RADIANT_AURA'] = 20;
-            newLogs.push("Radiant Aura: +50% XP");
-            used = true;
+            logs.push("Radiant Aura active.");
             break;
-         case ItemType.THUNDER_SCROLL:
-            // Immediate effect: destroy random tiles? Or just simulate cascade?
-            // Let's destroy 2 random columns
-            const cols = [Math.floor(Math.random() * state.gridSize), Math.floor(Math.random() * state.gridSize)];
-            newGrid = newGrid.filter(t => t.type === TileType.BOSS || !cols.includes(t.x));
-            newLogs.push("Thunder Scroll: Columns struck by lightning!");
-            used = true;
+        case ItemType.FLOW_ELIXIR:
+            newEffectCounters['FLOW_STATE'] = 20;
+            logs.push("Flow State active.");
             break;
-         case ItemType.ASCENDANT_RUNE:
-            newEffectCounters['ASCENDANT_SPAWN'] = 5;
-            newLogs.push("Ascendant Rune: High tier spawns");
-            used = true;
+        case ItemType.HARMONIC_CRYSTAL:
+            newEffectCounters['HARMONIC_RESONANCE'] = 20;
+            logs.push("Harmonic Resonance active.");
             break;
     }
 
-    if (used) {
-        return {
-            grid: newGrid,
-            effectCounters: newEffectCounters,
-            inventory: newInventory,
-            logs: newLogs,
-            xp: newXp,
-            gold: newGold
-        };
-    }
-    return null;
+    return {
+        grid: newGrid,
+        gold: newGold,
+        xp: newXp,
+        inventory: newInventory,
+        effectCounters: newEffectCounters,
+        logs
+    };
+};
+
+export const generateFallbackStory = (gameState: GameState): string => {
+    const cause = gameState.runStats.highestTile >= 2048 ? "ascension" : "greed";
+    const cls = gameState.selectedClass;
+    const loc = gameState.currentStage.name;
+    const reason = gameState.runStats.bossesDefeated > 2 ? "battle fatigue" : "bad luck";
+    
+    return `The ${cls} fell in ${loc}, consumed by ${cause}. Leaving behind ${gameState.runStats.goldEarned} gold coins as a warning to others. Overcome by ${reason}, their legend fades into the dark.`;
 };
 
 export const checkAchievements = (state: GameState): string[] => {
-    const unlocked: string[] = [];
+    const newUnlocked: string[] = [];
     ACHIEVEMENTS.forEach(ach => {
-        if (!state.achievements.includes(ach.id) && ach.condition(state.stats, state)) {
-            unlocked.push(ach.id);
+        if (!state.achievements.includes(ach.id)) {
+            if (ach.condition(state.stats, state)) {
+                newUnlocked.push(ach.id);
+            }
         }
     });
-    return unlocked;
+    return newUnlocked;
 };
 
 export const executeAutoCascade = (grid: Tile[], size: number, step: number, effectCounters: Record<string, number>) => {
-    // Simple cascade logic:
-    // If CHAIN_CATALYST or active cascade, check if any merges are possible "in place" without moving? 
-    // Or maybe check if gravity applies (tiles falling into empty spots)
-    
-    // For this implementation, we will simulate gravity DOWN if there are empty spots below tiles.
-    let newGrid = grid.map(t => ({...t}));
     let moved = false;
-    let xp = 0;
-    let gold = 0;
-    const lootEvents: LootEvent[] = [];
-
-    // Gravity logic (simple bubble sort down)
-    // iterate columns
-    for(let x=0; x<size; x++) {
-        const colTiles = newGrid.filter(t => t.x === x).sort((a,b) => b.y - a.y); // bottom to top
+    let newGrid = grid.map(t => ({...t}));
+    
+    for (let x = 0; x < size; x++) {
+        const col = newGrid.filter(t => t.x === x).sort((a, b) => a.y - b.y);
         let writeY = size - 1;
-        for(const tile of colTiles) {
-            if (tile.type === TileType.BOSS) {
-                writeY = tile.y - 1; // Boss blocks gravity
-                continue;
-            }
+        for (let i = col.length - 1; i >= 0; i--) {
+            const tile = col[i];
             if (tile.y !== writeY) {
-                // Check if blocked by boss? No, sort order handles it if boss is in list
-                // Need to be careful not to move tile past boss.
-                // Assuming Boss doesn't move and takes a slot.
-                const blocker = newGrid.find(t => t.x === x && t.y === writeY && t.id !== tile.id);
-                if (!blocker) {
-                    tile.y = writeY;
-                    tile.isCascade = true;
-                    moved = true;
-                }
+                tile.y = writeY;
+                moved = true;
             }
             writeY--;
         }
     }
-
-    // If we moved things, check for merges now
-    if (moved) {
-        // ... simplistic merge check on new positions?
-        // Reuse moveGrid logic with NO direction? No, 2048 merges happen on move.
-        // Let's just say "gravity happened" is the event.
+    
+    const mergedIds: string[] = [];
+    let xp = 0;
+    let gold = 0;
+    
+    for (let x = 0; x < size; x++) {
+        for (let y = size - 1; y > 0; y--) {
+            const current = newGrid.find(t => t.x === x && t.y === y && !mergedIds.includes(t.id));
+            const above = newGrid.find(t => t.x === x && t.y === y - 1 && !mergedIds.includes(t.id));
+            
+            if (current && above && current.value === above.value && current.value > 0) {
+                current.value *= 2;
+                current.isCascade = true;
+                current.mergedFrom = [current.id, above.id]; 
+                
+                newGrid = newGrid.filter(t => t.id !== above.id);
+                mergedIds.push(current.id); 
+                
+                xp += current.value;
+                gold += Math.floor(current.value / 10);
+                moved = true;
+            }
+        }
     }
 
-    return { occurred: moved, grid: newGrid, rewards: { xp, gold }, lootEvents };
+    return {
+        grid: newGrid,
+        rewards: { xp, gold },
+        lootEvents: [], 
+        occurred: moved
+    };
 };
 
 export const checkLoreUnlocks = (state: GameState, profile: PlayerProfile): StoryEntry[] => {
-    return STORY_ENTRIES.filter(entry => 
-        !profile.unlockedLore.includes(entry.id) && entry.unlockCondition(state.stats, state, profile)
-    );
+    return STORY_ENTRIES.filter(entry => {
+        if (profile.unlockedLore.includes(entry.id)) return false;
+        return entry.unlockCondition(state.stats, state, profile);
+    });
+};
+
+export const executePowerupAction = (state: GameState, tileId: string, row?: number): Partial<GameState> | null => {
+    // Only used for manual triggers if any exist (currently none)
+    return null;
+};
+
+// --- PASSIVE ABILITIES LOGIC ---
+export const processPassiveAbilities = (state: GameState): { grid: Tile[], abilities: Record<AbilityType, AbilityState>, triggered: string[] } => {
+    let { grid, abilities } = state;
+    const triggered: string[] = [];
+    const newAbilities = { ...abilities };
+    let newGrid = [...grid];
+
+    // SCORCH: Destroys the lowest non-boss tile
+    if (newAbilities['SCORCH'].isUnlocked && newAbilities['SCORCH'].currentCooldown <= 0) {
+        const targets = newGrid.filter(t => (t.type as any) !== TileType.BOSS).sort((a, b) => a.value - b.value);
+        if (targets.length > 0) {
+            const target = targets[0];
+            newGrid = newGrid.filter(t => t.id !== target.id);
+            newAbilities['SCORCH'].currentCooldown = newAbilities['SCORCH'].cooldown;
+            triggered.push('SCORCH');
+        }
+    }
+
+    // DRAGON BREATH: Clears a random row (prioritizes rows with many tiles)
+    if (newAbilities['DRAGON_BREATH'].isUnlocked && newAbilities['DRAGON_BREATH'].currentCooldown <= 0) {
+        // Group by row
+        const rows: Record<number, Tile[]> = {};
+        newGrid.forEach(t => {
+            if (!rows[t.y]) rows[t.y] = [];
+            rows[t.y].push(t);
+        });
+        // Find row with most tiles
+        const targetRow = Object.keys(rows).sort((a, b) => rows[parseInt(b)].length - rows[parseInt(a)].length)[0];
+        if (targetRow) {
+            const y = parseInt(targetRow);
+            newGrid = newGrid.filter(t => t.y !== y || (t.type as any) === TileType.BOSS);
+            newAbilities['DRAGON_BREATH'].currentCooldown = newAbilities['DRAGON_BREATH'].cooldown;
+            triggered.push('DRAGON_BREATH');
+        }
+    }
+
+    // GOLDEN EGG: Upgrades random non-boss tile
+    if (newAbilities['GOLDEN_EGG'].isUnlocked && newAbilities['GOLDEN_EGG'].currentCooldown <= 0) {
+        const targets = newGrid.filter(t => (t.type as any) !== TileType.BOSS);
+        if (targets.length > 0) {
+            const target = targets[Math.floor(Math.random() * targets.length)];
+            // In-place update works because we modify copy
+            const idx = newGrid.indexOf(target);
+            if (idx > -1) {
+                newGrid[idx] = { ...target, value: target.value * 2, isNew: true };
+                newAbilities['GOLDEN_EGG'].currentCooldown = newAbilities['GOLDEN_EGG'].cooldown;
+                triggered.push('GOLDEN_EGG');
+            }
+        }
+    }
+
+    return { grid: newGrid, abilities: newAbilities, triggered };
+};
+
+export const updateCooldowns = (abilities: Record<AbilityType, AbilityState>): Record<AbilityType, AbilityState> => {
+    const next = { ...abilities };
+    Object.keys(next).forEach(k => {
+        const key = k as AbilityType;
+        if (next[key].currentCooldown > 0) {
+            next[key] = { ...next[key], currentCooldown: next[key].currentCooldown - 1 };
+        }
+    });
+    return next;
 };
 
 export const getHighscores = (): LeaderboardEntry[] => {
     try {
-        const data = localStorage.getItem(LEADERBOARD_KEY);
-        return data ? JSON.parse(data) : [];
-    } catch { return []; }
+        const stored = localStorage.getItem(LEADERBOARD_KEY);
+        if (stored) return JSON.parse(stored);
+    } catch (e) {}
+    return [];
+};
+
+export const saveHighscore = (entry: LeaderboardEntry) => {
+    const scores = getHighscores();
+    scores.push(entry);
+    scores.sort((a, b) => b.score - a.score);
+    const top = scores.slice(0, 50);
+    localStorage.setItem(LEADERBOARD_KEY, JSON.stringify(top));
 };
 
 export const clearSaveData = () => {
-    localStorage.removeItem('2048_rpg_state_v3');
     localStorage.removeItem(PROFILE_STORAGE_KEY);
-    localStorage.removeItem(LEADERBOARD_KEY);
     localStorage.removeItem(ACHIEVEMENTS_STORAGE_KEY);
-    window.location.reload();
+    localStorage.removeItem('2048_rpg_state_v3');
 };

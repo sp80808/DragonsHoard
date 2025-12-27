@@ -1,30 +1,25 @@
 
-import { PlayerProfile, GameState, RunStats, HeroClass, DailyBounty } from '../types';
+import { PlayerProfile, GameState, RunStats, HeroClass, DailyBounty, AbilityType } from '../types';
 import { v4 as uuidv4 } from 'uuid';
+import { facebookService } from './facebookService';
 
 const STORAGE_KEY = 'dragons_hoard_profile';
 
-// --- XP & Leveling Logic ---
-// Level 1: 0-1000
-// Level 2: 1000-2828
-// Level 10: ~31,000
 const getXpForLevel = (level: number) => Math.floor(1000 * Math.pow(level, 1.5));
 
 export const getNextLevelXp = (level: number) => getXpForLevel(level);
 
-// --- Bounty System ---
 const BOUNTY_TEMPLATES: Omit<DailyBounty, 'id' | 'currentValue' | 'isCompleted'>[] = [
     { description: "Slay 1 Boss", targetStat: 'bossesDefeated', targetValue: 1, rewardXp: 500 },
     { description: "Earn 200 Gold", targetStat: 'goldEarned', targetValue: 200, rewardXp: 300 },
     { description: "Trigger 5 Cascades", targetStat: 'cascadesTriggered', targetValue: 5, rewardXp: 400 },
-    { description: "Reach Stage 2 (Fungal)", targetStat: 'highestTile', targetValue: 32, rewardXp: 400 }, // Proxy using Tile Value
+    { description: "Reach Stage 2 (Fungal)", targetStat: 'highestTile', targetValue: 32, rewardXp: 400 }, 
     { description: "Use 3 Power Ups", targetStat: 'powerUpsUsed', targetValue: 3, rewardXp: 300 },
     { description: "Survive 100 Turns", targetStat: 'turnCount', targetValue: 100, rewardXp: 350 },
-    { description: "Score 5,000 Points", targetStat: 'goldEarned', targetValue: 5000, rewardXp: 600 }, // Hack: reusing goldEarned field for score logic in finalize check
+    { description: "Score 5,000 Points", targetStat: 'goldEarned', targetValue: 5000, rewardXp: 600 }, 
 ];
 
 const generateDailyBounties = (): DailyBounty[] => {
-    // Shuffle and pick 3
     const shuffled = [...BOUNTY_TEMPLATES].sort(() => 0.5 - Math.random());
     return shuffled.slice(0, 3).map(t => ({
         ...t,
@@ -34,41 +29,7 @@ const generateDailyBounties = (): DailyBounty[] => {
     }));
 };
 
-// --- Profile Management ---
-
-export const getPlayerProfile = (): PlayerProfile => {
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored) {
-        const profile: PlayerProfile = JSON.parse(stored);
-        
-        // Data Migration: Ensure new fields exist
-        if (!profile.unlockedClasses) profile.unlockedClasses = [HeroClass.ADVENTURER];
-        if (!profile.unlockedFeatures) profile.unlockedFeatures = [];
-        if (!profile.activeBounties) profile.activeBounties = [];
-        if (profile.tutorialCompleted === undefined) profile.tutorialCompleted = false;
-        if (profile.bossTutorialCompleted === undefined) profile.bossTutorialCompleted = false;
-        if (!profile.seenHints) profile.seenHints = [];
-        if (!profile.activeTilesetId) profile.activeTilesetId = 'DEFAULT';
-        if (!profile.unlockedLore) profile.unlockedLore = [];
-        if (!profile.earnedMedals) profile.earnedMedals = {};
-        
-        // Check Daily Reset
-        const today = new Date().toISOString().split('T')[0];
-        if (profile.lastBountyDate !== today) {
-            profile.activeBounties = generateDailyBounties();
-            profile.lastBountyDate = today;
-            saveProfile(profile);
-        }
-        
-        return profile;
-    }
-  } catch (e) {
-    console.error("Failed to load profile", e);
-  }
-
-  // Initialize new anonymous profile
-  const newProfile: PlayerProfile = {
+const getDefaultProfile = (): PlayerProfile => ({
     id: uuidv4(),
     totalAccountXp: 0,
     accountLevel: 1,
@@ -84,10 +45,63 @@ export const getPlayerProfile = (): PlayerProfile => {
     seenHints: [],
     activeTilesetId: 'DEFAULT',
     unlockedLore: [],
-    earnedMedals: {}
-  };
-  saveProfile(newProfile);
-  return newProfile;
+    earnedMedals: {},
+    unlockedPowerups: []
+});
+
+export const syncPlayerProfile = async (): Promise<PlayerProfile> => {
+    // 1. Load Local
+    let localProfile: PlayerProfile | null = null;
+    try {
+        const stored = localStorage.getItem(STORAGE_KEY);
+        if (stored) localProfile = JSON.parse(stored);
+    } catch(e) {}
+
+    // 2. Load Cloud
+    let cloudData: any = {};
+    try {
+        cloudData = await facebookService.loadData([STORAGE_KEY]);
+    } catch(e) {}
+    
+    const cloudProfile = cloudData[STORAGE_KEY] as PlayerProfile | undefined;
+
+    // 3. Merge (Simple strategy: Highest XP wins, or Cloud wins if no local)
+    let finalProfile = localProfile || getDefaultProfile();
+
+    if (cloudProfile) {
+        if (!localProfile || cloudProfile.totalAccountXp > localProfile.totalAccountXp) {
+            finalProfile = cloudProfile;
+            console.log("Synced from Cloud (Newer/Better data)");
+        }
+    }
+
+    // 4. Validate & Fill missing fields
+    if (!finalProfile.unlockedClasses) finalProfile.unlockedClasses = [HeroClass.ADVENTURER];
+    if (!finalProfile.activeBounties) finalProfile.activeBounties = [];
+    
+    const today = new Date().toISOString().split('T')[0];
+    if (finalProfile.lastBountyDate !== today) {
+        finalProfile.activeBounties = generateDailyBounties();
+        finalProfile.lastBountyDate = today;
+    }
+
+    // 5. Save back to ensure consistency
+    saveProfile(finalProfile);
+    return finalProfile;
+};
+
+export const getPlayerProfile = (): PlayerProfile => {
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY);
+    if (stored) return JSON.parse(stored);
+  } catch (e) {}
+  return getDefaultProfile();
+};
+
+const saveProfile = (p: PlayerProfile) => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(p));
+    // Fire and forget cloud save
+    facebookService.saveData(STORAGE_KEY, p);
 };
 
 export const completeTutorial = () => {
@@ -127,29 +141,34 @@ export const awardMedal = (medalId: string) => {
     saveProfile(profile);
 };
 
-// Forcefully unlock a class (used for victory rewards)
 export const unlockClass = (cls: HeroClass) => {
     const profile = getPlayerProfile();
     if (!profile.unlockedClasses.includes(cls)) {
         profile.unlockedClasses.push(cls);
         saveProfile(profile);
-        return true; // Was new unlock
+        return true; 
     }
-    return false; // Already unlocked
+    return false; 
 };
 
 export interface UnlockReward {
-    type: 'CLASS' | 'FEATURE' | 'TILESET';
+    type: 'CLASS' | 'FEATURE' | 'TILESET' | 'POWERUP';
     id: string;
     label: string;
     desc: string;
     level: number;
 }
 
+const calculateHoardRank = (level: number) => {
+    if (level >= 50) return 3; // Dragon Lord
+    if (level >= 30) return 2; // Conqueror
+    if (level >= 10) return 1; // Slayer
+    return 0; // Scavenger
+};
+
 export const finalizeRun = (finalState: GameState): { profile: PlayerProfile, leveledUp: boolean, xpGained: number, bountiesCompleted: number, newUnlocks: UnlockReward[] } => {
   const profile = getPlayerProfile();
   
-  // 1. Calculate Base Run XP
   let runXp = 
     finalState.score + 
     (finalState.level * 250) + 
@@ -157,14 +176,11 @@ export const finalizeRun = (finalState: GameState): { profile: PlayerProfile, le
     (finalState.runStats.cascadesTriggered * 50) +
     (finalState.runStats.powerUpsUsed * 100);
   
-  // 2. Check Bounties
   let bountiesCompletedCount = 0;
   const updatedBounties = profile.activeBounties.map(bounty => {
       if (bounty.isCompleted) return bounty;
 
       let achieved = false;
-      
-      // Special handling for score which isn't directly in RunStats the same way
       if (bounty.description.includes("Score")) {
           if (finalState.score >= bounty.targetValue) achieved = true;
       } else {
@@ -181,18 +197,28 @@ export const finalizeRun = (finalState: GameState): { profile: PlayerProfile, le
   });
 
   profile.activeBounties = updatedBounties;
-  
-  // 3. Update Profile Stats
   profile.totalAccountXp += runXp;
   profile.gamesPlayed += 1;
   profile.highScore = Math.max(profile.highScore, finalState.score);
   profile.lastPlayed = new Date().toISOString();
 
-  // 4. Check for Account Level Up & Class Unlocks
+  // Social: Submit to Global Leaderboard
+  facebookService.submitScore('Global_Hoard_Rank', profile.highScore, JSON.stringify({ level: profile.accountLevel }));
+  
+  // Social: Post Session Score (For generic FB context ranking)
+  facebookService.postSessionScore(finalState.score);
+
+  // Social: Update Surfaceable Stats (Hoard Rank)
+  facebookService.setStats({ hoard_rank: calculateHoardRank(profile.accountLevel) });
+
   let leveledUp = false;
   const newUnlocks: UnlockReward[] = [];
   
-  // We simulate leveling up step by step to catch all rewards
+  if (finalState.runStats.highestTile >= 2048 && !profile.unlockedFeatures.includes('MODE_BOSS_RUSH')) {
+      profile.unlockedFeatures.push('MODE_BOSS_RUSH');
+      newUnlocks.push({ type: 'FEATURE', id: 'MODE_BOSS_RUSH', label: 'Boss Rush', desc: 'Face the gauntlet.', level: profile.accountLevel });
+  }
+
   while (true) {
     const nextLevelXp = getXpForLevel(profile.accountLevel);
     if (profile.totalAccountXp >= nextLevelXp) {
@@ -200,37 +226,58 @@ export const finalizeRun = (finalState: GameState): { profile: PlayerProfile, le
         leveledUp = true;
         const level = profile.accountLevel;
 
-        // Unlock Classes
+        if (level >= 3 && !profile.unlockedPowerups.includes('SCORCH')) {
+            profile.unlockedPowerups.push('SCORCH');
+            newUnlocks.push({ type: 'POWERUP', id: 'SCORCH', label: 'Passive: Scorch', desc: 'Automatically burns a weak tile every 30 turns.', level });
+        }
+
         if (level >= 3 && !profile.unlockedClasses.includes(HeroClass.WARRIOR)) {
             profile.unlockedClasses.push(HeroClass.WARRIOR);
             newUnlocks.push({ type: 'CLASS', id: HeroClass.WARRIOR, label: 'Warrior', desc: 'Starts with Bomb Scroll', level });
         }
-        if (level >= 5 && !profile.unlockedClasses.includes(HeroClass.ROGUE)) {
-            profile.unlockedClasses.push(HeroClass.ROGUE);
-            newUnlocks.push({ type: 'CLASS', id: HeroClass.ROGUE, label: 'Rogue', desc: 'Starts with Reroll Token', level });
-        }
-        if (level >= 10 && !profile.unlockedClasses.includes(HeroClass.MAGE)) {
-            profile.unlockedClasses.push(HeroClass.MAGE);
-            newUnlocks.push({ type: 'CLASS', id: HeroClass.MAGE, label: 'Mage', desc: 'Starts with XP Potion', level });
-        }
-         if (level >= 20 && !profile.unlockedClasses.includes(HeroClass.PALADIN)) {
-            profile.unlockedClasses.push(HeroClass.PALADIN);
-            newUnlocks.push({ type: 'CLASS', id: HeroClass.PALADIN, label: 'Paladin', desc: 'Starts with Golden Rune', level });
+
+        if (level >= 5) {
+            if (!profile.unlockedClasses.includes(HeroClass.ROGUE)) {
+                profile.unlockedClasses.push(HeroClass.ROGUE);
+                newUnlocks.push({ type: 'CLASS', id: HeroClass.ROGUE, label: 'Rogue', desc: 'Starts with Reroll Token', level });
+            }
+            if (!profile.unlockedFeatures.includes('HARD_MODE')) {
+                profile.unlockedFeatures.push('HARD_MODE');
+                newUnlocks.push({ type: 'FEATURE', id: 'HARD_MODE', label: 'Hard Mode', desc: 'Higher risks, higher rewards.', level });
+            }
         }
 
-        // Unlock Features
-        if (level >= 5 && !profile.unlockedFeatures.includes('HARD_MODE')) {
-            profile.unlockedFeatures.push('HARD_MODE');
-            newUnlocks.push({ type: 'FEATURE', id: 'HARD_MODE', label: 'Hard Mode', desc: 'Higher risks, higher rewards.', level });
+        if (level >= 6 && !profile.unlockedFeatures.includes('CODEX_FULL')) {
+            profile.unlockedFeatures.push('CODEX_FULL');
+            newUnlocks.push({ type: 'FEATURE', id: 'CODEX', label: 'Full Codex', desc: 'View enemy stats and detailed lore.', level });
         }
+
         if (level >= 8 && !profile.unlockedFeatures.includes('TILESET_UNDEAD')) {
             profile.unlockedFeatures.push('TILESET_UNDEAD');
             newUnlocks.push({ type: 'TILESET', id: 'TILESET_UNDEAD', label: 'Necrotic Rot', desc: 'New visual theme unlocked.', level });
         }
-        if (level >= 12 && !profile.unlockedFeatures.includes('MODE_BOSS_RUSH')) {
-            profile.unlockedFeatures.push('MODE_BOSS_RUSH');
-            newUnlocks.push({ type: 'FEATURE', id: 'MODE_BOSS_RUSH', label: 'Boss Rush', desc: 'Start at level 5 with boss waves.', level });
+
+        if (level >= 10) {
+            if (!profile.unlockedClasses.includes(HeroClass.MAGE)) {
+                profile.unlockedClasses.push(HeroClass.MAGE);
+                newUnlocks.push({ type: 'CLASS', id: HeroClass.MAGE, label: 'Mage', desc: 'Starts with XP Potion', level });
+            }
+            if (!profile.unlockedFeatures.includes('PASSIVE_MIDAS')) {
+                profile.unlockedFeatures.push('PASSIVE_MIDAS');
+                newUnlocks.push({ type: 'FEATURE', id: 'PASSIVE_MIDAS', label: 'Midas Touch', desc: '5% chance to earn 2x Gold on merge.', level });
+            }
         }
+
+        if (level >= 15 && !profile.unlockedPowerups.includes('DRAGON_BREATH')) {
+            profile.unlockedPowerups.push('DRAGON_BREATH');
+            newUnlocks.push({ type: 'POWERUP', id: 'DRAGON_BREATH', label: 'Passive: Dragon Breath', desc: 'Clears a random row every 60 turns.', level });
+        }
+
+        if (level >= 20 && !profile.unlockedPowerups.includes('GOLDEN_EGG')) {
+            profile.unlockedPowerups.push('GOLDEN_EGG');
+            newUnlocks.push({ type: 'POWERUP', id: 'GOLDEN_EGG', label: 'Passive: Golden Egg', desc: 'Evolves a random tile every 50 turns.', level });
+        }
+
         if (level >= 15 && !profile.unlockedFeatures.includes('TILESET_INFERNAL')) {
             profile.unlockedFeatures.push('TILESET_INFERNAL');
             newUnlocks.push({ type: 'TILESET', id: 'TILESET_INFERNAL', label: 'Infernal Core', desc: 'Magma visual theme.', level });
@@ -268,5 +315,3 @@ export const finalizeRun = (finalState: GameState): { profile: PlayerProfile, le
   saveProfile(profile);
   return { profile, leveledUp, xpGained: runXp, bountiesCompleted: bountiesCompletedCount, newUnlocks };
 };
-
-const saveProfile = (p: PlayerProfile) => localStorage.setItem(STORAGE_KEY, JSON.stringify(p));

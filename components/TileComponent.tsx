@@ -11,9 +11,10 @@ interface TileProps {
   graphicsQuality?: GraphicsQuality;
   tilesetId?: string;
   lowPerformanceMode?: boolean; // Legacy prop
+  onInteract?: () => void;
 }
 
-export const TileComponent = React.memo(({ tile, gridSize, slideSpeed, themeId, graphicsQuality = 'HIGH', tilesetId = 'DEFAULT', lowPerformanceMode }: TileProps) => {
+export const TileComponent = React.memo(({ tile, gridSize, slideSpeed, themeId, graphicsQuality = 'HIGH', tilesetId = 'DEFAULT', lowPerformanceMode, onInteract }: TileProps) => {
   // Backward compatibility
   const isLowQuality = graphicsQuality === 'LOW' || lowPerformanceMode === true;
   const isHighQuality = graphicsQuality === 'HIGH' && !lowPerformanceMode;
@@ -42,11 +43,13 @@ export const TileComponent = React.memo(({ tile, gridSize, slideSpeed, themeId, 
   const yPos = tile.y * 100;
 
   const isNewClass = !isLowQuality && tile.isNew ? 'tile-animation-enter' : '';
+  const isDyingClass = tile.isDying ? 'tile-exit-animation' : ''; // New explicit exit animation
   
   let mergeClass = '';
   let shakeClass = '';
   let showShockwave = false;
   let showGodwave = false;
+  let showRipple = false;
 
   if (tile.mergedFrom) {
       if (tile.mergedFrom[0] === 'damage') {
@@ -55,24 +58,23 @@ export const TileComponent = React.memo(({ tile, gridSize, slideSpeed, themeId, 
       } else {
           // Tiered Merge Animations
           if (!isLowQuality) {
-              if (tile.value < 32) {
-                  // Low tier pop
-                  mergeClass = 'tile-animation-pop-small';
-                  shakeClass = 'animate-shake-sm';
-              } else {
-                  // Standard/High tier pulse
-                  mergeClass = 'tile-animation-merge';
-                  shakeClass = 'animate-shake-sm';
+              // Default
+              mergeClass = 'tile-animation-merge';
+              shakeClass = 'animate-shake-sm';
+              showRipple = true;
 
-                  if (tile.value >= 32) {
-                      showShockwave = isHighQuality;
-                      shakeClass = 'animate-shake-md';
-                  }
+              // Heavy (32 - 256)
+              if (tile.value >= 32) {
+                  mergeClass = 'tile-animation-merge-heavy';
+                  showShockwave = isHighQuality;
+                  shakeClass = 'animate-shake-md';
+              }
 
-                  if (tile.value >= 512) {
-                      showGodwave = isHighQuality;
-                      shakeClass = 'animate-shake-lg';
-                  }
+              // Epic (512+)
+              if (tile.value >= 512) {
+                  mergeClass = 'tile-animation-merge-epic';
+                  showGodwave = isHighQuality;
+                  shakeClass = 'animate-shake-lg';
               }
           }
       }
@@ -111,20 +113,35 @@ export const TileComponent = React.memo(({ tile, gridSize, slideSpeed, themeId, 
   // Living Tile Animation Class
   const livingClass = isHighQuality ? (isGodTier ? 'animate-living-fast' : isHighTier ? 'animate-living-slow' : '') : '';
 
+  // Dying tiles should be behind normal ones to allow "merging into" effect
+  const zIndex = tile.isDying ? 5 : 10;
+
   return (
     <div
-      className={`absolute ease-in-out z-10 p-1 transition-transform will-change-transform`}
+      className={`absolute ease-in-out p-1 transition-transform will-change-transform cursor-pointer ${isDyingClass}`}
+      onClick={(e) => {
+          if (onInteract) {
+              e.stopPropagation();
+              onInteract();
+          }
+      }}
       style={{
         width: `${size}%`,
         height: `${size}%`,
         transform: `translate(${xPos}%, ${yPos}%)`,
-        transitionDuration: `${slideSpeed}ms`
+        transitionDuration: `${slideSpeed}ms`,
+        zIndex: zIndex
       }}
     >
       <div className={`w-full h-full relative ${isNewClass} ${mergeClass} group select-none`}>
         
+        {/* Satisfying merge ripple - using border for cleaner expansion */}
+        {showRipple && !isLowQuality && (
+             <div className={`absolute inset-0 z-0 rounded-xl border-2 ${style.ringColor.replace('ring-', 'border-')} animate-ripple pointer-events-none mix-blend-screen`}></div>
+        )}
+
         {showShockwave && (
-             <div className="absolute inset-0 z-50 rounded-lg border-2 border-white/60 animate-[ping_0.5s_cubic-bezier(0,0,0.2,1)_1] pointer-events-none mix-blend-overlay"></div>
+             <div className="absolute inset-0 z-50 rounded-lg border-4 border-white/40 animate-[ping_0.4s_ease-out_1] pointer-events-none mix-blend-overlay"></div>
         )}
         
         {showGodwave && (

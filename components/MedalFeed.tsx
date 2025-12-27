@@ -50,8 +50,9 @@ const MedalItem: React.FC<{ medal: Medal }> = ({ medal }) => {
 };
 
 export const MedalFeed: React.FC<MedalFeedProps> = ({ queue }) => {
-    // Show only the latest medal to avoid clutter
-    const displayQueue = queue.slice(-1);
+    // FIFO Queue: Show the first item (oldest). 
+    // App.tsx removes index 0 after a timeout, causing index 1 to become index 0 and display next.
+    const displayQueue = queue.slice(0, 1);
 
     // Z-index 30 puts it below HUD header (40) and Combo Meter
     return (

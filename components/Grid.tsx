@@ -16,9 +16,10 @@ interface GridProps {
   combo: number;
   tilesetId?: string;
   lowPerformanceMode?: boolean; // Legacy
+  onTileClick?: (id: string, row: number) => void;
 }
 
-export const Grid = React.memo(({ grid, size, mergeEvents, lootEvents, slideSpeed, themeId, graphicsQuality = 'HIGH', combo, tilesetId = 'DEFAULT', lowPerformanceMode }: GridProps) => {
+export const Grid = React.memo(({ grid, size, mergeEvents, lootEvents, slideSpeed, themeId, graphicsQuality = 'HIGH', combo, tilesetId = 'DEFAULT', lowPerformanceMode, onTileClick }: GridProps) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const particlesRef = useRef<any[]>([]);
   const animationFrameRef = useRef<number>(0);
@@ -72,36 +73,79 @@ export const Grid = React.memo(({ grid, size, mergeEvents, lootEvents, slideSpee
            else if (evt.type.startsWith('RUNE')) style = RUNE_STYLES[evt.type];
            const color = style?.particleColor || '#ffffff';
            
-           // Reduce particles on Medium
-           let comboMultiplier = Math.min(3, 1 + (combo * 0.2));
-           if (isMediumQuality) comboMultiplier *= 0.5;
+           // Determine Particle Config based on Value Tier
+           let particleCount = 10;
+           let speedMultiplier = 1;
+           let sizeBase = 2;
+           let ringEffect = false;
+
+           if (evt.value >= 2048) { // GOD TIER
+               particleCount = 50;
+               speedMultiplier = 2.5;
+               sizeBase = 4;
+               ringEffect = true;
+           } else if (evt.value >= 512) { // LEGENDARY
+               particleCount = 30;
+               speedMultiplier = 1.8;
+               sizeBase = 3;
+               ringEffect = true;
+           } else if (evt.value >= 128) { // HIGH
+               particleCount = 20;
+               speedMultiplier = 1.4;
+               sizeBase = 2.5;
+           } else if (evt.value >= 32) { // MID
+               particleCount = 15;
+               speedMultiplier = 1.2;
+           }
+
+           // Boost particle count for combos
+           let comboMultiplier = Math.min(2, 1 + (combo * 0.2));
+           particleCount = Math.floor(particleCount * comboMultiplier);
            
-           const particleCount = Math.floor(10 * comboMultiplier);
+           if (isMediumQuality) particleCount = Math.floor(particleCount * 0.6);
 
+           const spawnX = (evt.x * cellSize) + (cellSize / 2);
+           const spawnY = (evt.y * cellSize) + (cellSize / 2);
+
+           // Main Burst
            for (let i = 0; i < particleCount; i++) {
-               const side = Math.floor(Math.random() * 4);
-               let offsetX = 0, offsetY = 0;
-               const jitter = Math.random() * 8 - 4; 
-               if (side === 0) { offsetX = Math.random() * cellSize; offsetY = jitter; } 
-               else if (side === 1) { offsetX = cellSize + jitter; offsetY = Math.random() * cellSize; } 
-               else if (side === 2) { offsetX = Math.random() * cellSize; offsetY = cellSize + jitter; } 
-               else { offsetX = jitter; offsetY = Math.random() * cellSize; }
-
-               const spawnX = (evt.x * cellSize) + offsetX;
-               const spawnY = (evt.y * cellSize) + offsetY;
-               const centerX = (evt.x * cellSize) + (cellSize / 2);
-               const centerY = (evt.y * cellSize) + (cellSize / 2);
-               const dx = spawnX - centerX;
-               const dy = spawnY - centerY;
-               const len = Math.sqrt(dx*dx + dy*dy) || 1;
-               const nx = dx / len;
-               const ny = dy / len;
-               const speed = (Math.random() * 1.5 + 0.5) * comboMultiplier;
-
+               const angle = Math.random() * Math.PI * 2;
+               // High tier particles move faster outward
+               const velocity = (Math.random() * 4 + 2) * speedMultiplier; 
+               
                particlesRef.current.push({
-                   x: spawnX, y: spawnY, vx: nx * speed, vy: ny * speed, life: 1.0,
-                   decay: Math.random() * 0.04 + 0.04, color: color, size: Math.random() * 2 + 1, rotation: Math.random() * Math.PI
+                   x: spawnX, 
+                   y: spawnY, 
+                   vx: Math.cos(angle) * velocity, 
+                   vy: Math.sin(angle) * velocity, 
+                   life: 1.0,
+                   decay: Math.random() * 0.03 + 0.02, 
+                   color: color, 
+                   size: Math.random() * sizeBase + 1, 
+                   rotation: Math.random() * Math.PI,
+                   type: 'NORMAL'
                });
+           }
+
+           // Shockwave Ring (for High/God tiers)
+           if (ringEffect && !isMediumQuality) {
+               const ringCount = 20;
+               for (let i = 0; i < ringCount; i++) {
+                   const angle = (i / ringCount) * Math.PI * 2;
+                   const speed = 6 * speedMultiplier;
+                   particlesRef.current.push({
+                       x: spawnX,
+                       y: spawnY,
+                       vx: Math.cos(angle) * speed,
+                       vy: Math.sin(angle) * speed,
+                       life: 0.8,
+                       decay: 0.04,
+                       color: '#ffffff',
+                       size: 3,
+                       rotation: angle,
+                       type: 'RING' // Special type to potentially render differently
+                   });
+               }
            }
       });
   }, [mergeEvents, size, isLowQuality, isMediumQuality, combo]);
@@ -125,16 +169,43 @@ export const Grid = React.memo(({ grid, size, mergeEvents, lootEvents, slideSpee
           if (particlesRef.current.length === 0) { animationFrameRef.current = requestAnimationFrame(render); return; }
           for (let i = particlesRef.current.length - 1; i >= 0; i--) {
               const p = particlesRef.current[i];
-              p.x += p.vx; p.y += p.vy; p.life -= p.decay; p.vx *= 0.92; p.vy *= 0.92;
+              
+              // Physics with friction
+              p.x += p.vx; 
+              p.y += p.vy; 
+              p.vx *= 0.9; // Friction
+              p.vy *= 0.9; // Friction
+              
+              p.life -= p.decay;
+              
               if (p.life <= 0) { particlesRef.current.splice(i, 1); continue; }
+              
               const flicker = Math.random() > 0.8 ? 1.5 : 1.0;
               ctx.globalAlpha = Math.min(1, p.life * p.life * flicker);
               ctx.fillStyle = p.color;
+              
               ctx.save();
-              ctx.translate(p.x, p.y); ctx.rotate(p.life * 2 + p.rotation); 
+              ctx.translate(p.x, p.y); 
+              ctx.rotate(p.life * 2 + p.rotation); 
+              
               ctx.beginPath();
-              const s = p.size; ctx.moveTo(0, -s); ctx.quadraticCurveTo(s * 0.2, -s * 0.2, s, 0); ctx.quadraticCurveTo(s * 0.2, s * 0.2, 0, s); ctx.quadraticCurveTo(-s * 0.2, s * 0.2, -s, 0); ctx.quadraticCurveTo(-s * 0.2, -s * 0.2, 0, -s);
-              ctx.closePath(); ctx.fill(); ctx.restore();
+              
+              if (p.type === 'RING') {
+                  // Ring particles are dashes
+                  ctx.rect(-p.size * 2, -p.size/2, p.size*4, p.size);
+              } else {
+                  // Star shape for more sparkle
+                  const s = p.size * p.life; 
+                  ctx.moveTo(0, -s); 
+                  ctx.quadraticCurveTo(s * 0.5, -s * 0.5, s, 0); 
+                  ctx.quadraticCurveTo(s * 0.5, s * 0.5, 0, s); 
+                  ctx.quadraticCurveTo(-s * 0.5, s * 0.5, -s, 0); 
+                  ctx.quadraticCurveTo(-s * 0.5, -s * 0.5, 0, -s);
+              }
+              
+              ctx.closePath(); 
+              ctx.fill(); 
+              ctx.restore();
           }
           ctx.globalCompositeOperation = 'source-over';
           animationFrameRef.current = requestAnimationFrame(render);
@@ -150,47 +221,73 @@ export const Grid = React.memo(({ grid, size, mergeEvents, lootEvents, slideSpee
     <div ref={containerRef} className="relative w-full aspect-square group mx-auto">
         {!isLowQuality && <div className={`absolute -inset-4 bg-gradient-to-r ${ambientGlowClass} rounded-3xl blur-2xl -z-10 transition-colors duration-500`}></div>}
         
+        {/* Main Grid Container (Clipped for rounded corners and particles) */}
         <div className={`relative w-full h-full bg-black/90 rounded-xl p-1 sm:p-2 border-2 border-slate-700/50 shadow-2xl overflow-hidden ${isLowQuality ? '' : 'backdrop-blur-md'}`}>
             <div className="absolute inset-0 opacity-20 pointer-events-none" style={{ backgroundImage: 'radial-gradient(circle at 50% 50%, rgba(255,255,255,0.1) 1px, transparent 1px)', backgroundSize: '20px 20px' }}></div>
             {backgroundCells}
 
-            <div className="absolute inset-0 p-1 sm:p-2 pointer-events-none z-10">
+            <div className="absolute inset-0 p-1 sm:p-2 z-10">
                 <div className="relative w-full h-full">
                     {grid.map((tile) => (
-                    <TileComponent key={tile.id} tile={tile} gridSize={size} slideSpeed={slideSpeed} themeId={themeId} graphicsQuality={graphicsQuality} tilesetId={tilesetId} />
+                    <TileComponent 
+                      key={tile.id} 
+                      tile={tile} 
+                      gridSize={size} 
+                      slideSpeed={slideSpeed} 
+                      themeId={themeId} 
+                      graphicsQuality={graphicsQuality} 
+                      tilesetId={tilesetId} 
+                      onInteract={onTileClick ? () => onTileClick(tile.id, tile.y) : undefined}
+                    />
                     ))}
                 </div>
             </div>
             
-            <div className="absolute inset-0 p-1 sm:p-2 pointer-events-none z-30 overflow-hidden">
-                <div className="relative w-full h-full">
-                    {lootEvents.map((loot) => {
-                         const tileSize = 100 / size;
-                         const top = loot.y * tileSize;
-                         const left = loot.x * tileSize;
-                         return (
-                             <div key={loot.id} className="absolute flex flex-col items-center justify-center animate-loot-float" style={{ width: `${tileSize}%`, height: `${tileSize}%`, top: `${top}%`, left: `${left}%` }}>
-                                 <div className={`flex items-center gap-1 px-2 py-1 rounded-full border shadow-lg ${isLowQuality ? '' : 'backdrop-blur-md'}
-                                     ${loot.type === 'GOLD' ? 'bg-yellow-900/80 border-yellow-500 text-yellow-300' 
-                                       : loot.type === 'XP' ? 'bg-cyan-900/80 border-cyan-500 text-cyan-200' 
-                                       : 'bg-indigo-900/80 border-indigo-500 text-indigo-200'}
-                                 `}>
-                                     {loot.type === 'GOLD' ? <Coins size={14} className="text-yellow-400" /> 
-                                      : loot.type === 'XP' ? <Star size={14} className="text-cyan-400" />
-                                      : <span className="text-base">{loot.icon}</span>}
-                                     <span className="text-xs font-black whitespace-nowrap">
-                                         {loot.type === 'GOLD' ? `+${loot.value} G` 
-                                          : loot.type === 'XP' ? `+${loot.value} XP`
-                                          : 'Item!'}
-                                     </span>
-                                 </div>
-                             </div>
-                         );
-                    })}
-                </div>
-            </div>
-
             {!isLowQuality && <canvas ref={canvasRef} className="absolute inset-0 z-20 pointer-events-none w-full h-full"></canvas>}
+        </div>
+
+        {/* Floating Text Layer - MOVED OUTSIDE to prevent clipping */}
+        <div className="absolute inset-0 p-1 sm:p-2 pointer-events-none z-50">
+            <div className="relative w-full h-full">
+                {lootEvents.map((loot) => {
+                        const tileSize = 100 / size;
+                        const top = loot.y * tileSize;
+                        const left = loot.x * tileSize;
+                        
+                        let animationClass = 'animate-loot-float';
+                        let content = null;
+
+                        if (loot.type === 'XP') {
+                            animationClass = 'animate-float-xp';
+                            content = (
+                                <div className="fantasy-font font-black text-lg md:text-2xl text-transparent bg-clip-text bg-gradient-to-b from-cyan-300 to-blue-600 drop-shadow-[0_2px_2px_rgba(0,0,0,0.8)] stroke-black" style={{ WebkitTextStroke: '1px rgba(0,0,0,0.5)' }}>
+                                    +{loot.value} XP
+                                </div>
+                            );
+                        } else if (loot.type === 'GOLD') {
+                            animationClass = 'animate-float-gold';
+                            content = (
+                                <div className="fantasy-font font-black text-lg md:text-2xl text-transparent bg-clip-text bg-gradient-to-b from-yellow-300 to-orange-600 drop-shadow-[0_2px_2px_rgba(0,0,0,0.8)] flex items-center gap-1" style={{ WebkitTextStroke: '1px rgba(0,0,0,0.5)' }}>
+                                    +{loot.value} G
+                                </div>
+                            );
+                        } else {
+                            // Item
+                            content = (
+                                <div className="flex items-center gap-1 px-2 py-1 rounded-full border shadow-lg bg-indigo-900/80 border-indigo-500 text-indigo-200 backdrop-blur-md">
+                                    <span className="text-base">{loot.icon}</span>
+                                    <span className="text-xs font-black whitespace-nowrap">{loot.value}</span>
+                                </div>
+                            );
+                        }
+
+                        return (
+                            <div key={loot.id} className={`absolute flex flex-col items-center justify-center ${animationClass}`} style={{ width: `${tileSize}%`, height: `${tileSize}%`, top: `${top}%`, left: `${left}%` }}>
+                                {content}
+                            </div>
+                        );
+                })}
+            </div>
         </div>
     </div>
   );

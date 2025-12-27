@@ -1,460 +1,470 @@
-
-import React, { useEffect, useReducer, useRef, useState } from 'react';
+import React, { useState, useEffect, useReducer, useRef, useCallback } from 'react';
+import { GameState, Direction, HeroClass, GameMode, Difficulty, FeedbackEvent, InventoryItem, LootEvent, Medal, View, AbilityType, InputSettings } from './types';
+import { initializeGame, moveGrid, isGameOver, useInventoryItem, executeAutoCascade, checkAchievements, checkLoreUnlocks, spawnTile, executePowerupAction, updateCooldowns, saveHighscore, processPassiveAbilities } from './services/gameLogic';
+import { audioService } from './services/audioService';
 import { Grid } from './components/Grid';
 import { HUD } from './components/HUD';
 import { Store } from './components/Store';
 import { SplashScreen } from './components/SplashScreen';
-import { Leaderboard } from './components/Leaderboard';
+import { GameStatsModal } from './components/GameStatsModal';
 import { Settings } from './components/Settings';
+import { HelpScreen } from './components/HelpScreen';
+import { Grimoire } from './components/Grimoire';
+import { Leaderboard } from './components/Leaderboard';
 import { RunSummary } from './components/RunSummary';
-import { VictoryScreen } from './components/VictoryScreen';
 import { TutorialOverlay } from './components/TutorialOverlay';
 import { FeedbackLayer } from './components/FeedbackLayer';
-import { HelpScreen } from './components/HelpScreen';
-import { GameStatsModal } from './components/GameStatsModal';
-import { VersusGame } from './components/VersusGame';
-import { Grimoire } from './components/Grimoire';
 import { AmbientBackground } from './components/AmbientBackground';
+import { DynamicBackground } from './components/DynamicBackground';
+import { VersusGame } from './components/VersusGame';
 import { MedalFeed } from './components/MedalFeed';
-import { Direction, GameState, TileType, InventoryItem, CraftingRecipe, View, Achievement, ItemType, InputSettings, HeroClass, GameMode, PlayerProfile, DailyBounty, Difficulty, FeedbackEvent, LootEvent, Medal } from './types';
-import { initializeGame, moveGrid, spawnTile, isGameOver, useInventoryItem, checkAchievements, executeAutoCascade, checkLoreUnlocks } from './services/gameLogic';
-import { SHOP_ITEMS, getXpThreshold, getStage, getItemDefinition } from './constants';
-import { audioService } from './services/audioService';
+import { LootProvider, useLootSystem } from './components/LootSystem';
+import { VictoryScreen } from './components/VictoryScreen';
 import { loadCriticalAssets, loadBackgroundAssets } from './services/assetLoader';
-import { getPlayerProfile, markHintSeen, completeTutorial, unlockLore, awardMedal } from './services/storageService';
-import { Skull, Loader2, CheckCircle } from 'lucide-react';
+import { getNextLevelXp, awardMedal, markHintSeen, unlockLore, getPlayerProfile, syncPlayerProfile } from './services/storageService';
+import { useFullscreen } from './hooks/useFullscreen';
+import { facebookService } from './services/facebookService';
+import { AnimatePresence, motion } from 'framer-motion';
+import { GRID_SIZE_INITIAL, SHOP_ITEMS } from './constants';
+import { getStage } from './constants';
 import { v4 as uuidv4 } from 'uuid';
-import { motion, AnimatePresence } from 'framer-motion';
-import { rng } from './utils/rng';
-import { LootProvider } from './components/LootSystem';
+import { Lightbulb, Sparkles } from 'lucide-react';
 
-// Actions
+// Define Action Types
 type Action = 
-  | { type: 'MOVE'; direction: Direction }
-  | { type: 'RESTART'; selectedClass?: HeroClass; mode?: GameMode; seed?: number; difficulty?: Difficulty; tileset?: string }
-  | { type: 'CONTINUE' }
-  | { type: 'LOAD_GAME'; state: GameState }
-  | { type: 'BUY_ITEM'; item: typeof SHOP_ITEMS[0] }
-  | { type: 'CRAFT_ITEM'; recipe: CraftingRecipe }
-  | { type: 'USE_ITEM'; item: InventoryItem }
+  | { type: 'MOVE', direction: Direction }
+  | { type: 'START_GAME', heroClass: HeroClass, mode: GameMode, seed?: number, difficulty?: Difficulty, tileset?: string }
+  | { type: 'RESTART' }
+  | { type: 'USE_ITEM', item: InventoryItem }
+  | { type: 'BUY_ITEM', item: any } 
+  | { type: 'CRAFT_ITEM', recipe: any }
+  | { type: 'TILE_INTERACT', id: string, row?: number }
   | { type: 'REROLL' }
-  | { type: 'UPDATE_SETTINGS'; settings: InputSettings }
-  | { type: 'CASCADE_STEP'; payload: { grid: any[], rewards: { xp: number, gold: number }, lootEvents: LootEvent[] } }
-  | { type: 'CASCADE_COMPLETE' }
-  | { type: 'ACK_LEVEL_UP' }
-  | { type: 'CLEAR_LOOT' }
-  | { type: 'CLEAR_MEDALS' };
+  | { type: 'CASCADE_STEP' }
+  | { type: 'UPDATE_SETTINGS', settings: InputSettings }
+  | { type: 'RESTORE_STATE', state: GameState }
+  | { type: 'PROCESS_PASSIVES' }
+  | { type: 'CLAIM_BOUNTY', reward: number };
 
-const reducer = (state: GameState, action: Action): GameState => {
-  switch (action.type) {
-    case 'RESTART':
-      return initializeGame(true, action.selectedClass || HeroClass.ADVENTURER, action.mode || 'RPG', action.seed, action.difficulty, action.tileset);
-      
-    case 'MOVE':
-        if (state.gameOver || state.isCascading) return state;
-
-        const result = moveGrid(state.grid, action.direction, state.gridSize, state.gameMode, state.effectCounters, state.activeModifiers, state.difficulty, state.stats);
-        
-        if (!result.moved) return state;
-
-        let newState = { ...state };
-        newState.grid = result.grid;
-        newState.score += result.score;
-        newState.xp += result.xpGained;
-        newState.gold += result.goldGained;
-        newState.combo = result.combo;
-        
-        // Pass up medals
-        newState.lastTurnMedals = result.medalsEarned;
-        
-        // Accumulate loot events rather than replacing, Grid will filter old ones
-        newState.lootEvents = [...(state.lootEvents || []), ...result.lootEvents];
-        
-        // Handle Loot Items
-        if (result.itemsFound.length > 0) {
-            newState.inventory = [...newState.inventory, ...result.itemsFound];
-            newState.logs = [...newState.logs, ...result.itemsFound.map(i => `Looted: ${i.name}`)];
-        }
-        
-        // Handle Counters
-        const newEffectCounters = { ...newState.effectCounters };
-        Object.keys(newEffectCounters).forEach(key => {
-            if (newEffectCounters[key] > 0) newEffectCounters[key]--;
-            if (newEffectCounters[key] <= 0) delete newEffectCounters[key];
-        });
-        newState.effectCounters = newEffectCounters;
-
-        // Spawn new tile
-        let spawnOpts: any = {};
-        if ((newState.effectCounters['ASCENDANT_SPAWN'] || 0) > 0) {
-            spawnOpts.forcedValue = Math.random() > 0.5 ? 4 : 8; 
-        }
-        if ((newState.effectCounters['GOLDEN_SPAWN'] || 0) > 0) {
-             spawnOpts.type = TileType.GOLDEN;
-        }
-        spawnOpts.modifiers = state.activeModifiers;
-        spawnOpts.difficulty = state.difficulty;
-
-        newState.grid = spawnTile(newState.grid, newState.gridSize, newState.level, { ...spawnOpts, isClassic: newState.gameMode === 'CLASSIC', powerUpChanceBonus: (newState.effectCounters['LUCKY_DICE'] || 0) > 0 ? 0.05 : 0 });
-
-        // Update Stats
-        newState.stats = {
-            ...newState.stats,
-            totalMoves: newState.stats.totalMoves + 1,
-            goldCollected: newState.stats.goldCollected + result.goldGained,
-            highestCombo: Math.max(newState.stats.highestCombo, result.combo),
-            highestTile: Math.max(newState.stats.highestTile, ...newState.grid.map(t => t.value)),
-            totalMerges: newState.stats.totalMerges + result.mergedIds.length,
-        };
-        
-        newState.runStats = {
-             ...newState.runStats,
-             turnCount: newState.runStats.turnCount + 1,
-             goldEarned: newState.runStats.goldEarned + result.goldGained,
-             bossesDefeated: newState.runStats.bossesDefeated + (result.bossDefeated ? 1 : 0),
-             medalsEarned: [...(newState.runStats.medalsEarned || []), ...result.medalsEarned.map(m => m.id)]
-        };
-
-        // Check Victory Condition (2048) - Only trigger once
-        if (!newState.gameWon && newState.grid.some(t => t.value >= 2048)) {
-            newState.victory = true;
-            newState.gameWon = true; 
-        }
-
-        // Check Level Up
-        const threshold = getXpThreshold(newState.level);
-        if (newState.xp >= threshold) {
-            newState.level++;
-            newState.xp -= threshold;
-            newState.justLeveledUp = true;
-            
-            // Expand Grid logic
-            if (newState.level === 5 || newState.level === 10 || newState.level === 20) {
-                 if (newState.gridSize < 6) newState.gridSize++; 
+const gameReducer = (state: GameState, action: Action): GameState => {
+    switch(action.type) {
+        case 'START_GAME':
+            return initializeGame(true, action.heroClass, action.mode, action.seed, action.difficulty, action.tileset);
+        case 'RESTORE_STATE':
+            // Ensure settings are merged correctly if new fields (like enableHaptics) are missing in saved state
+            const restoredState = action.state;
+            if (restoredState.settings && restoredState.settings.enableHaptics === undefined) {
+                restoredState.settings.enableHaptics = true;
             }
-            
-            // Check Stage Transition
-            const newStage = getStage(newState.level);
-            if (newStage.name !== newState.currentStage.name) {
-                newState.currentStage = newStage;
+            return restoredState;
+        case 'RESTART':
+            return initializeGame(true, state.selectedClass, state.gameMode, undefined, state.difficulty, state.tilesetId);
+        case 'MOVE': {
+            if (state.gameOver || state.gameWon || state.isCascading) return state;
+            const res = moveGrid(
+                state.grid, 
+                action.direction, 
+                state.gridSize, 
+                state.gameMode, 
+                state.effectCounters, 
+                state.activeModifiers, 
+                state.difficulty,
+                state.stats
+            );
+            if (!res.moved) return state;
+
+            // Trigger Move Audio
+            audioService.playMove();
+            if (res.score > 0) audioService.playMerge(res.score, res.combo);
+            if (res.powerUpTriggered) audioService.playZap(2);
+
+            // Haptics for Merges (Mobile Feel) - CHECK SETTING
+            if (state.settings.enableHaptics && res.mergedIds.length > 0 && navigator.vibrate) {
+                navigator.vibrate(50);
             }
-        }
 
-        // Check Game Over
-        if (isGameOver(newState.grid, newState.gridSize)) {
-            if ((newState.rerolls > 0 || newState.gold >= 50) && newState.level >= 15 && newState.gameMode === 'RPG') {
-                // Reroll available
-            } else {
-                newState.gameOver = true;
-            }
-        }
-        
-        // Cascade Check
-        if (newState.accountLevel >= 5 && newState.gameMode === 'RPG') {
-             if (result.moved) {
-                 newState.isCascading = true;
-                 newState.cascadeStep = 0;
-             }
-        }
-
-        return newState;
-
-    case 'CLEAR_LOOT':
-        return { ...state, lootEvents: [] };
-    
-    case 'CLEAR_MEDALS':
-        return { ...state, lastTurnMedals: [] };
-
-    case 'CONTINUE':
-        return { ...state, victory: false }; 
-    
-    case 'LOAD_GAME':
-        return action.state;
-
-    case 'BUY_ITEM':
-        return {
-            ...state,
-            gold: state.gold - action.item.price,
-            inventory: [...state.inventory, { 
-                id: uuidv4(), 
-                type: action.item.id as ItemType, 
-                name: action.item.name, 
-                description: action.item.desc, 
-                icon: action.item.icon 
-            }],
-            shop: {
-                ...state.shop,
-                items: {
-                    ...state.shop.items,
-                    [action.item.id]: {
-                        stock: (state.shop.items[action.item.id]?.stock || 0) - 1,
-                        priceMultiplier: (state.shop.items[action.item.id]?.priceMultiplier || 1.0)
-                    }
-                }
-            }
-        };
-    
-    case 'CRAFT_ITEM':
-        {
-            let newInv = [...state.inventory];
-            action.recipe.ingredients.forEach(ing => {
-                for(let i=0; i<ing.count; i++) {
-                    const idx = newInv.findIndex(item => item.type === ing.type);
-                    if (idx > -1) newInv.splice(idx, 1);
-                }
+            let newGrid = spawnTile(res.grid, state.gridSize, state.level, { 
+                modifiers: state.activeModifiers,
+                difficulty: state.difficulty,
+                isClassic: state.gameMode === 'CLASSIC',
+                powerUpChanceBonus: (state.effectCounters['LUCKY_DICE'] ? 0.1 : 0)
             });
+
+            // Update Cooldowns (Passives charge up)
+            let updatedAbilities = updateCooldowns(state.abilities);
+
+            // Update Stats
+            const newStats = { ...state.stats };
+            newStats.totalMoves++;
+            newStats.totalMerges += res.mergedIds.length;
+            newStats.highestCombo = Math.max(newStats.highestCombo, res.combo);
+            if (res.bossDefeated) newStats.bossesDefeated++;
+            newStats.goldCollected += res.goldGained;
+
+            // Achievements
+            const newAchievements = checkAchievements({ ...state, stats: newStats });
             
-            const def = getItemDefinition(action.recipe.resultId);
-            newInv.push({
-                 id: uuidv4(),
-                 type: action.recipe.resultId,
-                 name: def.name,
-                 description: def.desc,
-                 icon: def.icon
-            });
+            // Check Game Over
+            const gameOver = isGameOver(newGrid, state.gridSize);
+            const gameWon = newStats.highestTile >= 2048 && !state.gameWon;
 
             return {
                 ...state,
-                gold: state.gold - action.recipe.goldCost,
-                inventory: newInv,
-                runStats: { ...state.runStats, itemsCrafted: state.runStats.itemsCrafted + 1 }
+                grid: newGrid,
+                score: state.score + res.score,
+                xp: state.xp + res.xpGained,
+                gold: state.gold + res.goldGained,
+                inventory: [...state.inventory, ...res.itemsFound],
+                gameOver,
+                gameWon,
+                combo: res.combo,
+                stats: newStats,
+                lootEvents: res.lootEvents,
+                lastTurnMedals: res.medalsEarned,
+                abilities: updatedAbilities,
+                achievements: [...state.achievements, ...newAchievements],
+                logs: [...state.logs, ...res.logs].slice(-5)
             };
         }
-
-    case 'USE_ITEM':
-        {
-            const res = useInventoryItem(state, action.item);
-            if (!res) return state;
-            return { ...state, ...res, runStats: { ...state.runStats, powerUpsUsed: state.runStats.powerUpsUsed + 1 } };
-        }
-
-    case 'REROLL':
-        if (state.rerolls > 0) {
-            return { 
-                ...state, 
-                rerolls: state.rerolls - 1, 
-                grid: spawnTile(spawnTile([], state.gridSize, state.level), state.gridSize, state.level),
-                logs: [...state.logs, "Board Rerolled!"]
-            };
-        } else if (state.gold >= 50) {
-             return { 
-                ...state, 
-                gold: state.gold - 50, 
-                grid: spawnTile(spawnTile([], state.gridSize, state.level), state.gridSize, state.level),
-                logs: [...state.logs, "Board Rerolled! (-50G)"]
+        case 'PROCESS_PASSIVES': {
+            const res = processPassiveAbilities(state);
+            if (res.triggered.length === 0) return state;
+            
+            audioService.playZap(1); 
+            return {
+                ...state,
+                grid: res.grid,
+                abilities: res.abilities
             };
         }
-        return state;
-
-    case 'UPDATE_SETTINGS':
-        return { ...state, settings: action.settings };
-
-    case 'CASCADE_STEP':
-        return {
-            ...state,
-            grid: action.payload.grid,
-            xp: state.xp + action.payload.rewards.xp,
-            gold: state.gold + action.payload.rewards.gold,
-            cascadeStep: (state.cascadeStep || 0) + 1,
-            lootEvents: [...(state.lootEvents || []), ...action.payload.lootEvents],
-            runStats: { ...state.runStats, cascadesTriggered: state.runStats.cascadesTriggered + 1 }
-        };
-
-    case 'CASCADE_COMPLETE':
-        return { ...state, isCascading: false, cascadeStep: 0 };
-    
-    case 'ACK_LEVEL_UP':
-        return { ...state, justLeveledUp: false };
-
-    default:
-        return state;
-  }
+        case 'USE_ITEM': {
+            const result = useInventoryItem(state, action.item);
+            return result ? { ...state, ...result } : state;
+        }
+        case 'BUY_ITEM': {
+            if (state.gold < action.item.price) return state;
+            const item = { 
+                id: uuidv4(), 
+                type: action.item.id, 
+                name: action.item.name, 
+                description: action.item.desc, 
+                icon: action.item.icon 
+            };
+            return {
+                ...state,
+                gold: state.gold - action.item.price,
+                inventory: [...state.inventory, item]
+            };
+        }
+        case 'CRAFT_ITEM': {
+             const newItem = {
+                 id: uuidv4(),
+                 type: action.recipe.resultId,
+                 name: action.recipe.name,
+                 description: action.recipe.description,
+                 icon: action.recipe.icon
+             };
+             let newInv = [...state.inventory];
+             action.recipe.ingredients.forEach((ing: any) => {
+                 for(let i=0; i<ing.count; i++) {
+                     const idx = newInv.findIndex(x => x.type === ing.type);
+                     if (idx > -1) newInv.splice(idx, 1);
+                 }
+             });
+             return {
+                 ...state,
+                 gold: state.gold - action.recipe.goldCost,
+                 inventory: [...newInv, newItem]
+             };
+        }
+        case 'TILE_INTERACT': {
+            const res = executePowerupAction(state, action.id, action.row);
+            return res ? { ...state, ...res } : state;
+        }
+        case 'REROLL': {
+            if (state.rerolls <= 0 && state.gold < 50) return state;
+            const cost = state.rerolls > 0 ? 0 : 50;
+            const rerolls = Math.max(0, state.rerolls - 1);
+            const grid = spawnTile(spawnTile([], state.gridSize, state.level), state.gridSize, state.level);
+            return { ...state, grid, rerolls, gold: state.gold - cost };
+        }
+        case 'CASCADE_STEP': {
+            const res = executeAutoCascade(state.grid, state.gridSize, state.cascadeStep || 0, state.effectCounters);
+            if (res.occurred) {
+                audioService.playCascade(state.cascadeStep || 0);
+                return {
+                    ...state,
+                    grid: res.grid,
+                    score: state.score + res.rewards.xp, // Score = XP for simplicity in cascade
+                    xp: state.xp + res.rewards.xp,
+                    gold: state.gold + res.rewards.gold,
+                    cascadeStep: (state.cascadeStep || 0) + 1,
+                    // Keep cascading
+                };
+            } else {
+                return { ...state, isCascading: false, cascadeStep: 0 };
+            }
+        }
+        case 'CLAIM_BOUNTY':
+            return { ...state, gold: state.gold + action.reward };
+        case 'UPDATE_SETTINGS':
+            return { ...state, settings: action.settings };
+        default:
+            return state;
+    }
 };
 
-const App: React.FC = () => {
-  const [state, dispatch] = useReducer(reducer, null, () => initializeGame());
+const TIPS = [
+    "Merges near Bosses deal damage to them.",
+    "Save your Gold! It carries over between runs.",
+    "Keep your highest value tiles in a corner.",
+    "Cascades multiply your gold earnings.",
+    "The 'Scorch' ability helps clear weak tiles automatically.",
+    "Unlock new classes to change your starting loadout.",
+    "Craft powerful items in the Forge tab of the Shop.",
+    "Daily Runs offer unique modifiers and rewards.",
+    "Check the Codex to track monsters you've discovered.",
+    "Bosses don't move, use this to your advantage."
+];
+
+const LoadingScreen = ({ progress }: { progress: number }) => {
+    const [tipIndex, setTipIndex] = useState(0);
+    const [statusText, setStatusText] = useState("Initializing...");
+
+    useEffect(() => {
+        const interval = setInterval(() => {
+            setTipIndex(prev => (prev + 1) % TIPS.length);
+        }, 4000);
+        return () => clearInterval(interval);
+    }, []);
+
+    useEffect(() => {
+        if (progress < 20) setStatusText("Forging Tiles...");
+        else if (progress < 40) setStatusText("Summoning Monsters...");
+        else if (progress < 60) setStatusText("Loading Environments...");
+        else if (progress < 80) setStatusText("Compiling Grimoire...");
+        else setStatusText("Finalizing Atmosphere...");
+    }, [progress]);
+
+    return (
+        <div className="fixed inset-0 z-[999] bg-[#050505] flex flex-col items-center justify-center select-none overflow-hidden">
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_#1a1005_0%,_#000000_100%)] opacity-50"></div>
+            
+            <div className="w-72 relative flex flex-col items-center z-10">
+                {/* Logo or Title */}
+                <div className="text-center mb-10 relative">
+                    <div className="absolute inset-0 bg-red-600 blur-[60px] opacity-20 animate-pulse"></div>
+                    <h1 className="text-4xl font-black text-transparent bg-clip-text bg-gradient-to-b from-yellow-100 via-orange-400 to-red-700 fantasy-font tracking-tighter drop-shadow-lg relative z-10">
+                        DRAGON'S HOARD
+                    </h1>
+                </div>
+                
+                {/* Bar Container */}
+                <div className="w-full h-2 bg-slate-900 rounded-full overflow-hidden border border-slate-800 relative shadow-2xl">
+                    <div 
+                        className="h-full bg-gradient-to-r from-red-600 via-orange-500 to-yellow-400 transition-all duration-300 ease-out shadow-[0_0_15px_rgba(234,179,8,0.6)] relative"
+                        style={{ width: `${progress}%` }}
+                    >
+                        <div className="absolute inset-0 bg-white/30 animate-[shimmer_1s_infinite]"></div>
+                    </div>
+                </div>
+                
+                {/* Status Text */}
+                <div className="w-full flex justify-between mt-3 text-[10px] font-mono font-bold text-slate-500 uppercase tracking-widest">
+                    <span className="text-orange-400/80 animate-pulse">{statusText}</span>
+                    <span>{progress}%</span>
+                </div>
+
+                {/* Tips Section */}
+                <div className="mt-12 w-full max-w-xs h-20 relative">
+                    <AnimatePresence mode="wait">
+                        <motion.div
+                            key={tipIndex}
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -10 }}
+                            transition={{ duration: 0.5 }}
+                            className="absolute inset-0 flex flex-col items-center text-center"
+                        >
+                            <div className="flex items-center gap-2 text-yellow-500/80 text-[10px] font-bold uppercase tracking-[0.2em] mb-2">
+                                <Lightbulb size={12} /> Tip
+                            </div>
+                            <p className="text-slate-400 text-xs font-medium leading-relaxed px-4">
+                                {TIPS[tipIndex]}
+                            </p>
+                        </motion.div>
+                    </AnimatePresence>
+                </div>
+            </div>
+            
+            {/* Version Footer */}
+            <div className="absolute bottom-6 text-[9px] text-slate-700 font-mono">v0.9.9 BETA</div>
+        </div>
+    );
+};
+
+const GameContent: React.FC = () => {
+  const [state, dispatch] = useReducer(gameReducer, initializeGame());
   const [view, setView] = useState<View>('SPLASH');
-  
-  const [isLoading, setIsLoading] = useState(true);
+  const [loading, setLoading] = useState(true);
   const [loadingProgress, setLoadingProgress] = useState(0);
-  
-  // Feedback Systems
-  const [feedbackQueue, setFeedbackQueue] = useState<FeedbackEvent[]>([]);
-  const [shakeIntensity, setShakeIntensity] = useState(0);
-  const [showTutorial, setShowTutorial] = useState(false);
-  const [medalQueue, setMedalQueue] = useState<{id: string, medal: Medal}[]>([]);
-  
-  // HUD/UI State
   const [showStore, setShowStore] = useState(false);
   const [showStats, setShowStats] = useState(false);
-  const [showDebug, setShowDebug] = useState(false);
+  const [showTutorial, setShowTutorial] = useState(false);
+  const [feedbackQueue, setFeedbackQueue] = useState<FeedbackEvent[]>([]);
+  const [medalQueue, setMedalQueue] = useState<{id: string, medal: Medal}[]>([]);
+  const [itemFeedback, setItemFeedback] = useState<{ slot: number, status: 'SUCCESS' | 'ERROR', id: string } | undefined>(undefined);
   
   // Bounty State
-  const [activeBounties, setActiveBounties] = useState<DailyBounty[]>([]);
-  const [completedBountyIds, setCompletedBountyIds] = useState<string[]>([]);
-  const [notifications, setNotifications] = useState<{id: string, text: string, subtext?: string}[]>([]);
-
-  // Refs for logic
-  const dragStartRef = useRef<{x: number, y: number} | null>(null);
+  const [challengeTarget, setChallengeTarget] = useState<{score: number, name: string} | null>(null);
+  const [bountyClaimed, setBountyClaimed] = useState(false);
+  
+  const dragStartRef = useRef<{ x: number, y: number } | null>(null);
   const scrollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const prevLevelRef = useRef(state.level);
-  const prevBossesRef = useRef(state.runStats.bossesDefeated);
-  const prevGridSizeRef = useRef(state.gridSize);
+  const { isFullscreen, toggleFullscreen } = useFullscreen();
+  const { spawnLoot } = useLootSystem();
 
-  // Derived low performance bool for legacy components until full migration
-  const lowPerformanceMode = state.settings.graphicsQuality === 'LOW';
-
+  // Dynamic Audio Intensity
+  // We map Score 0 -> 0.0 intensity, Score 15000 -> 1.0 intensity
   useEffect(() => {
-     loadCriticalAssets((p) => {
-         setLoadingProgress(p);
-         if (p >= 100) {
-             setTimeout(() => setIsLoading(false), 500);
-             loadBackgroundAssets();
-         }
-     });
-     const failsafe = setTimeout(() => setIsLoading(false), 8000);
-     const profile = getPlayerProfile();
-     setActiveBounties(profile.activeBounties || []);
-     setCompletedBountyIds(profile.activeBounties.filter(b => b.isCompleted).map(b => b.id));
-     return () => clearTimeout(failsafe);
-  }, []);
+      const intensity = Math.min(1, state.score / 15000);
+      audioService.updateGameplayIntensity(intensity);
+  }, [state.score]);
 
+  // Haptics Trigger for Score Milestones
+  const prevScore = useRef(state.score);
   useEffect(() => {
-      if (!isLoading && view === 'GAME' && state.gameMode !== 'DAILY') {
-          localStorage.setItem('2048_rpg_state_v3', JSON.stringify(state));
+      const scoreDiff = state.score - prevScore.current;
+      if (scoreDiff >= 500 && state.settings.enableHaptics && navigator.vibrate) {
+          navigator.vibrate(100);
       }
-  }, [state, isLoading, view]);
+      prevScore.current = state.score;
+  }, [state.score, state.settings.enableHaptics]);
 
-  // Handle Medals
+  // Bounty Check Logic
   useEffect(() => {
-      if (state.lastTurnMedals && state.lastTurnMedals.length > 0) {
-          const newMedals = state.lastTurnMedals.map(medal => {
-              awardMedal(medal.id);
-              return { id: uuidv4(), medal };
-          });
-          
-          setMedalQueue(prev => [...prev, ...newMedals]);
-          audioService.playLevelUp(); // Re-use nice sound for medal earn
-          
-          // Clear after processing so we don't re-process on re-renders
-          setTimeout(() => dispatch({ type: 'CLEAR_MEDALS' }), 0);
-          
-          // Auto remove from visual feed faster (1.5s)
-          setTimeout(() => {
-              setMedalQueue(prev => prev.slice(newMedals.length));
-          }, 1500); 
-      }
-  }, [state.lastTurnMedals]);
-
-  // Accumulative Loot Clearing
-  useEffect(() => {
-      if (state.lootEvents.length > 0) {
-          const timer = setTimeout(() => {
-              dispatch({ type: 'CLEAR_LOOT' });
-          }, 2000);
-          return () => clearTimeout(timer);
-      }
-  }, [state.lootEvents]);
-
-  // --- GAMEPLAY FEEDBACK MONITORING ---
-  useEffect(() => {
-      if (view !== 'GAME') return;
-
-      // 1. Level Up Feedback
-      if (state.level > prevLevelRef.current) {
-          prevLevelRef.current = state.level;
+      if (challengeTarget && !bountyClaimed && state.score > challengeTarget.score) {
+          setBountyClaimed(true);
+          dispatch({ type: 'CLAIM_BOUNTY', reward: 50 });
           setFeedbackQueue(prev => [...prev, {
               id: uuidv4(),
-              type: 'LEVEL_UP',
-              title: `Rank ${state.level}`,
-              subtitle: 'Stats Increased'
+              type: 'UNLOCK',
+              title: "BOUNTY CLAIMED",
+              subtitle: `You beat ${challengeTarget.name}! +50 Gold`
           }]);
           audioService.playLevelUp();
+          if (state.settings.enableHaptics && navigator.vibrate) navigator.vibrate([100, 50, 100]);
       }
+  }, [state.score, challengeTarget, bountyClaimed, state.settings.enableHaptics]);
 
-      // 2. Grid Expand Feedback
-      if (state.gridSize > prevGridSizeRef.current) {
-          prevGridSizeRef.current = state.gridSize;
-          setFeedbackQueue(prev => [...prev, {
-              id: uuidv4(),
-              type: 'GRID_EXPAND',
-              title: 'Grid Expanded',
-              subtitle: 'More space, more strategy'
-          }]);
-      }
+  // Load Assets & Init Facebook
+  useEffect(() => {
+      const init = async () => {
+          // Failsafe: If assets take longer than 8 seconds, force start the game
+          // This prevents the game from hanging on 0% or mid-way if a resource 404s
+          const failsafeTimer = setTimeout(() => {
+              if (loading) {
+                  console.warn("Asset loading timed out, forcing start...");
+                  setLoading(false);
+                  facebookService.startGame();
+              }
+          }, 8000);
 
-      // 3. Boss Kill Feedback
-      if (state.runStats.bossesDefeated > prevBossesRef.current) {
-          prevBossesRef.current = state.runStats.bossesDefeated;
-          setFeedbackQueue(prev => [...prev, {
-              id: uuidv4(),
-              type: 'BOSS_KILLED',
-              title: 'Boss Slain',
-              reward: '+500 Gold'
-          }]);
-      }
+          try {
+              await facebookService.initialize();
+              
+              // Handle Pause Events from FB (e.g. Minimized App)
+              facebookService.onPause(() => {
+                  audioService.suspend();
+              });
 
-      // 4. Tutorial Logic
-      const profile = getPlayerProfile();
-      if (!profile.tutorialCompleted && state.stats.totalMoves < 5 && !showTutorial && state.gameMode === 'RPG') {
-          setShowTutorial(true);
-      }
+              loadCriticalAssets((p) => {
+                  setLoadingProgress(p);
+                  facebookService.setLoadingProgress(p);
+              }).then(async () => {
+                  clearTimeout(failsafeTimer); // Cancel failsafe
+                  await facebookService.startGame();
+                  await syncPlayerProfile();
+                  
+                  // Check Challenge Context
+                  const entry = facebookService.getEntryPointData();
+                  if (entry && entry.score) {
+                      setChallengeTarget({ score: entry.score, name: entry.challenger || "Challenger" });
+                      setFeedbackQueue(prev => [...prev, {
+                          id: uuidv4(),
+                          type: 'UNLOCK', 
+                          title: "BOUNTY ACCEPTED",
+                          subtitle: `Beat ${entry.challenger}'s score of ${entry.score}!`
+                      }]);
+                  }
+
+                  loadBackgroundAssets();
+                  audioService.playSplashTheme();
+                  
+                  // Slight delay to ensure the progress bar looks complete before unmounting
+                  setTimeout(() => setLoading(false), 800); 
+              }).catch(e => {
+                  console.error("Asset load failed", e);
+                  clearTimeout(failsafeTimer);
+                  // Force start anyway
+                  setLoading(false);
+                  facebookService.startGame();
+              });
+          } catch (e) {
+              console.error("Critical Init Error:", e);
+              clearTimeout(failsafeTimer);
+              setLoading(false);
+          }
+      };
+      init();
       
-      // 5. Check Lore Unlocks
-      const newLore = checkLoreUnlocks(state, profile);
-      newLore.forEach(entry => {
-          const unlocked = unlockLore(entry.id);
-          if (unlocked) {
-              setFeedbackQueue(prev => [...prev, {
-                  id: uuidv4(),
-                  type: 'LORE_UNLOCK',
-                  title: entry.title
-              }]);
-              audioService.playLevelUp(); // Re-use nice sound
-          }
-      });
-
-  }, [state.level, state.gridSize, state.runStats.bossesDefeated, state.grid, view, state.stats, state.score]);
-
-  // Bounty Check
-  useEffect(() => {
-      if (view !== 'GAME' || state.gameMode === 'CLASSIC') return;
-      activeBounties.forEach(bounty => {
-          if (completedBountyIds.includes(bounty.id)) return;
-          let achieved = false;
-          if (bounty.description.includes("Score")) {
-              if (state.score >= bounty.targetValue) achieved = true;
-          } else {
-              const runVal = state.runStats[bounty.targetStat] as number;
-              if (runVal >= bounty.targetValue) achieved = true;
-          }
-          if (achieved) {
-              setCompletedBountyIds(prev => [...prev, bounty.id]);
-              const notifId = uuidv4();
-              setNotifications(prev => [...prev, { id: notifId, text: "Bounty Complete!", subtext: bounty.description }]);
-              audioService.playLevelUp();
-              setTimeout(() => setNotifications(prev => prev.filter(n => n.id !== notifId)), 4000);
-          }
-      });
-  }, [state.score, state.runStats, activeBounties, completedBountyIds, view]);
-
-  // Audio Logic
-  useEffect(() => {
-      if (view === 'GAME' && !state.gameOver) audioService.playGameplayTheme();
-      else if (view === 'VERSUS') audioService.playGameplayTheme(); 
-      else if (state.gameOver) audioService.playDeathTheme();
-      else if (view === 'SPLASH') audioService.playSplashTheme();
-  }, [view, state.gameOver]);
-
-  // Audio Intensity
-  useEffect(() => {
-      if (view === 'GAME' && !state.gameOver) {
-          const intensity = Math.min(1, state.combo / 8);
-          audioService.updateGameplayIntensity(intensity);
+      const saved = localStorage.getItem('2048_rpg_state_v3');
+      if (saved) {
+          try {
+              const parsed = JSON.parse(saved);
+              if (parsed && !parsed.gameOver) {
+                  dispatch({ type: 'RESTORE_STATE', state: parsed });
+              }
+          } catch(e) {}
       }
-  }, [state.combo, view, state.gameOver]);
+  }, []);
 
-  // Input Handling
+  // Audio & Persistence
+  useEffect(() => {
+      if (view === 'GAME') {
+          audioService.playGameplayTheme();
+          localStorage.setItem('2048_rpg_state_v3', JSON.stringify(state));
+      } else if (view === 'SPLASH') {
+          audioService.playSplashTheme();
+      }
+  }, [view, state]);
+
+  // Clear Item Feedback after delay
+  useEffect(() => {
+      if (itemFeedback) {
+          const timer = setTimeout(() => setItemFeedback(undefined), 1000);
+          return () => clearTimeout(timer);
+      }
+  }, [itemFeedback]);
+
+  // Handle Passives Check after Move
+  useEffect(() => {
+      if (!state.gameOver && !state.gameWon && !state.isCascading) {
+          dispatch({ type: 'PROCESS_PASSIVES' });
+      }
+  }, [state.stats.totalMoves]);
+
+  // Handle Cascade
+  useEffect(() => {
+      if (state.isCascading) {
+          const timer = setTimeout(() => {
+              dispatch({ type: 'CASCADE_STEP' });
+          }, 250);
+          return () => clearTimeout(timer);
+      }
+  }, [state.isCascading]);
+
+  // Handle Input
   useEffect(() => {
       if (view !== 'GAME') return;
 
@@ -464,13 +474,12 @@ const App: React.FC = () => {
           if (!dragStartRef.current || !state.settings.enableSwipe) return;
           const dx = clientX - dragStartRef.current.x;
           const dy = clientY - dragStartRef.current.y;
-          
           const sensitivity = state.settings.sensitivity || 5;
-          const threshold = 80 - (sensitivity * 6); // Range: 74px to 20px
+          const threshold = 80 - (sensitivity * 6);
           const safeThreshold = Math.max(15, threshold); 
 
           if (Math.abs(dx) > safeThreshold || Math.abs(dy) > safeThreshold) {
-              if (state.gameOver || state.isCascading || showStore || showStats || showTutorial) {
+              if (state.gameOver || state.isCascading || showStore || showStats || showTutorial || feedbackQueue.length > 0) {
                   dragStartRef.current = null;
                   return;
               }
@@ -493,7 +502,7 @@ const App: React.FC = () => {
       const handleWheel = (e: WheelEvent) => {
           if (!state.settings.enableScroll) return;
           if (scrollTimeoutRef.current) return; 
-          if (state.gameOver || state.isCascading || showStore || showStats || showTutorial) return;
+          if (state.gameOver || state.isCascading || showStore || showStats || showTutorial || feedbackQueue.length > 0) return;
 
           if (Math.abs(e.deltaX) > 20 || Math.abs(e.deltaY) > 20) {
               let direction: Direction | null = null;
@@ -516,13 +525,20 @@ const App: React.FC = () => {
           }
       };
 
-      const onTouchStart = (e: TouchEvent) => handleStart(e.touches[0].clientX, e.touches[0].clientY);
-      const onTouchEnd = (e: TouchEvent) => handleEnd(e.changedTouches[0].clientX, e.changedTouches[0].clientY);
+      const onTouchStart = (e: TouchEvent) => {
+          e.preventDefault(); 
+          handleStart(e.touches[0].clientX, e.touches[0].clientY);
+      };
+      const onTouchEnd = (e: TouchEvent) => {
+          e.preventDefault();
+          handleEnd(e.changedTouches[0].clientX, e.changedTouches[0].clientY);
+      };
+      
       const onMouseDown = (e: MouseEvent) => handleStart(e.clientX, e.clientY);
       const onMouseUp = (e: MouseEvent) => handleEnd(e.clientX, e.clientY);
       
       window.addEventListener('touchstart', onTouchStart, { passive: false });
-      window.addEventListener('touchend', onTouchEnd);
+      window.addEventListener('touchend', onTouchEnd, { passive: false });
       window.addEventListener('mousedown', onMouseDown);
       window.addEventListener('mouseup', onMouseUp);
       window.addEventListener('wheel', handleWheel);
@@ -534,280 +550,212 @@ const App: React.FC = () => {
           window.removeEventListener('mouseup', onMouseUp);
           window.removeEventListener('wheel', handleWheel);
       };
-  }, [view, state.gameOver, state.isCascading, showStore, showStats, state.settings, showTutorial]);
+  }, [view, state.gameOver, state.isCascading, showStore, showStats, state.settings, showTutorial, feedbackQueue.length]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
         if (!state.settings.enableKeyboard) return;
-        if (e.ctrlKey && e.key === '`') { setShowDebug(prev => !prev); return; }
         if (showTutorial) return; 
-        if (state.gameOver || view !== 'GAME' || state.isCascading || showStore || showStats) return;
+        if (state.gameOver || view !== 'GAME' || state.isCascading || showStore || showStats || feedbackQueue.length > 0) return;
+        
         switch(e.key) {
             case 'ArrowUp': case 'w': case 'W': dispatch({ type: 'MOVE', direction: Direction.UP }); break;
             case 'ArrowDown': case 's': case 'S': dispatch({ type: 'MOVE', direction: Direction.DOWN }); break;
             case 'ArrowLeft': case 'a': case 'A': dispatch({ type: 'MOVE', direction: Direction.LEFT }); break;
             case 'ArrowRight': case 'd': case 'D': dispatch({ type: 'MOVE', direction: Direction.RIGHT }); break;
+            case '1': 
+                if (state.inventory[0]) {
+                    dispatch({ type: 'USE_ITEM', item: state.inventory[0] });
+                    setItemFeedback({ slot: 0, status: 'SUCCESS', id: uuidv4() });
+                } else {
+                    setItemFeedback({ slot: 0, status: 'ERROR', id: uuidv4() });
+                }
+                break;
+            case '2': 
+                if (state.inventory[1]) {
+                    dispatch({ type: 'USE_ITEM', item: state.inventory[1] });
+                    setItemFeedback({ slot: 1, status: 'SUCCESS', id: uuidv4() });
+                } else {
+                    setItemFeedback({ slot: 1, status: 'ERROR', id: uuidv4() });
+                }
+                break;
+            case '3': 
+                if (state.inventory[2]) {
+                    dispatch({ type: 'USE_ITEM', item: state.inventory[2] });
+                    setItemFeedback({ slot: 2, status: 'SUCCESS', id: uuidv4() });
+                } else {
+                    setItemFeedback({ slot: 2, status: 'ERROR', id: uuidv4() });
+                }
+                break;
         }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [state.gameOver, view, state.isCascading, showStore, showStats, state.settings, showTutorial]);
+  }, [state.gameOver, view, state.isCascading, showStore, showStats, state.settings, showTutorial, feedbackQueue.length, state.inventory]);
 
-  // Cascade Logic
+  // Process Medals & Events
   useEffect(() => {
-      if (state.isCascading && view === 'GAME') {
+      if (state.lastTurnMedals && state.lastTurnMedals.length > 0) {
+          state.lastTurnMedals.forEach(m => {
+              setMedalQueue(prev => [...prev, { id: uuidv4(), medal: m }]);
+              awardMedal(m.id);
+          });
+      }
+      
+      const profile = getPlayerProfile();
+      const lore = checkLoreUnlocks(state, profile);
+      lore.forEach(l => {
+          if (unlockLore(l.id)) {
+             setFeedbackQueue(prev => [...prev, { id: uuidv4(), type: 'LORE_UNLOCK', title: l.title }]);
+          }
+      });
+  }, [state.lastTurnMedals, state.stats]);
+
+  // Handle Medal Queue Timer
+  useEffect(() => {
+      if (medalQueue.length > 0) {
           const timer = setTimeout(() => {
-               const res = executeAutoCascade(state.grid, state.gridSize, state.cascadeStep || 0, state.effectCounters);
-               if (res.occurred) {
-                   dispatch({ type: 'CASCADE_STEP', payload: { grid: res.grid, rewards: res.rewards, lootEvents: res.lootEvents } });
-                   audioService.playCascade(state.cascadeStep || 0);
-               } else {
-                   dispatch({ type: 'CASCADE_COMPLETE' });
-               }
-          }, 300); 
+              setMedalQueue(prev => prev.slice(1));
+          }, 2000);
           return () => clearTimeout(timer);
       }
-  }, [state.isCascading, state.grid, state.cascadeStep, view]);
+  }, [medalQueue]);
 
-  const dismissTutorial = () => {
-      setShowTutorial(false);
-      completeTutorial();
-  };
-
-  const removeFeedback = (id: string) => {
-      setFeedbackQueue(prev => prev.filter(e => e.id !== id));
-  };
-  
-  const mergeEvents = state.grid.filter(t => t.mergedFrom).map(t => ({
-      id: t.id,
-      x: t.x,
-      y: t.y,
-      value: t.value,
-      type: t.type
-  }));
-
-  if (isLoading) {
-      return (
-          <div className="fixed inset-0 bg-[#050505] flex flex-col items-center justify-center z-[100]">
-              <div className="w-24 h-24 mb-8 relative animate-pulse">
-                   <div className="absolute inset-0 bg-red-600 blur-2xl opacity-20"></div>
-                   <Skull size={96} className="text-red-900 relative z-10" />
-              </div>
-              <h1 className="text-4xl font-black text-transparent bg-clip-text bg-gradient-to-br from-yellow-200 to-red-700 fantasy-font mb-4 tracking-widest">
-                  DRAGON'S HOARD
-              </h1>
-              <div className="w-64 h-2 bg-slate-900 rounded-full overflow-hidden border border-slate-800">
-                  <div className="h-full bg-red-600 transition-all duration-300" style={{ width: `${loadingProgress}%` }}></div>
-              </div>
-              <div className="mt-4 flex items-center gap-2 text-slate-500 font-mono text-xs">
-                  <Loader2 size={12} className="animate-spin" /> Preparing Dungeon... {loadingProgress}%
-              </div>
-          </div>
-      );
+  if (loading) {
+      return <LoadingScreen progress={loadingProgress} />;
   }
 
-  return (
-    <LootProvider>
-      <div className={`fixed inset-0 w-full h-[100dvh] overflow-hidden bg-black select-none cursor-default touch-none flex flex-col`}>
-        {view === 'SPLASH' && (
-           <SplashScreen 
-              onStart={(selectedClass, mode, seed, difficulty, tileset) => {
-                  audioService.resume(); 
-                  if (mode === 'VERSUS') setView('VERSUS');
-                  else {
-                      dispatch({ type: 'RESTART', selectedClass, mode, seed, difficulty, tileset });
-                      setView('GAME');
-                  }
-              }} 
-              onContinue={() => { audioService.resume(); setView('GAME'); }}
-              onOpenLeaderboard={() => setView('LEADERBOARD')}
-              onOpenSettings={() => setView('SETTINGS')}
-              onOpenHelp={() => setView('HELP')}
-              onOpenGrimoire={() => setView('GRIMOIRE')}
-              hasSave={state.score > 0} 
-            />
-        )}
-        
-        {view === 'LEADERBOARD' && <Leaderboard onBack={() => setView('SPLASH')} />}
-        {view === 'HELP' && <HelpScreen onBack={() => setView('SPLASH')} />}
-        {view === 'VERSUS' && <VersusGame onBack={() => setView('SPLASH')} />}
-        {view === 'GRIMOIRE' && (
-            <Grimoire 
-                profile={getPlayerProfile()} 
-                onBack={() => setView('SPLASH')}
-                onSelectTileset={(id) => {}}
-            />
-        )}
-        {view === 'SETTINGS' && <Settings 
-              settings={state.settings}
-              onUpdateSettings={(s) => dispatch({ type: 'UPDATE_SETTINGS', settings: s })}
-              onBack={() => setView('SPLASH')} 
-              onClearData={() => { dispatch({ type: 'RESTART' }); setView('SPLASH'); }}
-        />}
-
-        {view === 'GAME' && (
-          <>
-            <motion.div 
-            className="fixed inset-0 z-0 bg-cover bg-center"
-            key={state.currentStage.name}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1, scale: 1.1 }}
-            transition={{ duration: 1.5 }}
-            style={{ backgroundImage: `url('${state.currentStage.backgroundUrl}')` }}
-            >
-              <div className={`absolute inset-0 bg-black/60 ${state.level >= 30 ? 'bg-black/80' : ''}`}></div>
-              <div className={`absolute inset-0 bg-gradient-to-t from-black via-transparent to-black/80`}></div>
-              {!lowPerformanceMode && (
-                  <div className="fog-wrapper"><div className="fog-piece"></div><div className="fog-piece"></div></div>
-              )}
-              {state.settings.graphicsQuality === 'HIGH' && <div className="scanlines"></div>}
-              <div className="vignette"></div>
-            </motion.div>
-
-            {/* Torch Effect Layer - Dynamic Opacity based on gameplay action */}
-            {state.settings.graphicsQuality === 'HIGH' && (
-                <div 
-                    className="torch-overlay"
-                    style={{ 
-                        opacity: 0.6 + (Math.min(state.combo, 20) * 0.02), // Base 0.6, up to 1.0 with combos
-                        transform: `scale(${1 + (Math.min(state.combo, 10) * 0.01)})` 
+  // View Routing
+  const renderView = () => {
+      switch(view) {
+          case 'SPLASH':
+              return (
+                <SplashScreen 
+                    onStart={(cls, mode, seed, diff, tileset) => {
+                        dispatch({ type: 'START_GAME', heroClass: cls, mode, seed, difficulty: diff, tileset });
+                        setView('GAME');
+                        setShowTutorial(true); 
+                        // Start Bounty Check if fresh start
+                        setBountyClaimed(false);
                     }}
-                ></div>
-            )}
-
-            <AmbientBackground graphicsQuality={state.settings.graphicsQuality} />
-            {state.settings.graphicsQuality === 'HIGH' && <div className="fog-layer"></div>}
-
-            <FeedbackLayer events={feedbackQueue} onDismiss={removeFeedback} />
-            <MedalFeed queue={medalQueue} />
-            {showTutorial && <TutorialOverlay onDismiss={dismissTutorial} />}
-
-            <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[90] flex flex-col gap-2 pointer-events-none w-full max-w-sm px-4">
-              <AnimatePresence>
-                  {notifications.map(n => (
-                      <motion.div
-                          key={n.id}
-                          initial={{ opacity: 0, y: -20, scale: 0.9 }}
-                          animate={{ opacity: 1, y: 0, scale: 1 }}
-                          exit={{ opacity: 0, scale: 0.9 }}
-                          className="bg-slate-900/90 border border-yellow-500/50 rounded-xl p-3 shadow-2xl flex items-center gap-3 backdrop-blur-md"
-                      >
-                          <div className="bg-yellow-500/20 p-2 rounded-full text-yellow-400"><CheckCircle size={20} /></div>
-                          <div>
-                              <div className="text-yellow-400 font-bold text-sm uppercase tracking-wide">{n.text}</div>
-                              {n.subtext && <div className="text-slate-300 text-xs">{n.subtext}</div>}
-                          </div>
-                      </motion.div>
-                  ))}
-              </AnimatePresence>
-            </div>
-
-            <div className={`relative z-10 flex flex-col h-full w-full mx-auto pb-safe
-                max-w-md md:max-w-xl lg:max-w-3xl xl:max-w-4xl
-                ${shakeIntensity === 1 ? 'animate-shake-sm' : ''}
-                ${shakeIntensity === 2 ? 'animate-shake-md' : ''}
-                ${shakeIntensity === 3 ? 'animate-shake-lg chromatic-shake' : ''}
-            `}>
-                <div className="flex-none px-2 pt-2 z-40">
-                    <HUD 
-                        score={state.score} 
-                        bestScore={state.bestScore} 
-                        level={state.level} 
-                        xp={state.xp} 
-                        gold={state.gold} 
-                        inventory={state.inventory}
-                        rerolls={state.rerolls}
-                        effectCounters={state.effectCounters}
-                        currentStage={state.currentStage}
-                        gameMode={state.gameMode}
-                        accountLevel={state.accountLevel}
-                        settings={state.settings}
-                        combo={state.combo}
-                        justLeveledUp={state.justLeveledUp}
-                        activeModifiers={state.activeModifiers}
-                        onOpenStore={() => setShowStore(true)}
-                        onUseItem={(item) => dispatch({ type: 'USE_ITEM', item })}
-                        onReroll={() => dispatch({ type: 'REROLL' })}
-                        onMenu={() => setView('SPLASH')}
-                        onOpenStats={() => setShowStats(true)}
-                    />
-                </div>
-
-                <div className="flex-1 flex flex-col items-center justify-center p-2 md:p-4 min-h-0">
-                    <div className="aspect-square w-full max-w-full max-h-full relative shadow-2xl rounded-xl">
-                        <Grid 
-                            grid={state.grid} 
-                            size={state.gridSize} 
-                            mergeEvents={mergeEvents} 
-                            lootEvents={state.lootEvents || []} 
-                            slideSpeed={state.settings.slideSpeed || 150}
-                            themeId={state.currentStage.themeId}
-                            graphicsQuality={state.settings.graphicsQuality}
-                            combo={state.combo}
-                            tilesetId={state.tilesetId}
-                        />
+                    onContinue={() => setView('GAME')}
+                    onOpenLeaderboard={() => setView('LEADERBOARD')}
+                    onOpenSettings={() => setView('SETTINGS')}
+                    onOpenHelp={() => setView('HELP')}
+                    onOpenGrimoire={() => setView('GRIMOIRE')}
+                    hasSave={!!localStorage.getItem('2048_rpg_state_v3')}
+                />
+              );
+          case 'LEADERBOARD': return <Leaderboard onBack={() => setView('SPLASH')} />;
+          case 'SETTINGS': return <Settings settings={state.settings} onUpdateSettings={(s) => dispatch({ type: 'UPDATE_SETTINGS', settings: s })} onBack={() => setView('SPLASH')} onClearData={() => { localStorage.removeItem('2048_rpg_state_v3'); setView('SPLASH'); }} />;
+          case 'HELP': return <HelpScreen onBack={() => setView('SPLASH')} />;
+          case 'GRIMOIRE': return <Grimoire profile={getPlayerProfile()} onBack={() => setView('SPLASH')} onSelectTileset={(id) => dispatch({ type: 'START_GAME', heroClass: state.selectedClass, mode: state.gameMode, tileset: id })} />;
+          case 'VERSUS': return <VersusGame onBack={() => setView('SPLASH')} />;
+          case 'GAME':
+              return (
+                <>
+                    {/* Full Screen Dynamic Environmental Background */}
+                    <DynamicBackground score={state.score} />
+                    
+                    {/* Fallback Ambient Layer for Particles */}
+                    <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none">
+                        <AmbientBackground graphicsQuality={state.settings.graphicsQuality} />
                     </div>
-                </div>
-            </div>
 
-            {showStore && (
-                <Store 
-                gold={state.gold} 
-                inventory={state.inventory} 
-                onClose={() => setShowStore(false)} 
-                onBuy={(item) => dispatch({ type: 'BUY_ITEM', item })}
-                onCraft={(recipe) => dispatch({ type: 'CRAFT_ITEM', recipe })}
-                onUseItem={(item) => dispatch({ type: 'USE_ITEM', item })}
-                shopState={state.shop}
-                />
-            )}
-
-            {showStats && (
-                <GameStatsModal 
-                    gameState={state} 
-                    onClose={() => setShowStats(false)} 
-                    nextLevelXp={getXpThreshold(state.level)} 
-                />
-            )}
-
-            {showDebug && (
-                <div className="fixed inset-0 z-[100] bg-black/80 flex items-center justify-center p-4">
-                    <div className="bg-slate-900 border-2 border-red-500 p-6 rounded-xl w-full max-w-md shadow-2xl">
-                        <h2 className="text-2xl font-bold text-red-500 mb-4 flex items-center gap-2"><Skull size={24}/> ADMIN CONSOLE</h2>
-                        <div className="grid grid-cols-2 gap-3">
-                            <button onClick={() => dispatch({ type: 'LOAD_GAME', state: { ...state, xp: state.xp + 10000 } })} className="p-3 bg-indigo-900 hover:bg-indigo-800 rounded font-mono text-xs">+10,000 XP</button>
-                            <button onClick={() => dispatch({ type: 'LOAD_GAME', state: { ...state, gold: state.gold + 5000 } })} className="p-3 bg-yellow-900 hover:bg-yellow-800 rounded font-mono text-xs">+5,000 GOLD</button>
-                            <button onClick={() => {
-                                    let grid = [...state.grid];
-                                    const targets = grid.filter(t => t.type === TileType.NORMAL);
-                                    if (targets.length > 0) {
-                                        const t = targets[0];
-                                        t.type = TileType.BOSS; t.value = 0; t.health = 500; t.maxHealth = 500;
-                                    }
-                                    dispatch({ type: 'LOAD_GAME', state: { ...state, grid, logs: [...state.logs, "DEBUG: BOSS SPAWNED"] } });
-                                }} className="p-3 bg-red-900 hover:bg-red-800 rounded font-mono text-xs">SPAWN BOSS</button>
-                            <button onClick={() => { dispatch({ type: 'LOAD_GAME', state: { ...state, gameOver: true } }); setShowDebug(false); }} className="p-3 bg-slate-700 hover:bg-slate-600 rounded font-mono text-xs">TRIGGER DEFEAT</button>
-                            <button onClick={() => setShowDebug(false)} className="p-3 bg-slate-800 hover:bg-slate-700 rounded font-mono text-xs col-span-2">CLOSE CONSOLE</button>
+                    <div className="relative w-full h-full max-w-lg mx-auto flex flex-col p-2 md:p-4 z-10">
+                        <div className="relative z-10 flex flex-col h-full">
+                            <HUD 
+                                score={state.score}
+                                bestScore={Math.max(state.score, state.bestScore)}
+                                level={state.level}
+                                xp={state.xp}
+                                gold={state.gold}
+                                inventory={state.inventory}
+                                rerolls={state.rerolls}
+                                effectCounters={state.effectCounters}
+                                currentStage={state.currentStage}
+                                gameMode={state.gameMode}
+                                accountLevel={state.accountLevel}
+                                settings={state.settings}
+                                combo={state.combo}
+                                justLeveledUp={state.justLeveledUp}
+                                activeModifiers={state.activeModifiers}
+                                shopState={state.shop}
+                                challengeTarget={!bountyClaimed ? challengeTarget : null}
+                                onOpenStore={() => setShowStore(true)}
+                                onUseItem={(item) => {
+                                    const idx = state.inventory.indexOf(item);
+                                    if (idx > -1) setItemFeedback({ slot: idx, status: 'SUCCESS', id: uuidv4() });
+                                    dispatch({ type: 'USE_ITEM', item });
+                                }}
+                                onReroll={() => dispatch({ type: 'REROLL' })}
+                                onMenu={() => setView('SPLASH')}
+                                onOpenStats={() => setShowStats(true)}
+                                itemFeedback={itemFeedback}
+                            />
+                            
+                            <div className="flex-1 flex flex-col justify-center relative">
+                                 <Grid 
+                                    grid={state.grid} 
+                                    size={state.gridSize} 
+                                    mergeEvents={[]} 
+                                    lootEvents={state.lootEvents}
+                                    slideSpeed={state.settings.slideSpeed} 
+                                    themeId={state.currentStage.themeId}
+                                    graphicsQuality={state.settings.graphicsQuality}
+                                    combo={state.combo}
+                                    tilesetId={state.tilesetId}
+                                    onTileClick={state.targetingMode ? (id, row) => dispatch({ type: 'TILE_INTERACT', id, row }) : undefined}
+                                 />
+                            </div>
                         </div>
+                        
+                        {/* Overlays */}
+                        {showStore && (
+                            <Store 
+                                gold={state.gold} 
+                                inventory={state.inventory} 
+                                onClose={() => setShowStore(false)}
+                                onBuy={(item) => dispatch({ type: 'BUY_ITEM', item })}
+                                onCraft={(recipe) => dispatch({ type: 'CRAFT_ITEM', recipe })}
+                                onUseItem={(item) => dispatch({ type: 'USE_ITEM', item })}
+                                shopState={state.shop}
+                            />
+                        )}
+                        
+                        {showStats && (
+                            <GameStatsModal 
+                                gameState={state} 
+                                onClose={() => setShowStats(false)} 
+                                nextLevelXp={getNextLevelXp(state.accountLevel)} 
+                            />
+                        )}
+                        
+                        {showTutorial && <TutorialOverlay onDismiss={() => setShowTutorial(false)} />}
+                        <FeedbackLayer events={feedbackQueue} onDismiss={(id) => setFeedbackQueue(q => q.filter(e => e.id !== id))} />
+                        <MedalFeed queue={medalQueue} />
+                        
+                        {(state.gameOver || state.gameWon) && (
+                            state.gameWon ? 
+                            <VictoryScreen gameState={state} onContinue={() => dispatch({ type: 'RESTORE_STATE', state: { ...state, gameWon: false } })} onHome={() => setView('SPLASH')} /> :
+                            <RunSummary gameState={state} onRestart={() => dispatch({ type: 'RESTART' })} onShowLeaderboard={() => setView('LEADERBOARD')} onHome={() => setView('SPLASH')} />
+                        )}
                     </div>
-                </div>
-            )}
+                </>
+              );
+      }
+  };
 
-            {state.gameOver && (
-                <RunSummary gameState={state} onRestart={() => dispatch({ type: 'RESTART' })} onShowLeaderboard={() => setView('LEADERBOARD')} onHome={() => setView('SPLASH')} />
-            )}
-            
-            {state.victory && (
-                <VictoryScreen 
-                    gameState={state} 
-                    onContinue={() => dispatch({ type: 'CONTINUE' })}
-                    onHome={() => setView('SPLASH')}
-                />
-            )}
-          </>
-        )}
-      </div>
-    </LootProvider>
+  return <>{renderView()}</>;
+};
+
+const App: React.FC = () => {
+  return (
+    <div className="fixed inset-0 bg-[#050505] text-slate-200 font-sans overflow-hidden select-none">
+        <LootProvider>
+            <GameContent />
+        </LootProvider>
+    </div>
   );
 };
 

@@ -1,15 +1,42 @@
+
 <!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <title>Dragon's Hoard 2048</title>
+    
+    <!-- Facebook Instant Games SDK -->
+    <script src="https://connect.facebook.net/en_US/fbinstant.6.3.js"></script>
+    
+    <!-- Meta Pixel Code -->
+    <script>
+      !function(f,b,e,v,n,t,s)
+      {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+      n.callMethod.apply(n,arguments):n.queue.push(arguments)};
+      if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
+      n.queue=[];t=b.createElement(e);t.async=!0;
+      t.src=v;s=b.getElementsByTagName(e)[0];
+      s.parentNode.insertBefore(t,s)}(window, document,'script',
+      'https://connect.facebook.net/en_US/fbevents.js');
+      fbq('init', '1734049544181820'); 
+      fbq('track', 'PageView');
+    </script>
+    <noscript><img height="1" width="1" style="display:none"
+      src="https://www.facebook.com/tr?id=1734049544181820&ev=PageView&noscript=1"
+    /></noscript>
+    <!-- End Meta Pixel Code -->
+
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
       @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700;900&family=Lato:wght@400;700&display=swap');
       
       :root {
-        /* Mouse variables removed as they are no longer needed for the torch */
+        /* Biome Colors Variables */
+        --biome-outskirts: #0f172a;
+        --biome-threshold: #1c1917;
+        --biome-hall: #1e1b4b;
+        --biome-hoard: #451a03;
       }
 
       body {
@@ -17,40 +44,79 @@
         background-color: #050505;
         color: #e2e8f0;
         overflow: hidden; /* Prevent scrolling on mobile swipes */
-        touch-action: none;
+        touch-action: none; /* Disable browser handling of gestures */
+        user-select: none; /* Prevent text highlighting during play */
+        -webkit-user-select: none;
       }
       
       h1, h2, h3, .fantasy-font {
         font-family: 'Cinzel', serif;
       }
 
-      /* Torch Effect Overlay - Subtle, Breathing, Centered */
-      @keyframes torchBreathe {
-        0%, 100% { opacity: 0.8; transform: scale(1); }
-        50% { opacity: 1; transform: scale(1.05); }
+      /* Badge Pulse Animation */
+      @keyframes badgePulse {
+        0% { transform: scale(1); box-shadow: 0 0 0 rgba(255, 0, 0, 0); }
+        50% { transform: scale(1.4); box-shadow: 0 0 10px rgba(255, 0, 0, 0.5); }
+        100% { transform: scale(1); box-shadow: 0 0 0 rgba(255, 0, 0, 0); }
+      }
+      .animate-badge-pulse {
+        animation: badgePulse 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
       }
 
-      .torch-overlay {
+      /* --- DYNAMIC ATMOSPHERE ANIMATIONS --- */
+
+      /* Outskirts: Rolling Fog - Improved for Seamless Scroll */
+      @keyframes fogFlow {
+        0% { transform: translateX(0); opacity: 0.3; }
+        50% { opacity: 0.5; }
+        100% { transform: translateX(-100%); opacity: 0.3; } /* Assuming background repeats */
+      }
+      .bg-fog-layer {
+        background: url('https://www.transparenttextures.com/patterns/foggy-birds.png'); /* Subtle noise pattern */
+        width: 200%; /* Make it wider so it can scroll seamlessly */
+        height: 100%;
         position: absolute;
-        inset: -50%; /* Extend beyond bounds to ensure gradient covers well */
-        width: 200%;
-        height: 200%;
-        pointer-events: none;
-        background: radial-gradient(
-          circle at 50% 50%,
-          rgba(255, 160, 60, 0.06) 0%,
-          rgba(100, 50, 20, 0.02) 40%,
-          transparent 70%
-        );
-        z-index: 45;
-        mix-blend-mode: screen;
-        transition: opacity 0.5s ease-out, transform 0.5s ease-out;
-        animation: torchBreathe 6s infinite ease-in-out;
+        top: 0; left: 0;
+        animation: fogFlow 60s linear infinite;
+      }
+
+      /* Threshold: Torch Flicker */
+      @keyframes torchFlicker {
+        0%, 100% { opacity: 0.1; transform: scale(1); }
+        25% { opacity: 0.15; transform: scale(1.02); }
+        50% { opacity: 0.1; transform: scale(0.98); }
+        75% { opacity: 0.18; transform: scale(1.01); }
+      }
+      .bg-torch-light {
+        background: radial-gradient(circle at 50% 50%, rgba(255, 160, 60, 0.15) 0%, transparent 70%);
+        animation: torchFlicker 4s infinite ease-in-out;
+      }
+
+      /* Hoard: Gold Shimmer */
+      @keyframes goldShimmer {
+        0% { transform: translateX(-150%) skewX(-20deg); }
+        100% { transform: translateX(150%) skewX(-20deg); }
+      }
+      .bg-gold-shimmer {
+        position: absolute;
+        top: 0; left: 0; width: 100%; height: 100%;
+        background: linear-gradient(90deg, transparent 0%, rgba(255, 215, 0, 0.1) 50%, transparent 100%);
+        animation: goldShimmer 3s infinite linear;
       }
 
       /* Text Outline for Readability */
       .text-outline-black {
         text-shadow: -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000;
+      }
+      
+      .text-stroke-sm {
+        -webkit-text-stroke: 1px rgba(0,0,0,0.5);
+        paint-order: stroke fill;
+      }
+      
+      .text-stroke-md {
+        -webkit-text-stroke: 2px rgba(0,0,0,0.8);
+        paint-order: stroke fill;
       }
 
       /* CRT / Scanline Effect */
@@ -97,32 +163,76 @@
       .no-scrollbar::-webkit-scrollbar { display: none; }
       .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
-      /* Floating Text Animation - Enhanced */
-      @keyframes floatUpLoot {
-        0% { transform: translateY(0) scale(0.5); opacity: 0; }
-        20% { transform: translateY(-10px) scale(1.1); opacity: 1; }
+      /* Floating Text Animations - Clean Vertical Rise */
+      @keyframes floatUpFade {
+        0% { transform: translateY(0) scale(0.5); opacity: 0; filter: blur(2px); }
+        20% { transform: translateY(-15px) scale(1.2); opacity: 1; filter: blur(0); }
         100% { transform: translateY(-60px) scale(1); opacity: 0; }
       }
-
-      .animate-loot-float {
-        animation: floatUpLoot 1.2s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
-      }
+      .animate-float-xp { animation: floatUpFade 1.2s cubic-bezier(0.2, 0.8, 0.2, 1) forwards; }
+      .animate-float-gold { animation: floatUpFade 1.2s cubic-bezier(0.2, 0.8, 0.2, 1) forwards; }
+      .animate-loot-float { animation: floatUpFade 1.2s cubic-bezier(0.2, 0.8, 0.2, 1) forwards; }
 
       /* Tile Entry - Pop with overshoot */
       @keyframes popIn {
         0% { transform: scale(0); opacity: 0; }
-        60% { transform: scale(1.1); opacity: 1; }
+        60% { transform: scale(1.15); opacity: 1; }
         100% { transform: scale(1); opacity: 1; }
       }
-      .tile-animation-enter { animation: popIn 0.25s cubic-bezier(0.34, 1.56, 0.64, 1); }
+      .tile-animation-enter { animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
 
-      /* Merge Pulse */
-      @keyframes mergePulse {
-        0% { transform: scale(1); filter: brightness(1); }
-        40% { transform: scale(1.12); filter: brightness(1.5) contrast(1.2); box-shadow: 0 0 20px rgba(255,255,255,0.4); }
+      /* Dying Tile Exit - Shrink and Fade clearly */
+      @keyframes shrinkFadeOut {
+        0% { transform: scale(1); opacity: 1; filter: brightness(1.5); }
+        30% { transform: scale(1.1); opacity: 0.8; }
+        100% { transform: scale(0); opacity: 0; }
+      }
+      .tile-exit-animation { 
+        animation: shrinkFadeOut 0.25s ease-out forwards; 
+        z-index: 5 !important;
+      }
+
+      /* Improved Merge Pop - Dopamine inducing */
+      @keyframes mergePop {
+        0% { transform: scale(0.5); filter: brightness(1.5); }
+        50% { transform: scale(1.25); filter: brightness(2) contrast(1.2); box-shadow: 0 0 40px rgba(255,255,255,0.6); }
         100% { transform: scale(1); filter: brightness(1); box-shadow: 0 0 0 rgba(255,255,255,0); }
       }
-      .tile-animation-merge { animation: mergePulse 0.25s ease-in-out; z-index: 20; }
+      .tile-animation-merge { 
+        animation: mergePop 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; 
+        z-index: 30; 
+      }
+
+      /* Heavy Merge (32-256) - Slower, heavier */
+      @keyframes mergePopHeavy {
+        0% { transform: scale(0.8); filter: brightness(2); }
+        40% { transform: scale(1.35); filter: brightness(2.5) contrast(1.5); box-shadow: 0 0 60px rgba(255,200,50,0.5); }
+        100% { transform: scale(1); filter: brightness(1); }
+      }
+      .tile-animation-merge-heavy {
+        animation: mergePopHeavy 0.45s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+        z-index: 35;
+      }
+
+      /* Epic Merge (512+) - Massive shake and flash */
+      @keyframes mergePopEpic {
+        0% { transform: scale(0.2) rotate(45deg); filter: brightness(3) sepia(1); opacity: 0.5; }
+        60% { transform: scale(1.5) rotate(0deg); filter: brightness(3) contrast(2); box-shadow: 0 0 100px rgba(255,255,255,0.9); opacity: 1; }
+        100% { transform: scale(1); filter: brightness(1); opacity: 1; }
+      }
+      .tile-animation-merge-epic {
+        animation: mergePopEpic 0.6s cubic-bezier(0.19, 1, 0.22, 1) forwards;
+        z-index: 40;
+      }
+
+      /* Shockwave Ripple */
+      @keyframes ripple {
+        0% { transform: scale(0.8); opacity: 0.8; border-width: 4px; }
+        100% { transform: scale(2); opacity: 0; border-width: 0px; }
+      }
+      .animate-ripple {
+        animation: ripple 0.5s cubic-bezier(0.215, 0.61, 0.355, 1) forwards;
+      }
 
       /* XP Bar Glow Pulse */
       @keyframes barGlow {
@@ -138,6 +248,8 @@
         75% { transform: translate(1px, -1px); }
       }
       .animate-shake-sm { animation: shakeSmall 0.2s ease-in-out; } 
+      .animate-shake-md { animation: shakeSmall 0.3s ease-in-out infinite; } 
+      .animate-shake-lg { animation: shakeSmall 0.4s ease-in-out infinite; }
 
       /* XP Bar Shimmer */
       @keyframes shimmer {
@@ -147,6 +259,13 @@
       .animate-shimmer {
         animation: shimmer 2s linear infinite;
       }
+
+      /* Level Up Sunburst */
+      @keyframes spinSlow {
+        from { transform: translate(-50%, -50%) rotate(0deg); }
+        to { transform: translate(-50%, -50%) rotate(360deg); }
+      }
+      .animate-spin-slow { animation: spinSlow 20s linear infinite; }
 
       /* God Tile Pulse */
       @keyframes godwave {
@@ -197,7 +316,11 @@
     "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.1/",
     "lucide-react": "https://aistudiocdn.com/lucide-react@^0.556.0",
     "uuid": "https://aistudiocdn.com/uuid@^13.0.0",
-    "framer-motion": "https://aistudiocdn.com/framer-motion@^11.0.0"
+    "framer-motion": "https://aistudiocdn.com/framer-motion@^11.0.0",
+    "@google/genai": "https://esm.sh/@google/genai@^1.34.0",
+    "path": "https://esm.sh/path@^0.12.7",
+    "vite": "https://esm.sh/vite@^7.3.0",
+    "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@^5.1.2"
   }
 }
 </script>

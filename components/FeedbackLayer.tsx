@@ -62,7 +62,12 @@ export const FeedbackLayer: React.FC<FeedbackLayerProps> = ({ events, onDismiss 
                 );
             case 'LEVEL_UP':
                 return (
-                    <div className="flex flex-col items-center justify-center text-center animate-in zoom-in-50 duration-500 pointer-events-none">
+                    <div className="flex flex-col items-center justify-center text-center animate-in zoom-in-50 duration-500 pointer-events-none relative">
+                        {/* Sunburst Background */}
+                        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] pointer-events-none -z-10 opacity-30">
+                             <div className="w-full h-full bg-[conic-gradient(from_0deg,transparent_0_10deg,rgba(251,191,36,0.3)_10deg_20deg,transparent_20deg_30deg,rgba(251,191,36,0.3)_30deg_40deg,transparent_40deg)] rounded-full animate-spin-slow mask-image-radial"></div>
+                        </div>
+
                         <div className="relative">
                             <Star size={120} className="text-yellow-500 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 blur-2xl opacity-50 animate-pulse" />
                             <h1 className="relative z-10 text-6xl md:text-9xl font-black text-transparent bg-clip-text bg-gradient-to-b from-yellow-100 via-amber-400 to-yellow-700 fantasy-font drop-shadow-[0_0_40px_rgba(251,191,36,0.6)] filter">

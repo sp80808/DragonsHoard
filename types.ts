@@ -57,6 +57,17 @@ export enum HeroClass {
   DRAGON_SLAYER = 'DRAGON_SLAYER' // Starts with Siege Breaker (Unlocked by winning)
 }
 
+export type AbilityType = 'SCORCH' | 'DRAGON_BREATH' | 'GOLDEN_EGG';
+
+export interface AbilityState {
+    id: AbilityType;
+    isUnlocked: boolean;
+    charges: number; // For passives, this tracks unused charges if needed
+    maxCharges: number;
+    cooldown: number; // Turns until auto-trigger
+    currentCooldown: number;
+}
+
 export type GameMode = 'RPG' | 'CLASSIC' | 'VERSUS' | 'DAILY' | 'BOSS_RUSH';
 export type Difficulty = 'NORMAL' | 'HARD';
 
@@ -93,6 +104,7 @@ export interface Tile {
   health?: number;
   maxHealth?: number;
   bossThemeId?: string; // To render unique boss images
+  isDying?: boolean; // For exit animations (Dragon Breath)
 }
 
 export interface Stage {
@@ -178,6 +190,7 @@ export interface PlayerProfile {
   activeTilesetId: string;
   unlockedLore: string[]; // IDs of unlocked story fragments
   earnedMedals: Record<string, number>; // Medal ID -> Count
+  unlockedPowerups: AbilityType[]; // Persistent unlocks
 }
 
 export interface Achievement {
@@ -194,6 +207,7 @@ export interface StoryEntry {
     id: string;
     title: string;
     text: string;
+    imageUrl?: string; // New: Visuals for lore
     unlockCondition: (stats: GameStats, state: GameState, profile: PlayerProfile) => boolean;
     order: number;
 }
@@ -204,12 +218,18 @@ export interface InputSettings {
   enableKeyboard: boolean;
   enableSwipe: boolean;
   enableScroll: boolean;
+  enableHaptics: boolean; 
   invertSwipe: boolean;
   invertScroll: boolean;
   sensitivity: number; // 1-10 (For scroll/swipe threshold)
   enableTooltips: boolean;
   slideSpeed: number; // ms duration for tile movement
-  graphicsQuality: GraphicsQuality; // Replaces lowPerformanceMode
+  graphicsQuality: GraphicsQuality;
+  
+  // Enhanced Depth Settings
+  enableScreenShake: boolean;
+  enableParticles: boolean;
+  reduceMotion: boolean;
 }
 
 export interface ShopItemState {
@@ -278,6 +298,10 @@ export interface GameState {
   activeModifiers: DailyModifier[]; // New: List of active modifiers for Daily/Challenge runs
   lootEvents: LootEvent[];
   lastTurnMedals: Medal[]; // Medals earned in the most recent move (cleared by UI)
+  
+  // Powerup System
+  abilities: Record<AbilityType, AbilityState>;
+  targetingMode: AbilityType | null; // Keep for legacy compatibility but generally unused for passives
 }
 
 export interface MoveResult {
@@ -295,6 +319,7 @@ export interface MoveResult {
   bossDefeated: boolean;
   lootEvents: LootEvent[];
   medalsEarned: Medal[];
+  abilitiesTriggered: string[]; 
 }
 
 export interface LootResult {
@@ -313,7 +338,7 @@ export interface LeaderboardEntry {
     mode?: GameMode;
 }
 
-export type FeedbackType = 'LEVEL_UP' | 'BOSS_KILLED' | 'GRID_EXPAND' | 'UNLOCK' | 'ACHIEVEMENT' | 'LORE_UNLOCK';
+export type FeedbackType = 'LEVEL_UP' | 'BOSS_KILLED' | 'GRID_EXPAND' | 'UNLOCK' | 'ACHIEVEMENT' | 'LORE_UNLOCK' | 'POWERUP_UNLOCK' | 'PASSIVE_TRIGGER';
 
 export interface FeedbackEvent {
     id: string;

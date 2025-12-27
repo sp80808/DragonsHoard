@@ -1,6 +1,5 @@
 
-import { TILE_STYLES, BOSS_STYLE, RUNE_STYLES, MUSIC_PATHS, STAGES, getStageBackground, THEME_STYLES } from '../constants';
-import { audioService } from './audioService';
+import { TILE_STYLES, BOSS_STYLE, RUNE_STYLES, STAGES, getStageBackground, THEME_STYLES } from '../constants';
 
 // In-memory cache to prevent redundant fetches
 const assetCache = new Map<string, Promise<void>>();
@@ -60,23 +59,24 @@ const loadImage = (url: string): Promise<void> => {
     return promise;
 };
 
-const loadAudio = (key: string, url: string): Promise<void> => {
-    const cacheKey = `audio:${key}`;
-    if (assetCache.has(cacheKey)) return assetCache.get(cacheKey)!;
-
-    const promise = audioService.loadTrack(key, url);
-    assetCache.set(cacheKey, promise);
-    return promise;
-};
-
 // Loads essential assets needed for the Splash Screen and immediate Gameplay start
 export const loadCriticalAssets = async (onProgress: (percent: number) => void, startThemeId: string = 'DEFAULT') => {
     let loadedCount = 0;
     
     // 1. Collect Image URLs (Visuals are critical)
     const imagesToLoad = [
-        // SPLASH BACKGROUND - Explicitly loaded here
+        // SPLASH BACKGROUND
         'https://image.pollinations.ai/prompt/mysterious%20dark%20fantasy%20dungeon%20entrance%20environment%20art%20no%20text%20scenery?width=1024&height=1024&nologo=true&seed=99',
+        
+        // DYNAMIC BACKGROUND TEXTURES (Explicitly preloading to prevent pop-in)
+        'https://www.transparenttextures.com/patterns/stardust.png',
+        'https://www.transparenttextures.com/patterns/dark-stone.png',
+        'https://www.transparenttextures.com/patterns/diagmonds-light.png',
+        'https://www.transparenttextures.com/patterns/black-scales.png',
+        'https://www.transparenttextures.com/patterns/gold-scale.png',
+        'https://www.transparenttextures.com/patterns/foggy-birds.png', // Used for fog layer
+
+        // GAME ASSETS
         ...Object.values(TILE_STYLES).map(s => s.imageUrl),
         BOSS_STYLE.imageUrl,
         ...Object.values(RUNE_STYLES).map(s => s.imageUrl),
@@ -89,16 +89,7 @@ export const loadCriticalAssets = async (onProgress: (percent: number) => void, 
         imagesToLoad.push(...themeAssets);
     }
 
-    // 2. Collect Critical Audio (Splash + First Gameplay Track)
-    const audioToLoad = [
-        { key: 'SPLASH', url: MUSIC_PATHS.SPLASH }
-    ];
-
-    if (MUSIC_PATHS.GAMEPLAY && MUSIC_PATHS.GAMEPLAY.length > 0) {
-        audioToLoad.push({ key: 'GAMEPLAY_0', url: MUSIC_PATHS.GAMEPLAY[0] });
-    }
-
-    const totalAssets = imagesToLoad.length + audioToLoad.length;
+    const totalAssets = imagesToLoad.length;
     if (totalAssets === 0) {
         onProgress(100);
         return;
@@ -109,45 +100,26 @@ export const loadCriticalAssets = async (onProgress: (percent: number) => void, 
         onProgress(Math.min(100, Math.floor((loadedCount / totalAssets) * 100)));
     };
 
-    // 3. Execute Loads concurrently with fail-safety
+    // 2. Execute Loads concurrently with fail-safety
     const imagePromises = imagesToLoad.map(url => 
         retryOperation(() => loadImage(url), 'image')
         .then(updateProgress)
     );
 
-    const audioPromises = audioToLoad.map(track => 
-        retryOperation(() => loadAudio(track.key, track.url), 'audio')
-        .then(updateProgress)
-    );
-
-    await Promise.allSettled([...imagePromises, ...audioPromises]);
+    await Promise.allSettled([...imagePromises]);
     
     // Ensure 100% at end regardless of failures
     onProgress(100);
 };
 
-// Loads remaining audio tracks and ALL theme assets in the background
+// Loads ALL theme assets in the background
 export const loadBackgroundAssets = async () => {
-    const audioToLoad = [
-        { key: 'DEATH', url: MUSIC_PATHS.DEATH }
-    ];
-
-    if (MUSIC_PATHS.GAMEPLAY && MUSIC_PATHS.GAMEPLAY.length > 1) {
-        for (let i = 1; i < MUSIC_PATHS.GAMEPLAY.length; i++) {
-            audioToLoad.push({ key: `GAMEPLAY_${i}`, url: MUSIC_PATHS.GAMEPLAY[i] });
-        }
-    }
-
     const allThemeImages = Object.values(THEME_STYLES).flatMap(theme => 
         Object.values(theme).map((s: any) => s.imageUrl).filter(Boolean)
     );
 
     const visualPromises = allThemeImages.map(url => retryOperation(() => loadImage(url), 'theme_asset'));
 
-    const audioPromises = audioToLoad.map(track => 
-        retryOperation(() => loadAudio(track.key, track.url), 'bg_audio')
-    );
-
-    await Promise.allSettled([...visualPromises, ...audioPromises]);
+    await Promise.allSettled(visualPromises);
     console.log("Background assets loaded.");
 };

@@ -1,30 +1,44 @@
 
-
 class AudioService {
   private ctx: AudioContext | null = null;
-  private buffers: Record<string, AudioBuffer> = {};
   
   // Nodes
   private masterGain: GainNode | null = null;
-  private musicGain: GainNode | null = null;
+  private musicGain: GainNode | null = null; // Used for Drone
   private sfxGain: GainNode | null = null;
   
   // Reverb
   private reverbNode: ConvolverNode | null = null;
   private reverbGain: GainNode | null = null;
   
-  // Active Nodes
-  private activeMusicSource: AudioBufferSourceNode | null = null;
-  private activeDroneSource: OscillatorNode | null = null;
-  private musicFilter: BiquadFilterNode | null = null;
+  // Active Drone Nodes
+  private droneOscillators: OscillatorNode[] = [];
+  private droneGain: GainNode | null = null;
+  private droneFilter: BiquadFilterNode | null = null;
+  private droneLFO: OscillatorNode | null = null;
 
   private enabled: boolean = true;
-  private volume: number = 0.5; // Boosted from 0.3
+  private volume: number = 0.5; 
   private musicVolume: number = 0.5; 
   
   private isInitialized = false;
 
-  constructor() {}
+  constructor() {
+      // Auto-bind resume to window interactions to fix audio blockage
+      if (typeof window !== 'undefined') {
+          const tryResume = () => {
+              this.resume();
+              if (this.ctx && this.ctx.state === 'running') {
+                  window.removeEventListener('click', tryResume);
+                  window.removeEventListener('touchstart', tryResume);
+                  window.removeEventListener('keydown', tryResume);
+              }
+          };
+          window.addEventListener('click', tryResume);
+          window.addEventListener('touchstart', tryResume);
+          window.addEventListener('keydown', tryResume);
+      }
+  }
 
   async init() {
     if (this.isInitialized) return;
@@ -44,7 +58,7 @@ class AudioService {
       // --- Setup Reverb (Procedural Hall) ---
       this.reverbNode = this.ctx!.createConvolver();
       this.reverbGain = this.ctx!.createGain();
-      this.reverbGain.gain.value = 0.3; // Reduced slightly for clarity
+      this.reverbGain.gain.value = 0.3; 
 
       // Generate Impulse Response (Dark Hall)
       const duration = 2.5;
@@ -74,25 +88,23 @@ class AudioService {
     }
   }
 
+  // Legacy method signature maintained for compatibility, but no longer loads external files.
   async loadTrack(key: string, url: string): Promise<void> {
-    if (!this.ctx) await this.init();
-    if (!this.ctx) return;
-
-    try {
-        const response = await fetch(url);
-        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-        const arrayBuffer = await response.arrayBuffer();
-        const audioBuffer = await this.ctx.decodeAudioData(arrayBuffer);
-        this.buffers[key] = audioBuffer;
-    } catch (e) {
-        console.warn(`Failed to load audio track: ${key} (${url})`);
-    }
+      // No-op: We are fully procedural now.
+      return Promise.resolve();
   }
 
   resume() {
+    if (!this.isInitialized) this.init();
     if (this.ctx && this.ctx.state === 'suspended') {
       this.ctx.resume();
     }
+  }
+
+  suspend() {
+      if (this.ctx && this.ctx.state === 'running') {
+          this.ctx.suspend();
+      }
   }
 
   setVolume(val: number) {
@@ -109,169 +121,118 @@ class AudioService {
 
   getMusicVolume() { return this.musicVolume; }
 
-  // --- Playback Control ---
+  // --- PROCEDURAL DRONE (Focus Music) ---
 
-  stopCurrentMusic(fadeOutDuration = 1.0) {
+  startDrone() {
+      if (!this.ctx || !this.enabled) return;
+      if (this.droneOscillators.length > 0) return; // Already playing
+
+      const t = this.ctx.currentTime;
+
+      this.droneGain = this.ctx.createGain();
+      // Reduced gain significantly to be subliminal/focus-aiding (approx -46dBFS)
+      this.droneGain.gain.value = 0.005; 
+      this.droneGain.connect(this.musicGain!);
+
+      // Lowpass Filter for that "underwater/focus" feel
+      // Restricting range to 80-200Hz to avoid mud but keep it deep
+      this.droneFilter = this.ctx.createBiquadFilter();
+      this.droneFilter.type = 'lowpass'; 
+      this.droneFilter.frequency.value = 80; 
+      this.droneFilter.connect(this.droneGain);
+
+      // Slow LFO to modulate filter - breathing effect
+      this.droneLFO = this.ctx.createOscillator();
+      this.droneLFO.type = 'sine';
+      this.droneLFO.frequency.value = 0.05; // Very slow (20s cycle)
+      
+      const lfoGain = this.ctx.createGain();
+      lfoGain.gain.value = 20; // Modulate cutoff very slightly (+/- 20Hz)
+      
+      this.droneLFO.connect(lfoGain);
+      lfoGain.connect(this.droneFilter.frequency);
+      this.droneLFO.start(t);
+
+      // Dual Oscillators for thick texture
+      // Tuned to ~40Hz (Gamma Range) which is associated with cognitive focus
+      // Osc 1: Deep Root (40Hz)
+      const osc1 = this.ctx.createOscillator();
+      osc1.type = 'sawtooth';
+      osc1.frequency.value = 40; 
+      osc1.connect(this.droneFilter);
+      osc1.start(t);
+      this.droneOscillators.push(osc1);
+
+      // Osc 2: Slight detune (40.5Hz) creates a 0.5Hz "breathing" phase
+      const osc2 = this.ctx.createOscillator();
+      osc2.type = 'sawtooth';
+      osc2.frequency.value = 40.5; 
+      osc2.connect(this.droneFilter);
+      osc2.start(t);
+      this.droneOscillators.push(osc2);
+
+      // Osc 3: Sub Sine (80Hz) - First harmonic support
+      const osc3 = this.ctx.createOscillator();
+      osc3.type = 'sine';
+      osc3.frequency.value = 80; 
+      osc3.connect(this.droneFilter);
+      osc3.start(t);
+      this.droneOscillators.push(osc3);
+  }
+
+  stopDrone() {
       if (!this.ctx) return;
       const t = this.ctx.currentTime;
       
-      // Stop File-based Music
-      if (this.activeMusicSource) {
-          try {
-             this.activeMusicSource.stop(t + fadeOutDuration);
-          } catch(e) {}
-          this.activeMusicSource = null;
-      }
-      
-      // Stop Drone
-      if (this.activeDroneSource) {
-          try {
-              this.activeDroneSource.stop(t + fadeOutDuration);
-          } catch(e) {}
-          this.activeDroneSource = null;
+      this.droneOscillators.forEach(osc => {
+          try { osc.stop(t + 1); } catch(e) {}
+      });
+      this.droneOscillators = [];
+
+      if (this.droneLFO) {
+          try { this.droneLFO.stop(t + 1); } catch(e) {}
+          this.droneLFO = null;
       }
 
-      this.musicFilter = null;
+      if (this.droneGain) {
+          this.droneGain.gain.setTargetAtTime(0, t, 0.5);
+      }
   }
 
+  // Replaces all previous "Play Track" methods
   playSplashTheme() {
       this.resume();
-      if (!this.enabled || !this.ctx) return;
-      this.stopCurrentMusic();
-      
-      if (!this.buffers['SPLASH']) return;
-
-      const source = this.ctx.createBufferSource();
-      source.buffer = this.buffers['SPLASH'];
-      source.loop = true;
-      source.loopStart = 0;
-      source.loopEnd = 62;
-      
-      const trackGain = this.ctx.createGain();
-      trackGain.gain.value = 0.5;
-
-      source.connect(trackGain);
-      trackGain.connect(this.musicGain!);
-      
-      source.start();
-      this.activeMusicSource = source;
+      this.startDrone();
   }
 
   playDeathTheme() {
-      this.resume();
-      if (!this.enabled || !this.ctx) return;
-      this.stopCurrentMusic();
-      
-      if (!this.buffers['DEATH']) return;
-
-      const source = this.ctx.createBufferSource();
-      source.buffer = this.buffers['DEATH'];
-      source.loop = true;
-
-      const trackGain = this.ctx.createGain();
-      trackGain.gain.value = 0.6; 
-
-      source.connect(trackGain);
-      trackGain.connect(this.musicGain!);
-      
-      source.start();
-      this.activeMusicSource = source;
-  }
-
-  // Fallback: Dark Drone Ambience using FM Synthesis
-  playAmbientDrone() {
-      if (!this.ctx) return;
-      
-      const t = this.ctx.currentTime;
-      const osc = this.ctx.createOscillator();
-      const lfo = this.ctx.createOscillator();
-      const gain = this.ctx.createGain();
-      const filter = this.ctx.createBiquadFilter();
-
-      osc.type = 'sawtooth';
-      osc.frequency.value = 55; // Low A
-
-      lfo.type = 'sine';
-      lfo.frequency.value = 0.1; // Slow modulation
-      
-      filter.type = 'lowpass';
-      filter.frequency.value = 200;
-      
-      // LFO modulate Filter Cutoff
-      const lfoGain = this.ctx.createGain();
-      lfoGain.gain.value = 100;
-      lfo.connect(lfoGain);
-      lfoGain.connect(filter.frequency);
-
-      gain.gain.value = 0.2;
-
-      osc.connect(filter);
-      filter.connect(gain);
-      gain.connect(this.musicGain!);
-
-      osc.start(t);
-      lfo.start(t);
-      
-      this.activeDroneSource = osc;
+      // Just keep the drone, maybe lower the filter to make it darker?
+      if (this.droneFilter && this.ctx) {
+          this.droneFilter.frequency.setTargetAtTime(60, this.ctx.currentTime, 1.0);
+      }
   }
 
   playGameplayTheme() {
       this.resume();
-      if (!this.enabled || !this.ctx) return;
-      this.stopCurrentMusic();
-      
-      // Pick random gameplay track
-      const availableTracks = Object.keys(this.buffers).filter(k => k.startsWith('GAMEPLAY_'));
-      
-      if (availableTracks.length === 0) {
-          this.playAmbientDrone();
-          return;
+      this.startDrone();
+      // Open up the filter slightly for gameplay, but keep under 200Hz limit
+      if (this.droneFilter && this.ctx) {
+          this.droneFilter.frequency.setTargetAtTime(150, this.ctx.currentTime, 1.0);
       }
-
-      const randomKey = availableTracks[Math.floor(Math.random() * availableTracks.length)];
-      const buffer = this.buffers[randomKey];
-      if (!buffer) return;
-
-      const source = this.ctx.createBufferSource();
-      source.buffer = buffer;
-      source.loop = true;
-
-      // Create Filter for Dynamic Intensity (Muffled -> Clear)
-      this.musicFilter = this.ctx.createBiquadFilter();
-      this.musicFilter.type = 'lowpass';
-      this.musicFilter.frequency.value = 400; // Start Audible but Muffled
-      this.musicFilter.Q.value = 0.5;
-
-      const trackGain = this.ctx.createGain();
-      trackGain.gain.value = 0.4;
-
-      // Connect: Source -> Filter -> Gain -> MusicMix
-      source.connect(this.musicFilter);
-      this.musicFilter.connect(trackGain);
-      trackGain.connect(this.musicGain!);
-
-      source.start();
-      this.activeMusicSource = source;
   }
 
-  /**
-   * Updates music intensity based on game state.
-   * @param intensity 0.0 to 1.0
-   */
   updateGameplayIntensity(intensity: number) {
-      if (!this.musicFilter || !this.ctx) return;
-      
+      if (!this.droneFilter || !this.ctx) return;
       const t = this.ctx.currentTime;
       
-      // Map intensity to Filter Opening (400Hz -> 3000Hz)
-      const minFreq = 400;
-      const maxFreq = 3000;
+      // Map intensity to Filter Opening (80Hz -> 200Hz)
+      const minFreq = 80;
+      const maxFreq = 200;
       const clamped = Math.max(0, Math.min(1, intensity));
       
       const targetFreq = minFreq + (clamped * (maxFreq - minFreq));
       
-      // Use shorter ramp for reactiveness
-      this.musicFilter.frequency.setTargetAtTime(targetFreq, t, 0.5);
+      this.droneFilter.frequency.setTargetAtTime(targetFreq, t, 0.5);
   }
 
   // --- SOUND EFFECTS (SYNTHESIS) ---
@@ -486,26 +447,60 @@ class AudioService {
       this.resume();
       if (!this.enabled || !this.ctx) return;
       
-      // 1. Base Sound based on Value
-      if (value >= 2048) {
-          this.playGodChord();
-      } else if (value >= 512) {
-          this.playCrunch(); // Heavy impact for high tiers
+      const t = this.ctx.currentTime;
+
+      // Tier 3: God / Legendary (512+)
+      if (value >= 512) {
+          if (value >= 2048) {
+              this.playGodChord();
+          } else {
+              this.playCrunch(); // Heavy impact
+          }
+          
+      // Tier 2: Mid Range (32 - 256) - Crunchy FM Synth
+      } else if (value >= 32) {
+          const osc = this.ctx.createOscillator();
+          const mod = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+          const modGain = this.ctx.createGain();
+          
+          osc.connect(gain);
+          mod.connect(modGain);
+          modGain.connect(osc.frequency);
+          gain.connect(this.sfxGain!);
+
+          osc.type = 'square';
+          mod.type = 'sawtooth';
+
+          const baseFreq = 100 + (Math.log2(value) * 20);
+          osc.frequency.setValueAtTime(baseFreq, t);
+          osc.frequency.exponentialRampToValueAtTime(baseFreq * 0.5, t + 0.3);
+
+          mod.frequency.setValueAtTime(50, t);
+          modGain.gain.setValueAtTime(200, t);
+          modGain.gain.linearRampToValueAtTime(0, t + 0.3);
+
+          gain.gain.setValueAtTime(0.25, t);
+          gain.gain.exponentialRampToValueAtTime(0.001, t + 0.3);
+
+          osc.start(t);
+          mod.start(t);
+          osc.stop(t + 0.3);
+          mod.stop(t + 0.3);
+
+      // Tier 1: Low Range (2 - 16) - Simple Pluck
       } else {
-          // Standard "Bloop" for lower tiers
-          const t = this.ctx.currentTime;
           const osc = this.ctx.createOscillator();
           const gain = this.ctx.createGain();
           osc.connect(gain);
           gain.connect(this.sfxGain!);
           
-          osc.type = 'sine';
-          const baseFreq = 220 + (Math.log2(value) * 50);
+          osc.type = 'triangle'; // Softer than sine for game feel
+          const baseFreq = 220 + (Math.log2(value) * 60);
           osc.frequency.setValueAtTime(baseFreq, t);
-          osc.frequency.exponentialRampToValueAtTime(baseFreq * 1.5, t + 0.1);
+          osc.frequency.exponentialRampToValueAtTime(baseFreq * 1.2, t + 0.1);
           
-          gain.gain.setValueAtTime(0.3, t); // Boosted
-          // Smoother fade out
+          gain.gain.setValueAtTime(0.2, t); 
           gain.gain.exponentialRampToValueAtTime(0.001, t + 0.15);
           
           osc.start(t);

@@ -2,7 +2,10 @@
 import React, { useEffect, useState } from 'react';
 import { GameState, PlayerProfile, HeroClass } from '../types';
 import { finalizeRun, getNextLevelXp, UnlockReward } from '../services/storageService';
+import { generateFallbackStory } from '../services/gameLogic';
 import { MEDALS } from '../constants';
+import { GoogleGenAI } from "@google/genai";
+import { facebookService } from '../services/facebookService';
 import { 
   Trophy, 
   Play, 
@@ -17,7 +20,8 @@ import {
   Share2,
   Sparkles as SparklesIcon,
   Medal as MedalIcon,
-  Ghost, Flame, Droplets, Zap, Star, Settings, Sword, Heart, Unlock, Palette
+  Ghost, Flame, Droplets, Zap, Star, Settings, Sword, Heart, Unlock, Palette,
+  Feather, MessageCircle
 } from 'lucide-react';
 
 interface Props {
@@ -33,6 +37,10 @@ export const RunSummary: React.FC<Props> = ({ gameState, onRestart, onShowLeader
   const [displayedXp, setDisplayedXp] = useState(0);
   const [runXp, setRunXp] = useState(0);
   const [newUnlocks, setNewUnlocks] = useState<UnlockReward[]>([]);
+  
+  // Story Generation State
+  const [story, setStory] = useState<string>('');
+  const [isStoryLoading, setIsStoryLoading] = useState(false);
 
   // Auto-save on mount
   useEffect(() => {
@@ -51,7 +59,46 @@ export const RunSummary: React.FC<Props> = ({ gameState, onRestart, onShowLeader
         setDisplayedXp(newProfile.totalAccountXp);
     }, 500);
 
+    generateStory();
+
   }, []);
+
+  const generateStory = async () => {
+      try {
+          setIsStoryLoading(true);
+          const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+          
+          const prompt = `
+            Write a very short, dark fantasy obituary (max 2 sentences) for a ${gameState.selectedClass} named "The Hero" who died in the ${gameState.currentStage.name}.
+            
+            Run Stats:
+            - Reached Account Level: ${profile?.accountLevel || gameState.level}
+            - Bosses Slain: ${gameState.runStats.bossesDefeated}
+            - Gold Hoarded: ${gameState.runStats.goldEarned}
+            - Highest Combo: ${gameState.stats.highestCombo}
+            
+            Tone: Somber, epic, slightly poetic. Focus on their demise or their greed. Do not use hashtags.
+          `;
+
+          const response = await ai.models.generateContent({
+            model: 'gemini-3-flash-preview',
+            contents: prompt,
+          });
+
+          if (response.text) {
+              setStory(response.text.trim());
+          }
+      } catch (error) {
+          console.error("Failed to generate story, using fallback.");
+          setStory(generateFallbackStory(gameState));
+      } finally {
+          setIsStoryLoading(false);
+      }
+  };
+
+  const handleChallenge = () => {
+      facebookService.challengeFriend(gameState.score, gameState.selectedClass);
+  };
 
   if (!profile) return null;
 
@@ -94,24 +141,6 @@ export const RunSummary: React.FC<Props> = ({ gameState, onRestart, onShowLeader
           return <Palette size={18} />;
       }
       return <Unlock size={18} />;
-  };
-
-  const handleShare = () => {
-      const summary = [
-          `🐉 Dragon's Hoard - Run Summary 💀`,
-          `Class: ${gameState.selectedClass}`,
-          `Score: ${gameState.score.toLocaleString()}`,
-          `Max Combo: x${gameState.stats.highestCombo}`,
-          `Gold Earned: ${gameState.runStats.goldEarned}`,
-          `Level Reached: ${gameState.level}`,
-          `Play now!`
-      ].join('\n');
-
-      navigator.clipboard.writeText(summary).then(() => {
-          alert("📋 Run summary copied to clipboard!");
-      }).catch(() => {
-          alert("Failed to copy. Share your score manually!");
-      });
   };
 
   return (
@@ -190,17 +219,17 @@ export const RunSummary: React.FC<Props> = ({ gameState, onRestart, onShowLeader
 
               <div className="mt-auto flex gap-4 w-full pt-4">
                    <button 
-                        onClick={handleShare}
-                        className="flex-1 py-3 bg-slate-800/50 hover:bg-slate-700/50 text-slate-400 hover:text-white border border-slate-700 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all hover:scale-105"
+                        onClick={handleChallenge}
+                        className="flex-1 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all hover:scale-105 shadow-lg shadow-blue-900/20"
                    >
-                       <Share2 size={16} /> SHARE LEGEND
+                       <MessageCircle size={16} /> CHALLENGE FRIENDS
                    </button>
               </div>
            </div>
         </div>
 
         {/* RIGHT COLUMN: THE LEGACY (Progression) */}
-        <div className="w-full md:w-5/12 bg-slate-950 border-t md:border-t-0 md:border-l border-red-900/30 relative flex flex-col">
+        <div className="w-full md:w-5/12 bg-slate-950 border-t md:border-t-0 md:border-l border-red-900/30 relative flex flex-col overflow-y-auto custom-scrollbar">
             
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,_var(--tw-gradient-stops))] from-red-900/10 via-transparent to-transparent pointer-events-none"></div>
 
@@ -242,8 +271,8 @@ export const RunSummary: React.FC<Props> = ({ gameState, onRestart, onShowLeader
                     </div>
                 </div>
 
-                {/* Rewards List - REDESIGNED */}
-                <div className="flex-1 overflow-y-auto mb-6 pr-1 custom-scrollbar">
+                {/* Rewards List */}
+                <div className="w-full mb-6">
                     {leveledUp && newUnlocks.length > 0 ? (
                         <div className="space-y-3">
                             <h3 className="text-yellow-400 font-bold text-xs uppercase tracking-widest mb-3 flex items-center gap-2 pb-2 border-b border-yellow-500/20">
@@ -274,9 +303,27 @@ export const RunSummary: React.FC<Props> = ({ gameState, onRestart, onShowLeader
                             <div className="text-[10px] text-yellow-200/60 mt-1">Keep growing to unlock new powers.</div>
                         </div>
                     ) : (
-                        <div className="h-full flex items-center justify-center opacity-30 text-xs text-slate-500 font-serif italic text-center">
+                        <div className="h-full flex items-center justify-center opacity-30 text-xs text-slate-500 font-serif italic text-center py-4">
                             No new discoveries this run.<br/>Press on, adventurer.
                         </div>
+                    )}
+                </div>
+
+                {/* AI Story Section */}
+                <div className="mb-6 p-4 rounded-xl bg-slate-900/50 border border-slate-800/50 min-h-[80px] flex flex-col justify-center relative overflow-hidden group hover:bg-slate-900/80 transition-colors">
+                    <Feather size={60} className="absolute -right-4 -bottom-4 text-slate-800 opacity-20 rotate-[-20deg]" />
+                    {isStoryLoading ? (
+                        <div className="flex items-center gap-2 text-xs text-slate-500 animate-pulse">
+                            <Feather size={12} className="animate-bounce" /> Etching your tale...
+                        </div>
+                    ) : story ? (
+                        <div className="relative z-10 animate-in fade-in duration-1000">
+                            <p className="font-serif italic text-slate-400 text-xs leading-relaxed text-justify">
+                                "{story}"
+                            </p>
+                        </div>
+                    ) : (
+                        <div className="text-xs text-slate-600 italic">History has forgotten you...</div>
                     )}
                 </div>
 

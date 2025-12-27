@@ -1,7 +1,8 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { getXpThreshold, getLevelRank } from '../constants';
-import { Trophy, Star, Store as StoreIcon, Coins, RefreshCw, Menu, Clover, Skull, Zap, Info, HelpCircle, Flame, Hammer, Moon, Sun, Waves, Gem, Calendar } from 'lucide-react';
-import { InventoryItem, Stage, GameMode, InputSettings, DailyModifier } from '../types';
+
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { getXpThreshold, getLevelRank, SHOP_ITEMS } from '../constants';
+import { Trophy, Star, Store as StoreIcon, Coins, RefreshCw, Menu, Clover, Skull, Zap, Info, Flame, Hammer, Moon, Sun, Waves, Gem, Target } from 'lucide-react';
+import { InventoryItem, Stage, GameMode, InputSettings, DailyModifier, AbilityState, AbilityType, ShopState } from '../types';
 import { CountUp } from './CountUp';
 import { motion, AnimatePresence, useAnimation } from 'framer-motion';
 import { useLootSystem } from './LootSystem';
@@ -22,11 +23,14 @@ interface HUDProps {
   combo: number;
   justLeveledUp?: boolean;
   activeModifiers?: DailyModifier[];
+  shopState?: ShopState; 
+  challengeTarget?: { score: number, name: string } | null;
   onOpenStore: () => void;
   onUseItem: (item: InventoryItem) => void;
   onReroll: () => void;
   onMenu: () => void;
   onOpenStats: () => void;
+  itemFeedback?: { slot: number, status: 'SUCCESS' | 'ERROR', id: string };
 }
 
 const AnimatedScoreDisplay = ({ value, combo }: { value: number, combo: number }) => {
@@ -98,73 +102,93 @@ const StatDisplay = ({ value, className, prefix = '', suffix = '' }: { value: nu
 
 const ComboMeter = ({ combo }: { combo: number }) => {
     if (combo < 2) return null;
-
-    let styles = {
-        text: 'text-yellow-400',
-        glow: 'drop-shadow-[0_0_8px_rgba(250,204,21,0.8)]',
-        border: 'border-yellow-500/50',
-        bg: 'bg-slate-900/90',
-        label: 'COMBO',
-        scale: 1
-    };
-
-    if (combo >= 20) {
-        styles = {
-            text: 'text-transparent bg-clip-text bg-gradient-to-b from-fuchsia-300 to-purple-600',
-            glow: 'drop-shadow-[0_0_20px_rgba(192,38,211,1)] filter brightness-125',
-            border: 'border-purple-400',
-            bg: 'bg-purple-950/90',
-            label: 'COSMIC',
-            scale: 1.2
-        };
-    } else if (combo >= 10) {
-        styles = {
-            text: 'text-transparent bg-clip-text bg-gradient-to-b from-red-300 to-red-600',
-            glow: 'drop-shadow-[0_0_15px_rgba(220,38,38,0.9)] filter brightness-110',
-            border: 'border-red-500',
-            bg: 'bg-red-950/90',
-            label: 'SAVAGE',
-            scale: 1.1
-        };
-    } else if (combo >= 5) {
-        styles = {
-            text: 'text-transparent bg-clip-text bg-gradient-to-b from-orange-200 to-orange-500',
-            glow: 'drop-shadow-[0_0_10px_rgba(249,115,22,0.8)]',
-            border: 'border-orange-500',
-            bg: 'bg-orange-950/90',
-            label: 'BLAZING',
-            scale: 1.05
-        };
-    }
-
     return (
         <div className="absolute top-0 left-0 right-0 z-20 flex justify-center -mt-6 pointer-events-none">
-            <div 
-                key={combo}
-                className={`relative flex flex-col items-center justify-center px-6 py-1 rounded-full border-2 shadow-2xl animate-in zoom-in-50 slide-in-from-bottom-4 duration-300 ${styles.bg} ${styles.border}`}
-                style={{ transform: `scale(${styles.scale})` }}
-            >
-                {/* Glow Behind */}
-                <div className={`absolute inset-0 blur-xl opacity-50 ${styles.bg} -z-10`}></div>
-                
-                <div className="flex items-baseline gap-2">
-                    <span className={`fantasy-font font-black italic text-2xl leading-none ${styles.text} ${styles.glow}`}>
-                        x{combo}
-                    </span>
-                    <span className={`text-[10px] font-black uppercase tracking-[0.2em] text-white/80 leading-none`}>
-                        {styles.label}
-                    </span>
-                </div>
-                
-                {/* Visual Bar */}
-                <div className="w-full h-1 bg-black/50 rounded-full mt-1 overflow-hidden">
-                    <div 
-                        className={`h-full ${combo >= 20 ? 'bg-fuchsia-500' : combo >= 10 ? 'bg-red-500' : combo >= 5 ? 'bg-orange-500' : 'bg-yellow-400'} animate-pulse`} 
-                        style={{ width: '100%' }}
-                    ></div>
-                </div>
+            <div className="bg-slate-900/90 px-4 py-1 rounded-full border border-yellow-500/50 shadow-[0_0_15px_rgba(234,179,8,0.3)] flex items-baseline gap-2 transform -rotate-2 animate-in slide-in-from-top-4 duration-200">
+                <span className="fantasy-font text-xl font-black text-transparent bg-clip-text bg-gradient-to-b from-white via-yellow-200 to-yellow-500 drop-shadow-sm filter">
+                    x{combo}
+                </span>
+                <span className="text-[10px] font-black italic tracking-[0.2em] text-yellow-600 uppercase">
+                    COMBO
+                </span>
             </div>
         </div>
+    );
+};
+
+interface InventorySlotProps {
+    index: number;
+    item?: InventoryItem;
+    onUseItem: (item: InventoryItem) => void;
+    itemFeedback?: { slot: number, status: 'SUCCESS' | 'ERROR', id: string };
+}
+
+const InventorySlot: React.FC<InventorySlotProps> = ({ index, item, onUseItem, itemFeedback }) => {
+    const [feedback, setFeedback] = useState<'SUCCESS' | 'ERROR' | null>(null);
+    
+    useEffect(() => {
+        if (itemFeedback && itemFeedback.slot === index) {
+            setFeedback(itemFeedback.status);
+            const t = setTimeout(() => setFeedback(null), 500);
+            return () => clearTimeout(t);
+        }
+    }, [itemFeedback, index]);
+
+    return (
+      <motion.div 
+          animate={feedback === 'SUCCESS' ? { scale: [1, 1.1, 1], borderColor: '#4ade80' } : feedback === 'ERROR' ? { x: [-5, 5, -5, 5, 0], borderColor: '#ef4444' } : { scale: 1, x: 0, borderColor: '#1e293b' }}
+          transition={{ duration: 0.3 }}
+          className={`flex-1 h-12 md:h-14 bg-slate-900/50 border-2 rounded-lg relative flex items-center justify-center group overflow-hidden active:scale-95 transition-colors duration-200
+              ${feedback === 'ERROR' ? 'bg-red-900/20 shadow-[0_0_15px_rgba(239,68,68,0.3)]' : ''}
+              ${feedback === 'SUCCESS' ? 'bg-green-900/20 shadow-[0_0_15px_rgba(74,222,128,0.3)]' : 'border-slate-800 hover:border-slate-600'}
+          `}
+      >
+          {/* Success Flash */}
+          <AnimatePresence>
+              {feedback === 'SUCCESS' && (
+                  <motion.div 
+                      initial={{ opacity: 0 }} 
+                      animate={{ opacity: 0.5 }} 
+                      exit={{ opacity: 0 }} 
+                      className="absolute inset-0 bg-green-400 z-20 pointer-events-none mix-blend-overlay" 
+                  />
+              )}
+          </AnimatePresence>
+
+          {/* Error Flash */}
+          <AnimatePresence>
+              {feedback === 'ERROR' && (
+                  <motion.div 
+                      initial={{ opacity: 0 }} 
+                      animate={{ opacity: 0.3 }} 
+                      exit={{ opacity: 0 }} 
+                      className="absolute inset-0 bg-red-500 z-20 pointer-events-none mix-blend-overlay" 
+                  />
+              )}
+          </AnimatePresence>
+
+          <div className="absolute top-0 left-0 bg-slate-800/90 px-1.5 py-0.5 rounded-br-md text-[8px] md:text-[10px] font-mono text-slate-500 border-r border-b border-slate-700/50 z-10 font-bold">
+              {index + 1}
+          </div>
+          
+          <AnimatePresence mode='wait'>
+              {item ? (
+                  <motion.button 
+                      key={item.id}
+                      initial={{ scale: 0.8, opacity: 0 }}
+                      animate={{ scale: 1, opacity: 1 }}
+                      exit={{ scale: 1.5, opacity: 0, filter: 'brightness(2)' }}
+                      onClick={() => onUseItem(item)} 
+                      className="w-full h-full flex items-center justify-center hover:bg-white/5 transition-colors relative z-10"
+                  >
+                      <span className="text-xl md:text-3xl drop-shadow-md transform group-hover:scale-110 transition-transform">{item.icon}</span>
+                      <span className="absolute bottom-0 right-1 text-[7px] md:text-[8px] text-slate-400 font-bold tracking-tighter opacity-70">{item.name.split(' ')[0]}</span>
+                  </motion.button>
+              ) : (
+                  <div className="w-full h-full flex items-center justify-center opacity-20"><div className="w-1.5 h-1.5 md:w-2 md:h-2 rounded-full bg-slate-700"></div></div>
+              )}
+          </AnimatePresence>
+      </motion.div>
     );
 };
 
@@ -184,21 +208,48 @@ export const HUD = React.memo(({
     combo,
     justLeveledUp,
     activeModifiers,
+    shopState,
+    challengeTarget,
     onOpenStore, 
     onUseItem, 
     onReroll, 
     onMenu,
-    onOpenStats
+    onOpenStats,
+    itemFeedback
 }: HUDProps) => {
   const { registerTarget } = useLootSystem();
   const xpRef = useRef<HTMLDivElement>(null);
   const goldRef = useRef<HTMLSpanElement>(null);
   const xpControls = useAnimation();
   const goldControls = useAnimation();
-  const [activeTooltip, setActiveTooltip] = useState<string | null>(null);
-
-  // Derive graphics quality setting
+  const flashControls = useAnimation(); 
   const isLowQuality = settings.graphicsQuality === 'LOW';
+
+  // --- SMART SHOP NOTIFICATION LOGIC ---
+  const [badgeCount, setBadgeCount] = useState(0);
+  const [pulse, setPulse] = useState(false);
+  const prevBadgeCount = useRef(0);
+
+  useEffect(() => {
+      const affordableItems = SHOP_ITEMS.filter(item => {
+          let price = item.price;
+          if (shopState && shopState.items[item.id]) {
+              price = Math.floor(item.price * shopState.items[item.id].priceMultiplier);
+              if (shopState.items[item.id].stock <= 0) return false;
+          }
+          return gold >= price;
+      });
+
+      const count = affordableItems.length;
+      
+      if (count > prevBadgeCount.current) {
+          setPulse(true);
+          setTimeout(() => setPulse(false), 400); 
+      }
+      
+      setBadgeCount(count);
+      prevBadgeCount.current = count;
+  }, [gold, shopState]);
 
   useEffect(() => {
       if (xpRef.current) registerTarget('XP', xpRef.current);
@@ -209,11 +260,20 @@ export const HUD = React.memo(({
   const prevGold = useRef(gold);
 
   useEffect(() => {
-    if (xp > prevXp.current + 50) { 
-        xpControls.start({ scale: [1, 1.05, 1], transition: { duration: 0.2 } });
+    if (xp > prevXp.current) {
+        // More reactive animation: Bulge out
+        xpControls.start({ 
+            scale: [1, 1.05, 1], 
+            filter: ["brightness(1)", "brightness(1.5)", "brightness(1)"],
+            transition: { duration: 0.2, ease: "easeOut" } 
+        });
+        
+        if (!isLowQuality) {
+            flashControls.start({ opacity: [0, 0.6, 0], transition: { duration: 0.4 } });
+        }
     }
     prevXp.current = xp;
-  }, [xp, xpControls]);
+  }, [xp, xpControls, flashControls, isLowQuality]);
 
   useEffect(() => {
     if (gold > prevGold.current) {
@@ -222,20 +282,17 @@ export const HUD = React.memo(({
     prevGold.current = gold;
   }, [gold, goldControls]);
 
-  const toggleTooltip = (id: string, e?: React.MouseEvent) => {
-      e?.stopPropagation();
-      setActiveTooltip(prev => prev === id ? null : id);
-  }
-  
   const isClassic = gameMode === 'CLASSIC';
   const xpThreshold = getXpThreshold(level);
   const xpPercent = Math.min(100, (xp / xpThreshold) * 100);
-  const canReroll = (level >= 15 && (rerolls > 0 || gold >= 50)) && !isClassic;
+  
+  const isRerollUnlocked = level >= 15 && !isClassic;
+  const canAffordReroll = rerolls > 0 || gold >= 50;
+  const canReroll = isRerollUnlocked && canAffordReroll;
 
   const barGradient = currentStage.barColor || "from-cyan-600 via-blue-500 to-indigo-500";
   const accentColor = currentStage.colorTheme || "text-slate-200";
   const shimmerDuration = Math.max(1.0, 3.5 - (level * 0.05)) + 's';
-  const isCascadeActive = accountLevel >= 5 && !isClassic;
   const rank = getLevelRank(level);
   const RankIcon = rank.icon;
 
@@ -252,27 +309,24 @@ export const HUD = React.memo(({
   if ((effectCounters['FLOW_STATE'] || 0) > 0) buffs.push({ id: 'flow', icon: <Waves size={12} className="text-cyan-400" />, label: 'FLOW', count: effectCounters['FLOW_STATE'], color: 'bg-cyan-900/40 border-cyan-500/30' });
   if ((effectCounters['HARMONIC_RESONANCE'] || 0) > 0) buffs.push({ id: 'harmony', icon: <Gem size={12} className="text-pink-400" />, label: 'ECHO', count: effectCounters['HARMONIC_RESONANCE'], color: 'bg-pink-900/40 border-pink-500/30' });
 
-  const MicroTooltip = ({ id, icon, title, content, side = 'left' }: { id: string, icon: React.ReactNode, title: string, content: React.ReactNode, side?: 'left' | 'right' }) => {
-      if (!settings.enableTooltips) return null;
-      const isOpen = activeTooltip === id;
-      return (
-          <div className="relative inline-flex items-center ml-1 z-50">
-              <button onClick={(e) => toggleTooltip(id, e)} className={`p-0.5 rounded-full hover:bg-white/10 transition-colors ${isOpen ? 'text-white bg-white/10' : 'text-slate-500 hover:text-slate-300'}`}>
-                  {icon}
-              </button>
-              {isOpen && (
-                  <>
-                    <div className="fixed inset-0 z-[90]" onClick={() => setActiveTooltip(null)}></div>
-                    <div className={`absolute top-full ${side === 'left' ? 'left-0' : 'right-0'} mt-2 w-56 bg-slate-900/95 border border-slate-700 rounded-lg p-3 shadow-2xl z-[100] ${isLowQuality ? 'bg-slate-900' : 'backdrop-blur-md'} text-left animate-in fade-in zoom-in-95 duration-200`}>
-                        <h4 className="text-xs font-bold text-white mb-2 pb-2 border-b border-slate-800 flex items-center gap-2">{title}</h4>
-                        <div className="text-[10px] text-slate-300 leading-relaxed font-sans">{content}</div>
-                        <div className={`absolute -top-1 ${side === 'left' ? 'left-2' : 'right-2'} w-2 h-2 bg-slate-900 border-t border-l border-slate-700 transform rotate-45`}></div>
-                    </div>
-                  </>
-              )}
-          </div>
-      );
-  };
+  const RerollButton = () => {
+        if (!isRerollUnlocked) return null;
+        return (
+            <button 
+                onClick={canReroll ? onReroll : undefined} 
+                disabled={!canReroll} 
+                className={`w-10 h-10 md:w-12 md:h-12 relative flex flex-col items-center justify-center rounded-lg border transition-all duration-75 shrink-0
+                    ${!canReroll ? 'bg-slate-900/30 border-slate-800 opacity-50 cursor-not-allowed' : 
+                    'bg-purple-900/20 border-purple-500/30 hover:bg-purple-900/40 hover:border-purple-400 active:scale-95 text-purple-200 shadow-lg'}
+                `}
+            >
+                <RefreshCw size={14} className={canReroll ? "mb-0.5" : "opacity-50 mb-0.5"} />
+                <span className="text-[7px] font-bold uppercase tracking-wider leading-none">
+                    {rerolls > 0 ? `${rerolls}` : '50G'}
+                </span>
+            </button>
+        )
+  }
 
   return (
     <div className="w-full mb-1 md:mb-2 space-y-1 md:space-y-2">
@@ -286,7 +340,6 @@ export const HUD = React.memo(({
                     <h1 className="text-xs sm:text-lg md:text-xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-yellow-200 via-orange-400 to-red-500 fantasy-font drop-shadow-sm whitespace-nowrap">
                         {gameMode === 'DAILY' ? 'Daily Run' : isClassic ? "Classic" : "Dragon's Hoard"}
                     </h1>
-                    {!isClassic && <MicroTooltip id="evolution-help" icon={<Info size={12} />} title="Monster Evolution" content={<span>Merge two identity monsters to <strong>Evolve</strong> them. Target: 2048.</span>} />}
                 </div>
                 <div className="flex items-center gap-3 text-[9px] md:text-xs text-slate-400 mt-0.5 md:mt-1">
                     <span className="flex items-center gap-1"><Trophy size={10} /> <CountUp value={bestScore} /></span>
@@ -295,118 +348,30 @@ export const HUD = React.memo(({
                             <Coins size={10} /> <StatDisplay value={gold} suffix=" G" />
                         </motion.span>
                     )}
-                    <div className="relative flex items-center">
-                        <div className={`flex items-center gap-1 ${isCascadeActive ? 'text-cyan-400' : 'text-slate-600'} transition-colors ml-1`}>
-                            <Zap size={10} className={isCascadeActive ? "fill-cyan-400/20" : ""} />
-                            <span className="hidden xs:inline font-bold">Chain</span>
-                        </div>
-                    </div>
                 </div>
             </div>
         </div>
         <div className="text-right pl-3 flex flex-col items-end justify-center min-w-[100px]">
-          <div className="text-[9px] text-slate-500 uppercase tracking-wider font-bold mb-0.5 drop-shadow-md">Score</div>
-          <AnimatedScoreDisplay value={score} combo={combo} />
+          {challengeTarget ? (
+              <div className="flex flex-col items-end animate-pulse">
+                  <div className="text-[9px] text-red-400 uppercase tracking-wider font-black mb-0.5 drop-shadow-md flex items-center gap-1">
+                      <Target size={10} /> BEAT {challengeTarget.name.toUpperCase()}
+                  </div>
+                  <div className="text-xs text-slate-300 font-mono font-bold">
+                      {challengeTarget.score.toLocaleString()}
+                  </div>
+              </div>
+          ) : (
+              <>
+                <div className="text-[9px] text-slate-500 uppercase tracking-wider font-bold mb-0.5 drop-shadow-md">Score</div>
+                <AnimatedScoreDisplay value={score} combo={combo} />
+              </>
+          )}
         </div>
       </div>
 
       {!isClassic && (
           <div className="relative">
               <ComboMeter combo={combo} />
-              
               <div className="flex flex-wrap gap-2 justify-center animate-in fade-in slide-in-from-top-1 overflow-x-auto p-1 no-scrollbar mt-1">
-                  {/* Daily Modifiers Display */}
-                  {gameMode === 'DAILY' && activeModifiers && activeModifiers.length > 0 && (
-                      <div className="flex gap-2 border-r border-slate-700 pr-2 mr-1">
-                          {activeModifiers.map(mod => (
-                              <div key={mod.id} className="flex items-center gap-1 bg-slate-800/80 border border-slate-600 px-2 py-1 rounded text-[9px] font-bold text-slate-200">
-                                  <span className={mod.color}>{mod.icon}</span>
-                                  <span className="hidden sm:inline">{mod.name}</span>
-                              </div>
-                          ))}
-                      </div>
-                  )}
-                  
-                  {/* Active Buffs */}
-                  {buffs.map(b => (
-                      <div key={b.id} className={`px-2 py-1 rounded border flex items-center gap-2 ${b.color} shadow-sm ${isLowQuality ? '' : 'backdrop-blur-sm'} whitespace-nowrap`}>
-                          {b.icon}
-                          <span className="text-[9px] font-bold text-slate-200 tracking-wide">{b.label}</span>
-                          <span className="text-[10px] font-mono text-white bg-black/40 px-1 rounded">{b.count}</span>
-                      </div>
-                  ))}
-              </div>
-          </div>
-      )}
-
-      {!isClassic && (
-      <>
-        <div className="flex gap-2 h-9 md:h-14">
-            <motion.div 
-                ref={xpRef}
-                animate={xpControls}
-                className={`flex-1 bg-[#0a0c10] p-1 rounded-lg border border-slate-700 relative flex items-center shadow-lg overflow-visible group pl-4 cursor-pointer hover:border-slate-500 transition-colors active:scale-[0.99] ${justLeveledUp ? 'xp-bar-glow ring-2 ring-yellow-400' : ''}`}
-                onClick={onOpenStats}
-            >
-                <div className="absolute -left-1 top-1/2 -translate-y-1/2 z-20 filter drop-shadow-xl hover:scale-105 transition-transform duration-300">
-                     <div className={`w-10 h-12 md:w-14 md:h-16 ${rank.bg} flex items-center justify-center relative`} style={{ clipPath: 'polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%)' }}>
-                          <div className="absolute inset-[2px] bg-slate-900 z-0" style={{ clipPath: 'polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%)' }}></div>
-                          <div className="relative z-10 flex flex-col items-center justify-center -mt-1">
-                              <RankIcon size={14} className={`${rank.color} mb-0.5 filter drop-shadow-[0_0_5px_currentColor] md:w-[18px] md:h-[18px]`} />
-                              <span className="text-[10px] md:text-sm font-black text-white leading-none font-mono">{level}</span>
-                          </div>
-                          <div className="absolute top-0 left-0 right-0 h-1/2 bg-gradient-to-b from-white/20 to-transparent pointer-events-none z-20" style={{ clipPath: 'polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%)' }}></div>
-                     </div>
-                </div>
-                <div className="flex-1 flex flex-col justify-center pl-8 md:pl-10 pr-1 h-full relative">
-                    <div className="flex justify-between items-center mb-0.5 z-10">
-                        <div className="flex items-center gap-1">
-                             <span className={`text-[9px] md:text-[10px] font-bold uppercase tracking-wider text-slate-400`}>XP</span>
-                        </div>
-                        <span className={`text-[8px] md:text-[9px] font-mono ${accentColor} opacity-90`}><StatDisplay value={Math.floor(xp)} /> / <CountUp value={xpThreshold} /></span>
-                    </div>
-                    <div className="w-full h-2 md:h-4 bg-black/80 rounded-full border border-slate-700/80 relative overflow-hidden shadow-[inset_0_2px_4px_rgba(0,0,0,1)]">
-                        <div className={`h-full bg-gradient-to-r ${barGradient} transition-all duration-700 ease-out relative shadow-[0_0_15px_rgba(255,255,255,0.1)]`} style={{ width: `${xpPercent}%` }}>
-                            {!isLowQuality && (
-                                <div className="absolute inset-0 w-full h-full opacity-50" style={{ background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.4) 50%, transparent)', animation: `shimmer ${shimmerDuration} infinite linear` }}></div>
-                            )}
-                        </div>
-                        {!isLowQuality && <div className="absolute inset-0 bg-gradient-to-b from-white/10 to-transparent pointer-events-none rounded-full"></div>}
-                    </div>
-                </div>
-            </motion.div>
-            <button onClick={onOpenStore} className="w-10 md:w-14 bg-yellow-900/20 hover:bg-yellow-900/40 border border-yellow-700/50 rounded-lg flex flex-col items-center justify-center text-yellow-500 transition-colors group relative overflow-hidden shrink-0">
-                <div className="absolute inset-0 bg-yellow-500/10 translate-y-full group-hover:translate-y-0 transition-transform duration-300"></div>
-                <StoreIcon size={14} className="relative z-10 md:w-4 md:h-4" />
-                <span className="text-[7px] md:text-[9px] font-bold mt-0.5 md:mt-1 relative z-10">SHOP</span>
-            </button>
-        </div>
-        <div className="flex gap-2 h-9 md:h-12">
-            <div className="flex flex-1 gap-2">
-                {[0, 1, 2].map((slotIndex) => {
-                    const item = inventory[slotIndex];
-                    return (
-                        <div key={slotIndex} className="flex-1 bg-slate-900/50 border border-slate-800 rounded-lg relative flex items-center justify-center group overflow-hidden">
-                            <div className="absolute top-0 left-0 bg-slate-800/90 px-1 py-0.5 rounded-br-md text-[8px] md:text-[9px] font-mono text-slate-500 border-r border-b border-slate-700/50 z-10">{slotIndex + 1}</div>
-                            {item ? (
-                                <button onClick={() => onUseItem(item)} className="w-full h-full flex items-center justify-center hover:bg-white/5 transition-colors relative">
-                                    <span className="text-lg md:text-2xl drop-shadow-md transform group-hover:scale-110 transition-transform">{item.icon}</span>
-                                    <span className="absolute bottom-0 right-1 text-[7px] md:text-[8px] text-slate-400 font-bold tracking-tighter opacity-70">{item.name.split(' ')[0]}</span>
-                                </button>
-                            ) : (
-                                <div className="w-full h-full flex items-center justify-center opacity-20"><div className="w-1.5 h-1.5 md:w-2 md:h-2 rounded-full bg-slate-700"></div></div>
-                            )}
-                        </div>
-                    );
-                })}
-            </div>
-            <button onClick={canReroll ? onReroll : undefined} disabled={!canReroll} className={`w-10 md:w-14 rounded-lg flex flex-col items-center justify-center border transition-all relative shrink-0 ${canReroll ? 'bg-purple-900/30 hover:bg-purple-800/50 border-purple-500/50 text-purple-300 shadow-[0_0_10px_rgba(168,85,247,0.2)]' : 'bg-slate-900/30 border-slate-800 text-slate-700 opacity-50 cursor-not-allowed'}`}>
-                <RefreshCw size={12} className={canReroll ? "md:w-3.5 md:h-3.5" : "opacity-50"} />
-                <div className="text-[7px] md:text-[8px] font-bold mt-0.5 md:mt-1">{level < 15 ? 'Lvl 15' : (rerolls > 0 ? `Free: ${rerolls}` : '50G')}</div>
-            </button>
-        </div>
-      </>
-      )}
-    </div>
-  );
-});
+                  {activeModifiers && activeModifiers.map(
