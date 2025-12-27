@@ -43,8 +43,13 @@ export const TileComponent = React.memo(({ tile, gridSize, slideSpeed, themeId, 
   const yPos = tile.y * 100;
 
   const isNewClass = !isLowQuality && tile.isNew ? 'tile-animation-enter' : '';
-  const isDyingClass = tile.isDying ? 'tile-exit-animation' : ''; // New explicit exit animation
+  const isDyingClass = tile.isDying ? 'tile-exit-animation' : ''; 
   
+  // Delay the appearance of NEW tiles so they don't visually clip through moving tiles.
+  // We sync this delay roughly with the slide speed.
+  // Dying tiles (merging or destroyed) don't need delay.
+  const animDelay = isNewClass ? `${Math.max(100, slideSpeed * 0.9)}ms` : '0ms';
+
   let mergeClass = '';
   let shakeClass = '';
   let showShockwave = false;
@@ -133,7 +138,10 @@ export const TileComponent = React.memo(({ tile, gridSize, slideSpeed, themeId, 
         zIndex: zIndex
       }}
     >
-      <div className={`w-full h-full relative ${isNewClass} ${mergeClass} group select-none`}>
+      <div 
+        className={`w-full h-full relative ${isNewClass} ${mergeClass} group select-none`}
+        style={{ animationDelay: animDelay }}
+      >
         
         {/* Satisfying merge ripple - using border for cleaner expansion */}
         {showRipple && !isLowQuality && (

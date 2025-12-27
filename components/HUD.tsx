@@ -100,32 +100,51 @@ const StatDisplay = ({ value, className, prefix = '', suffix = '' }: { value: nu
     );
 };
 
-// Revamped Combo Meter - Positioned Right
+// Combo Meter - Anchored relative to the parent to prevent clipping/overlap
 const ComboMeter = ({ combo }: { combo: number }) => {
     if (combo < 2) return null;
     
     return (
         <motion.div 
-            key={combo} 
-            initial={{ scale: 1.5, opacity: 0, x: 20, rotate: 10 }}
-            animate={{ scale: 1, opacity: 1, x: 0, rotate: -5 }}
-            exit={{ scale: 0.5, opacity: 0, x: 20, transition: { duration: 0.2 } }}
-            className="absolute right-0 top-[4.5rem] z-50 pointer-events-none origin-right"
+            key="combo-meter"
+            initial={{ scale: 0.5, opacity: 0, y: -10 }}
+            animate={{ 
+                scale: 1, 
+                opacity: 1, 
+                y: 0,
+                rotate: [0, -2, 2, 0] // Subtle shake loop
+            }}
+            exit={{ scale: 0.5, opacity: 0, y: 10, transition: { duration: 0.2 } }}
+            transition={{
+                rotate: { repeat: Infinity, duration: 2, ease: "easeInOut" },
+                type: "spring", stiffness: 300, damping: 15
+            }}
+            className="absolute -bottom-6 right-2 z-50 pointer-events-none"
         >
             <div className="relative group">
-                {/* Fire Effect behind */}
-                <div className="absolute inset-0 bg-orange-600 blur-xl opacity-40 animate-pulse rounded-full"></div>
+                {/* Fire Effect behind - continuously pulsing */}
+                <motion.div 
+                    animate={{ scale: [1, 1.1, 1], opacity: [0.5, 0.8, 0.5] }}
+                    transition={{ repeat: Infinity, duration: 0.8 }}
+                    className="absolute inset-0 bg-orange-600 blur-md rounded-full"
+                ></motion.div>
                 
-                <div className="bg-gradient-to-l from-slate-900/95 to-slate-800/90 pl-5 pr-3 py-1 rounded-l-2xl border-y-2 border-l-2 border-orange-500 shadow-[0_4px_20px_rgba(249,115,22,0.4)] flex items-center gap-3 transform skew-x-12 backdrop-blur-md">
-                    <div className="flex flex-col items-end -skew-x-12">
-                        <span className="text-4xl font-black text-transparent bg-clip-text bg-gradient-to-b from-yellow-300 via-orange-500 to-red-600 fantasy-font leading-[0.8] drop-shadow-sm filter">
-                            {combo}<span className="text-2xl text-orange-300 ml-0.5">x</span>
-                        </span>
+                <div className="bg-gradient-to-l from-slate-900 via-slate-800 to-slate-900 px-3 py-1 rounded-xl border-2 border-orange-500 shadow-[0_4px_10px_rgba(0,0,0,0.5)] flex items-center gap-2 transform -skew-x-6 backdrop-blur-md relative z-10">
+                    <div className="flex flex-col items-end">
+                        <motion.span 
+                            key={combo}
+                            initial={{ scale: 1.3, color: '#fff' }}
+                            animate={{ scale: 1, color: 'transparent' }}
+                            transition={{ duration: 0.2 }}
+                            className="text-2xl font-black text-transparent bg-clip-text bg-gradient-to-b from-yellow-300 via-orange-500 to-red-600 fantasy-font leading-none drop-shadow-sm filter"
+                        >
+                            {combo}x
+                        </motion.span>
                     </div>
-                    <div className="h-8 w-px bg-white/10 -skew-x-12 mx-1"></div>
-                    <div className="flex flex-col -skew-x-12 leading-none">
-                        <span className="text-[9px] font-bold text-orange-200 uppercase opacity-80 tracking-widest">Combo</span>
-                        <span className="text-[9px] font-black text-white uppercase tracking-widest">Chain</span>
+                    <div className="h-6 w-px bg-white/10 mx-0.5"></div>
+                    <div className="flex flex-col leading-none">
+                        <span className="text-[7px] font-bold text-orange-200 uppercase opacity-80 tracking-widest">Combo</span>
+                        <span className="text-[8px] font-black text-white uppercase tracking-widest">Chain</span>
                     </div>
                 </div>
             </div>
@@ -299,18 +318,10 @@ export const HUD = React.memo(({
   }, [gold, goldControls]);
 
   const isClassic = gameMode === 'CLASSIC';
-  const xpThreshold = getXpThreshold(level);
-  const xpPercent = Math.min(100, (xp / xpThreshold) * 100);
   
   const isRerollUnlocked = level >= 15 && !isClassic;
   const canAffordReroll = rerolls > 0 || gold >= 50;
   const canReroll = isRerollUnlocked && canAffordReroll;
-
-  const barGradient = currentStage.barColor || "from-cyan-600 via-blue-500 to-indigo-500";
-  const accentColor = currentStage.colorTheme || "text-slate-200";
-  const shimmerDuration = Math.max(1.0, 3.5 - (level * 0.05)) + 's';
-  const rank = getLevelRank(level);
-  const RankIcon = rank.icon;
 
   const buffs = [];
   if ((effectCounters['LUCKY_LOOT'] || 0) > 0) buffs.push({ id: 'luck', icon: <Clover size={12} className="text-green-400" />, label: 'LUCK', count: effectCounters['LUCKY_LOOT'], color: 'bg-green-900/40 border-green-500/30' });
@@ -345,14 +356,16 @@ export const HUD = React.memo(({
   }
 
   return (
-    <div className="w-full mb-1 md:mb-2 space-y-3 md:space-y-4 relative z-20">
+    <div className="w-full mb-1 flex flex-col gap-2 relative z-20">
       
-      {/* Moved Combo Meter to be absolute relative to this container but top-level to avoid inner clipping */}
-      <AnimatePresence>
-          {combo >= 2 && <ComboMeter combo={combo} />}
-      </AnimatePresence>
+      {/* Top Header Row with integrated Combo Meter */}
+      <div className={`relative flex flex-wrap justify-between items-center bg-slate-900/90 p-3 rounded-xl border border-slate-700 shadow-xl gap-2 ${isLowQuality ? '' : 'backdrop-blur-md'}`}>
+        
+        {/* Combo Meter attached to header but hanging down */}
+        <AnimatePresence>
+            {combo >= 2 && <ComboMeter combo={combo} />}
+        </AnimatePresence>
 
-      <div className={`flex flex-wrap justify-between items-center bg-slate-900/90 p-3 rounded-xl border border-slate-700 shadow-xl gap-2 ${isLowQuality ? '' : 'backdrop-blur-md'}`}>
         <div className="flex items-center gap-3 flex-1 min-w-[120px]">
             <button onClick={onMenu} className="p-2 hover:bg-white/10 rounded-lg transition-colors text-slate-400 hover:text-white">
                 <Menu size={20} />
@@ -373,7 +386,7 @@ export const HUD = React.memo(({
                 </div>
             </div>
         </div>
-        <div className="text-right pl-3 flex flex-col items-end justify-center min-w-[100px]">
+        <div className="text-right pl-3 flex flex-col items-end justify-center min-w-[100px] z-10">
           {challengeTarget ? (
               <div className="flex flex-col items-end animate-pulse">
                   <div className="text-[9px] text-red-400 uppercase tracking-wider font-black mb-0.5 drop-shadow-md flex items-center gap-1">
@@ -393,8 +406,8 @@ export const HUD = React.memo(({
       </div>
 
       {!isClassic && (
-          <div className="relative flex justify-center">
-              <div className="flex flex-wrap gap-2 justify-center animate-in fade-in slide-in-from-top-1 overflow-x-auto p-1 no-scrollbar mt-1 h-6">
+          <div className="relative flex justify-center min-h-[24px]">
+              <div className="flex flex-wrap gap-2 justify-center animate-in fade-in slide-in-from-top-1 overflow-x-auto p-1 no-scrollbar h-6">
                   {activeModifiers && activeModifiers.map(mod => (
                       <div key={mod.id} className="flex items-center gap-1 bg-slate-800/80 px-2 py-1 rounded text-[10px] border border-slate-700">
                           <span>{mod.icon}</span>
@@ -419,7 +432,7 @@ export const HUD = React.memo(({
       </div>
 
       {/* Inventory Bar */}
-      <div className="flex gap-2 w-full mt-2">
+      <div className="flex gap-2 w-full">
           {Array.from({ length: 3 }).map((_, i) => (
               <InventorySlot 
                   key={i} 
