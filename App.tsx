@@ -1,5 +1,6 @@
+
 import React, { useState, useEffect, useReducer, useRef, useCallback } from 'react';
-import { GameState, Direction, HeroClass, GameMode, Difficulty, FeedbackEvent, InventoryItem, LootEvent, Medal, View, AbilityType, InputSettings } from './types';
+import { GameState, Direction, HeroClass, GameMode, Difficulty, FeedbackEvent, InventoryItem, LootEvent, Medal, View, AbilityType, InputSettings, TileType } from './types';
 import { initializeGame, moveGrid, isGameOver, useInventoryItem, executeAutoCascade, checkAchievements, checkLoreUnlocks, spawnTile, executePowerupAction, updateCooldowns, saveHighscore, processPassiveAbilities, createId } from './services/gameLogic';
 import { audioService } from './services/audioService';
 import { Grid } from './components/Grid';
@@ -55,6 +56,11 @@ const gameReducer = (state: GameState, action: Action): GameState => {
             if (restoredState.settings && restoredState.settings.enableHaptics === undefined) {
                 restoredState.settings.enableHaptics = true;
             }
+            if (restoredState.baselineAccountXp === undefined) {
+                // Recover from old saves without baseline
+                const profile = getPlayerProfile();
+                restoredState.baselineAccountXp = profile.totalAccountXp;
+            }
             return restoredState;
         case 'RESTART':
             return initializeGame(true, state.selectedClass, state.gameMode, undefined, state.difficulty, state.tilesetId);
@@ -89,6 +95,15 @@ const gameReducer = (state: GameState, action: Action): GameState => {
                 powerUpChanceBonus: (state.effectCounters['LUCKY_DICE'] ? 0.1 : 0)
             });
 
+            // Boss Spawn Check & Audio Trigger
+            const bossSpawned = newGrid.some(t => t.type === TileType.BOSS && t.isNew);
+            if (bossSpawned) {
+                audioService.playBossSpawn();
+                if (state.settings.enableHaptics && navigator.vibrate) {
+                    navigator.vibrate([100, 50, 100, 50, 200]);
+                }
+            }
+
             // Update Cooldowns (Passives charge up)
             let updatedAbilities = updateCooldowns(state.abilities);
 
@@ -107,12 +122,28 @@ const gameReducer = (state: GameState, action: Action): GameState => {
             const gameOver = isGameOver(newGrid, state.gridSize);
             const gameWon = newStats.highestTile >= 2048 && !state.gameWon;
 
+            // Check Account Level Up (Loop for multi-level gain)
+            const nextXp = state.xp + res.xpGained;
+            const currentTotalXp = (state.baselineAccountXp || 0) + nextXp;
+            let nextAccountLevel = state.accountLevel;
+            let leveledUp = false;
+            
+            while (currentTotalXp >= getNextLevelXp(nextAccountLevel)) {
+                nextAccountLevel++;
+                leveledUp = true;
+            }
+            
+            if (leveledUp) {
+                audioService.playLevelUp();
+            }
+
             return {
                 ...state,
                 grid: newGrid,
                 score: state.score + res.score,
-                xp: state.xp + res.xpGained,
+                xp: nextXp,
                 gold: state.gold + res.goldGained,
+                accountLevel: nextAccountLevel,
                 inventory: [...state.inventory, ...res.itemsFound],
                 gameOver,
                 gameWon,
@@ -297,7 +328,7 @@ const LoadingScreen = ({ progress }: { progress: number }) => {
             </div>
             
             {/* Version Footer */}
-            <div className="absolute bottom-6 text-[9px] text-slate-700 font-mono">v0.9.9 BETA</div>
+            <div className="absolute bottom-6 text-[9px] text-slate-700 font-mono">v1.0.0 RC1</div>
         </div>
     );
 };
@@ -313,6 +344,7 @@ const GameContent: React.FC = () => {
   const [feedbackQueue, setFeedbackQueue] = useState<FeedbackEvent[]>([]);
   const [medalQueue, setMedalQueue] = useState<{id: string, medal: Medal}[]>([]);
   const [itemFeedback, setItemFeedback] = useState<{ slot: number, status: 'SUCCESS' | 'ERROR', id: string } | undefined>(undefined);
+  const [globalShake, setGlobalShake] = useState(false);
   
   // Bounty State
   const [challengeTarget, setChallengeTarget] = useState<{score: number, name: string} | null>(null);
@@ -339,6 +371,30 @@ const GameContent: React.FC = () => {
       }
       prevScore.current = state.score;
   }, [state.score, state.settings.enableHaptics]);
+
+  // Global Screen Shake Trigger on Boss Spawn
+  useEffect(() => {
+      const bossSpawned = state.grid.some(t => t.type === TileType.BOSS && t.isNew);
+      if (bossSpawned && state.settings.enableScreenShake) {
+          setGlobalShake(true);
+          const t = setTimeout(() => setGlobalShake(false), 500);
+          return () => clearTimeout(t);
+      }
+  }, [state.grid, state.settings.enableScreenShake]);
+
+  // Trigger Level Up Feedback
+  const prevAccountLevel = useRef(state.accountLevel);
+  useEffect(() => {
+      if (state.accountLevel > prevAccountLevel.current) {
+          setFeedbackQueue(prev => [...prev, { 
+              id: createId(), 
+              type: 'LEVEL_UP', 
+              title: `LEVEL ${state.accountLevel}`,
+              subtitle: "Power Grows!" 
+          }]);
+      }
+      prevAccountLevel.current = state.accountLevel;
+  }, [state.accountLevel]);
 
   // Bounty Check Logic
   useEffect(() => {
@@ -660,7 +716,7 @@ const GameContent: React.FC = () => {
                         <AmbientBackground graphicsQuality={state.settings.graphicsQuality} />
                     </div>
 
-                    <div className="relative w-full h-full max-w-lg mx-auto flex flex-col p-2 md:p-4 z-10">
+                    <div className={`relative w-full h-full max-w-lg mx-auto flex flex-col p-2 md:p-4 z-10 transition-transform duration-100 ${globalShake ? 'animate-shake-lg' : ''}`}>
                         <div className="relative z-10 flex flex-col h-full gap-4">
                             <HUD 
                                 score={state.score}

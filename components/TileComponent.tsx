@@ -38,17 +38,20 @@ export const TileComponent = React.memo(({ tile, gridSize, slideSpeed, themeId, 
 
   const [imgError, setImgError] = useState(false);
   
+  if (tile.x === undefined || tile.y === undefined) return null; // Safety check
+
   const size = 100 / gridSize;
   const xPos = tile.x * 100;
   const yPos = tile.y * 100;
 
-  const isNewClass = !isLowQuality && tile.isNew ? 'tile-animation-enter' : '';
+  // Only apply new animation if NOT merged (merged tiles have their own animation)
+  const isNewClass = !isLowQuality && tile.isNew && !tile.mergedFrom ? 'tile-animation-enter' : '';
   const isDyingClass = tile.isDying ? 'tile-exit-animation' : ''; 
   
   // Delay the appearance of NEW tiles so they don't visually clip through moving tiles.
   // We sync this delay roughly with the slide speed.
   // Dying tiles (merging or destroyed) don't need delay.
-  const animDelay = isNewClass ? `${Math.max(100, slideSpeed * 0.9)}ms` : '0ms';
+  const animDelay = (tile.isNew || tile.mergedFrom) ? `${Math.max(100, slideSpeed * 0.9)}ms` : '0ms';
 
   let mergeClass = '';
   let shakeClass = '';
@@ -123,7 +126,7 @@ export const TileComponent = React.memo(({ tile, gridSize, slideSpeed, themeId, 
 
   return (
     <div
-      className={`absolute ease-in-out p-1 transition-transform will-change-transform cursor-pointer ${isDyingClass}`}
+      className={`absolute ease-in-out p-1 transition-transform will-change-transform cursor-pointer`}
       onClick={(e) => {
           if (onInteract) {
               e.stopPropagation();
@@ -139,10 +142,18 @@ export const TileComponent = React.memo(({ tile, gridSize, slideSpeed, themeId, 
       }}
     >
       <div 
-        className={`w-full h-full relative ${isNewClass} ${mergeClass} group select-none`}
+        className={`w-full h-full relative ${isNewClass} ${isDyingClass} ${mergeClass} group select-none`}
         style={{ animationDelay: animDelay }}
       >
         
+        {/* Boss Spawn Effect: Lightning & Flash */}
+        {tile.type === TileType.BOSS && tile.isNew && !isLowQuality && (
+             <div className="absolute inset-0 z-50 pointer-events-none overflow-visible">
+                 <div className="absolute top-[-20%] left-1/2 -translate-x-1/2 w-1 h-[140%] bg-cyan-200 blur-[2px] animate-[lightning_0.4s_ease-out_forwards]"></div>
+                 <div className="absolute inset-0 bg-white/80 animate-[flash_0.6s_ease-out_forwards] rounded-lg mix-blend-overlay"></div>
+             </div>
+        )}
+
         {/* Satisfying merge ripple - using border for cleaner expansion */}
         {showRipple && !isLowQuality && (
              <div className={`absolute inset-0 z-0 rounded-xl border-2 ${style.ringColor.replace('ring-', 'border-')} animate-ripple pointer-events-none mix-blend-screen`}></div>

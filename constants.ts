@@ -12,16 +12,16 @@ export const genUrl = (prompt: string, seed: number) =>
 export const getXpThreshold = (level: number) => Math.floor(1000 * Math.pow(level, 1.5));
 
 export const STAGES: Stage[] = [
-    { name: 'Dungeon Entrance', minLevel: 1, backgroundUrl: genUrl('dark dungeon entrance torches stone walls rpg', 101), colorTheme: 'text-slate-200', barColor: 'from-slate-600 to-slate-500', themeId: 'DEFAULT' },
-    { name: 'Fungal Caverns', minLevel: 5, backgroundUrl: genUrl('glowing mushroom cave bioluminescent purple green rpg', 102), colorTheme: 'text-purple-300', barColor: 'from-purple-600 to-green-500', themeId: 'FUNGAL' },
-    { name: 'Molten Depths', minLevel: 10, backgroundUrl: genUrl('lava cave volcano magma fire rpg', 103), colorTheme: 'text-red-300', barColor: 'from-red-600 to-orange-500', themeId: 'MAGMA' },
-    { name: 'Whispering Library', minLevel: 15, backgroundUrl: genUrl('ancient magical library floating books fantasy rpg', 201), colorTheme: 'text-amber-200', barColor: 'from-amber-700 to-yellow-600', themeId: 'LIBRARY' },
-    { name: 'Crystal Spire', minLevel: 20, backgroundUrl: genUrl('ice crystal cave blue frozen magical rpg', 104), colorTheme: 'text-cyan-300', barColor: 'from-cyan-600 to-blue-500', themeId: 'CRYSTAL' },
-    { name: 'Sunken Tomb', minLevel: 25, backgroundUrl: genUrl('underwater ruins glowing runes atlantis rpg', 202), colorTheme: 'text-teal-300', barColor: 'from-teal-800 to-emerald-600', themeId: 'AQUATIC' },
-    { name: 'Void Realm', minLevel: 30, backgroundUrl: genUrl('cosmic void space stars nebula purple dark rpg', 105), colorTheme: 'text-fuchsia-300', barColor: 'from-fuchsia-900 to-purple-800', themeId: 'VOID' },
-    { name: 'Iron Fortress', minLevel: 35, backgroundUrl: genUrl('steampunk industrial fortress gears lava rpg', 203), colorTheme: 'text-orange-300', barColor: 'from-orange-800 to-red-700', themeId: 'STEAMPUNK' },
-    { name: 'Celestial Citadel', minLevel: 40, backgroundUrl: genUrl('heavenly clouds golden gates divine light rpg', 106), colorTheme: 'text-yellow-200', barColor: 'from-yellow-400 to-amber-200', themeId: 'HEAVEN' },
-    { name: 'Astral Nexus', minLevel: 45, backgroundUrl: genUrl('cosmic galaxy stars nebula magic rpg', 204), colorTheme: 'text-indigo-200', barColor: 'from-indigo-600 to-violet-500', themeId: 'COSMIC' }
+    { name: 'Dungeon Entrance', minLevel: 1, backgroundUrl: genUrl('dark dungeon entrance torches stone walls rpg', 101), colorTheme: 'text-slate-200', barColor: 'bg-gradient-to-r from-amber-500 via-orange-500 to-yellow-500', themeId: 'DEFAULT' },
+    { name: 'Fungal Caverns', minLevel: 5, backgroundUrl: genUrl('glowing mushroom cave bioluminescent purple green rpg', 102), colorTheme: 'text-purple-300', barColor: 'bg-gradient-to-r from-lime-500 via-green-400 to-emerald-500', themeId: 'FUNGAL' },
+    { name: 'Molten Depths', minLevel: 10, backgroundUrl: genUrl('lava cave volcano magma fire rpg', 103), colorTheme: 'text-red-300', barColor: 'bg-gradient-to-r from-cyan-500 via-blue-500 to-sky-500', themeId: 'MAGMA' },
+    { name: 'Whispering Library', minLevel: 15, backgroundUrl: genUrl('ancient magical library floating books fantasy rpg', 201), colorTheme: 'text-amber-200', barColor: 'bg-gradient-to-r from-violet-500 via-purple-500 to-fuchsia-500', themeId: 'LIBRARY' },
+    { name: 'Crystal Spire', minLevel: 20, backgroundUrl: genUrl('ice crystal cave blue frozen magical rpg', 104), colorTheme: 'text-cyan-300', barColor: 'bg-gradient-to-r from-rose-500 via-red-500 to-orange-500', themeId: 'CRYSTAL' },
+    { name: 'Sunken Tomb', minLevel: 25, backgroundUrl: genUrl('underwater ruins glowing runes atlantis rpg', 202), colorTheme: 'text-teal-300', barColor: 'bg-gradient-to-r from-rose-400 via-pink-500 to-red-500', themeId: 'AQUATIC' },
+    { name: 'Void Realm', minLevel: 30, backgroundUrl: genUrl('cosmic void space stars nebula purple dark rpg', 105), colorTheme: 'text-fuchsia-300', barColor: 'bg-gradient-to-r from-emerald-400 via-teal-400 to-cyan-400', themeId: 'VOID' },
+    { name: 'Iron Fortress', minLevel: 35, backgroundUrl: genUrl('steampunk industrial fortress gears lava rpg', 203), colorTheme: 'text-orange-300', barColor: 'bg-gradient-to-r from-blue-600 via-indigo-600 to-cyan-600', themeId: 'STEAMPUNK' },
+    { name: 'Celestial Citadel', minLevel: 40, backgroundUrl: genUrl('heavenly clouds golden gates divine light rpg', 106), colorTheme: 'text-yellow-200', barColor: 'bg-gradient-to-r from-violet-600 via-indigo-600 to-purple-600', themeId: 'HEAVEN' },
+    { name: 'Astral Nexus', minLevel: 45, backgroundUrl: genUrl('cosmic galaxy stars nebula magic rpg', 204), colorTheme: 'text-indigo-200', barColor: 'bg-gradient-to-r from-yellow-400 via-orange-400 to-red-500', themeId: 'COSMIC' }
 ];
 
 export const getStage = (level: number) => {

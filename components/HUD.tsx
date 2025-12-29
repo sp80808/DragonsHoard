@@ -6,6 +6,7 @@ import { InventoryItem, Stage, GameMode, InputSettings, DailyModifier, AbilitySt
 import { CountUp } from './CountUp';
 import { motion, AnimatePresence, useAnimation } from 'framer-motion';
 import { useLootSystem } from './LootSystem';
+import { getNextLevelXp, getPlayerProfile } from '../services/storageService';
 
 interface HUDProps {
   score: number;
@@ -31,6 +32,7 @@ interface HUDProps {
   onMenu: () => void;
   onOpenStats: () => void;
   itemFeedback?: { slot: number, status: 'SUCCESS' | 'ERROR', id: string };
+  // Should ideally pass baselineAccountXp here if refactoring props, but we can stick to using profile or assume updated via parent
 }
 
 const AnimatedScoreDisplay = ({ value, combo }: { value: number, combo: number }) => {
@@ -261,6 +263,27 @@ export const HUD = React.memo(({
   const flashControls = useAnimation(); 
   const isLowQuality = settings.graphicsQuality === 'LOW';
 
+  // XP Progress Calculation
+  const [baselineXp, setBaselineXp] = useState(0);
+  
+  useEffect(() => {
+      // Fetch initial account XP to accurately show progress
+      // Use local state if prop not provided (though App.tsx handles this better now)
+      const p = getPlayerProfile();
+      setBaselineXp(p.totalAccountXp);
+  }, []);
+
+  // Use baselineXp from state (loaded on mount), but prioritize the state logic in App.tsx if passed
+  // Since we don't pass baselineXp as a direct prop here in this interface, we approximate using the stored value
+  // Ideally App.tsx passes `totalXP` but `xp` is run XP.
+  // We use `baselineXp` (start of run) + `xp` (gained in run) to estimate total.
+  // Note: if App.tsx levels up, `accountLevel` prop increases.
+  
+  const totalCurrentXp = baselineXp + xp;
+  const nextLevelXp = getNextLevelXp(accountLevel);
+  const prevLevelXp = accountLevel === 1 ? 0 : getNextLevelXp(accountLevel - 1);
+  const xpProgress = Math.min(100, Math.max(0, ((totalCurrentXp - prevLevelXp) / (nextLevelXp - prevLevelXp)) * 100));
+
   // --- SMART SHOP NOTIFICATION LOGIC ---
   const [badgeCount, setBadgeCount] = useState(0);
   const [pulse, setPulse] = useState(false);
@@ -405,10 +428,43 @@ export const HUD = React.memo(({
         </div>
       </div>
 
+      {/* Enhanced Level / XP Bar */}
       {!isClassic && (
+          <div className="w-full px-1 relative group cursor-pointer" ref={xpRef} onClick={onOpenStats}>
+              <div className="flex justify-between text-[10px] font-bold text-slate-400 mb-1 uppercase tracking-wider px-1">
+                  <span className="text-indigo-300 drop-shadow-md flex items-center gap-1">
+                      <Zap size={10} className="text-yellow-400" /> Account Level {accountLevel}
+                  </span>
+                  <span className="font-mono text-slate-500">{Math.floor(totalCurrentXp - prevLevelXp).toLocaleString()} / {(nextLevelXp - prevLevelXp).toLocaleString()} XP</span>
+              </div>
+              <div className="h-4 md:h-6 bg-slate-900/80 rounded-full border border-slate-700/80 overflow-hidden relative shadow-inner backdrop-blur-sm">
+                  {/* Deep Background Glow */}
+                  <div className="absolute inset-0 bg-indigo-950/30"></div>
+                  
+                  {/* Fill Bar */}
+                  <motion.div 
+                      className={`h-full ${currentStage.barColor} relative`}
+                      initial={{ width: 0 }}
+                      animate={{ width: `${xpProgress}%` }}
+                      transition={{ type: "spring", stiffness: 100, damping: 20 }}
+                  >
+                      {/* Shimmer Effect */}
+                      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent w-[50%] skew-x-12 animate-[shimmer_2s_infinite_linear] opacity-50 mix-blend-overlay"></div>
+                      
+                      {/* Leading Edge Glow */}
+                      <div className="absolute right-0 top-0 bottom-0 w-1 bg-white/60 blur-[2px] shadow-[0_0_10px_white]"></div>
+                  </motion.div>
+                  
+                  {/* Subtle Scanline Overlay */}
+                  <div className="absolute inset-0 bg-[linear-gradient(rgba(0,0,0,0.1)_50%,transparent_50%)] bg-[length:4px_4px] opacity-20 pointer-events-none"></div>
+              </div>
+          </div>
+      )}
+
+      {!isClassic && activeModifiers && activeModifiers.length > 0 && (
           <div className="relative flex justify-center min-h-[24px]">
               <div className="flex flex-wrap gap-2 justify-center animate-in fade-in slide-in-from-top-1 overflow-x-auto p-1 no-scrollbar h-6">
-                  {activeModifiers && activeModifiers.map(mod => (
+                  {activeModifiers.map(mod => (
                       <div key={mod.id} className="flex items-center gap-1 bg-slate-800/80 px-2 py-1 rounded text-[10px] border border-slate-700">
                           <span>{mod.icon}</span>
                           <span className={`font-bold ${mod.color}`}>{mod.name}</span>

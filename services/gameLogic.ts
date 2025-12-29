@@ -152,7 +152,7 @@ export const initializeGame = (restart = false, heroClass: HeroClass = HeroClass
   }
 
   const profileStr = localStorage.getItem(PROFILE_STORAGE_KEY);
-  const profile: PlayerProfile = profileStr ? JSON.parse(profileStr) : { accountLevel: 1, unlockedPowerups: [] };
+  const profile: PlayerProfile = profileStr ? JSON.parse(profileStr) : { accountLevel: 1, unlockedPowerups: [], totalAccountXp: 0 };
 
   if (!restart && mode !== 'DAILY') {
     const saved = localStorage.getItem('2048_rpg_state_v3');
@@ -175,6 +175,10 @@ export const initializeGame = (restart = false, heroClass: HeroClass = HeroClass
                 if (parsed.settings.enableScreenShake === undefined) parsed.settings.enableScreenShake = true;
                 if (parsed.settings.enableParticles === undefined) parsed.settings.enableParticles = true;
                 if (parsed.settings.reduceMotion === undefined) parsed.settings.reduceMotion = false;
+            }
+            // Ensure baseline exists if recovering old save
+            if (parsed.baselineAccountXp === undefined) {
+                parsed.baselineAccountXp = profile.totalAccountXp;
             }
             parsed.grid = parsed.grid.filter((t: Tile) => !t.isDying);
             return parsed;
@@ -282,6 +286,7 @@ export const initializeGame = (restart = false, heroClass: HeroClass = HeroClass
     difficulty,
     tilesetId,
     accountLevel: profile.accountLevel,
+    baselineAccountXp: profile.totalAccountXp, // Track starting XP
     justLeveledUp: false,
     shop: getInitialShopState(activeModifiers),
     activeModifiers,

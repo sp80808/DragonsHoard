@@ -4,6 +4,7 @@ import { Tile, LootEvent, GraphicsQuality } from '../types';
 import { TileComponent } from './TileComponent';
 import { TILE_STYLES, BOSS_STYLE, RUNE_STYLES, FALLBACK_STYLE, STONE_STYLE } from '../constants';
 import { Coins, Star } from 'lucide-react';
+import { useLootSystem } from './LootSystem';
 
 interface GridProps {
   grid: Tile[];
@@ -24,6 +25,7 @@ export const Grid = React.memo(({ grid, size, mergeEvents, lootEvents, slideSpee
   const particlesRef = useRef<any[]>([]);
   const animationFrameRef = useRef<number>(0);
   const containerRef = useRef<HTMLDivElement>(null);
+  const { spawnLoot } = useLootSystem();
 
   // Backward compatibility logic
   const isLowQuality = graphicsQuality === 'LOW' || lowPerformanceMode === true;
@@ -58,6 +60,31 @@ export const Grid = React.memo(({ grid, size, mergeEvents, lootEvents, slideSpee
         </div>
       );
   }, [size]);
+
+  // Trigger Loot Particles
+  useEffect(() => {
+      if (!containerRef.current || lootEvents.length === 0 || isLowQuality) return;
+      
+      const rect = containerRef.current.getBoundingClientRect();
+      const padding = 8; // approx p-2
+      const availableWidth = rect.width - (padding * 2);
+      const availableHeight = rect.height - (padding * 2);
+      const cellSize = availableWidth / size;
+
+      lootEvents.forEach(loot => {
+          if (loot.type === 'XP' || loot.type === 'GOLD') {
+              const spawnX = rect.left + padding + (loot.x * cellSize) + (cellSize / 2);
+              const spawnY = rect.top + padding + (loot.y * cellSize) + (cellSize / 2);
+              
+              // Mock a DOMRect for the source
+              const sourceRect = {
+                  left: spawnX, top: spawnY, width: 0, height: 0, right: spawnX, bottom: spawnY, x: spawnX, y: spawnY, toJSON: () => {}
+              } as DOMRect;
+
+              spawnLoot(loot.type, sourceRect, 6);
+          }
+      });
+  }, [lootEvents, size, isLowQuality, spawnLoot]);
 
   useEffect(() => {
       if (isLowQuality || mergeEvents.length === 0) return;

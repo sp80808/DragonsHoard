@@ -178,7 +178,7 @@ export const RunSummary: React.FC<Props> = ({ gameState, onRestart, onShowLeader
               <div className="w-full bg-slate-900/50 border border-red-900/20 rounded-2xl p-4 mb-4 backdrop-blur-sm relative overflow-hidden group">
                   <div className="absolute inset-0 bg-red-600/5 translate-y-full group-hover:translate-y-0 transition-transform duration-500"></div>
                   <div className="text-xs text-slate-500 uppercase tracking-[0.2em] font-bold mb-1 relative z-10">Final Score</div>
-                  <div className="text-4xl md:text-5xl font-mono font-black text-white drop-shadow-md relative z-10">
+                  <div className="text-4xl md:text-5xl fantasy-font font-black text-white drop-shadow-md relative z-10 tracking-wide">
                       {gameState.score.toLocaleString()}
                   </div>
                   {gameState.score > profile.highScore && (
@@ -362,13 +362,13 @@ export const RunSummary: React.FC<Props> = ({ gameState, onRestart, onShowLeader
   );
 };
 
-// Helper for Stats
+// Helper for Stats - UPDATED: Removed font-mono, added fantasy-font for numbers
 const DeathStat = ({ label, value, icon }: any) => (
     <div 
         className={`border border-white/5 bg-slate-900/40 p-2 rounded-xl flex flex-col items-center justify-center gap-0.5 transition-all hover:scale-105 hover:bg-white/5`}
     >
         <div className="text-slate-500 uppercase tracking-wider text-[8px] font-bold">{label}</div>
-        <div className="text-white font-bold text-sm flex items-center gap-1.5">
+        <div className="text-white font-bold text-sm flex items-center gap-1.5 fantasy-font tracking-wide">
             {icon} {typeof value === 'number' ? value.toLocaleString() : value}
         </div>
     </div>

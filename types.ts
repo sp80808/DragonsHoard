@@ -292,6 +292,7 @@ export interface GameState {
   difficulty: Difficulty; // NORMAL or HARD
   tilesetId: string; // DEFAULT or UNDEAD
   accountLevel: number; // Used for gating cascades
+  baselineAccountXp: number; // New: Tracks starting XP of the session for level up calculation
   justLeveledUp: boolean;
   unlockedPerk?: string;
   shop: ShopState;

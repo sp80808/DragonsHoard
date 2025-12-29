@@ -59,7 +59,7 @@ export const VictoryScreen: React.FC<VictoryScreenProps> = ({ gameState, onConti
               <div className="w-full bg-yellow-900/10 border border-yellow-500/20 rounded-2xl p-6 backdrop-blur-sm relative overflow-hidden group">
                   <div className="absolute inset-0 bg-gradient-to-r from-transparent via-yellow-500/10 to-transparent translate-x-[-100%] group-hover:animate-shimmer"></div>
                   <div className="text-xs text-yellow-500 uppercase tracking-[0.2em] font-bold mb-2">Final Score</div>
-                  <div className="text-4xl md:text-5xl font-mono font-bold text-white drop-shadow-md">
+                  <div className="text-4xl md:text-5xl fantasy-font font-black text-white drop-shadow-md tracking-wide">
                       {gameState.score.toLocaleString()}
                   </div>
               </div>
@@ -126,10 +126,11 @@ export const VictoryScreen: React.FC<VictoryScreenProps> = ({ gameState, onConti
   );
 };
 
+// Helper for Stats - UPDATED: Removed font-mono, added fantasy-font for numbers
 const VictoryStat = ({ label, value, icon }: { label: string, value: string | number, icon: React.ReactNode }) => (
     <div className="bg-slate-900/50 border border-slate-800 p-3 rounded-xl flex flex-col items-center justify-center gap-1">
         <div className="text-slate-500 uppercase tracking-wider text-[9px] font-bold">{label}</div>
-        <div className="text-white font-bold text-base flex items-center gap-2">
+        <div className="text-white font-bold text-base flex items-center gap-2 fantasy-font tracking-wide">
             {icon} {value}
         </div>
     </div>
