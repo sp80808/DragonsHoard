@@ -1,7 +1,7 @@
 
 import React, { useEffect, useState, useRef } from 'react';
 import { HeroClass, GameMode, PlayerProfile, Difficulty } from '../types';
-import { Trophy, Settings, Swords, Play, Skull, Palette, Grid, HelpCircle, Star, Calendar, RefreshCcw, ChevronRight, Users, ChevronDown, Gamepad2, Award, Lock, User, Maximize } from 'lucide-react';
+import { Trophy, Settings, Swords, Play, Skull, Palette, Grid, HelpCircle, Star, Calendar, RefreshCcw, ChevronRight, Users, ChevronDown, Gamepad2, Award, Lock, User, Maximize, Facebook } from 'lucide-react';
 import { getPlayerProfile, getNextLevelXp } from '../services/storageService';
 import { generateDailyModifiers } from '../services/gameLogic';
 import { facebookService } from '../services/facebookService';
@@ -112,6 +112,7 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({ onStart, onContinue,
   const [showProfileStats, setShowProfileStats] = useState(false);
   const [bgUrl, setBgUrl] = useState('');
   const { toggleFullscreen } = useFullscreen();
+  const [fbLoggedIn, setFbLoggedIn] = useState(facebookService.isLoggedIn());
   
   // Facebook Player Info
   const playerName = facebookService.getPlayerName();
@@ -141,7 +142,6 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({ onStart, onContinue,
   };
 
   const handleVersus = async () => {
-      // Open Facebook Context Chooser
       const success = await facebookService.chooseContext();
       if (success) {
           onStart(HeroClass.ADVENTURER, 'VERSUS', undefined, 'NORMAL', profile?.activeTilesetId);
@@ -152,7 +152,15 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({ onStart, onContinue,
       onStart(HeroClass.ADVENTURER, 'BOSS_RUSH', undefined, 'NORMAL', profile?.activeTilesetId);
   };
 
+  const handleFbLogin = async () => {
+      const success = await facebookService.loginWeb();
+      if (success) {
+          setFbLoggedIn(true);
+      }
+  };
+
   const isBossRushUnlocked = profile?.unlockedFeatures.includes('MODE_BOSS_RUSH');
+  const isWebMode = facebookService.isWebMode();
 
   return (
     <div className="absolute inset-0 z-50 flex flex-col md:flex-row bg-[#050505] overflow-hidden font-sans">
@@ -250,6 +258,18 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({ onStart, onContinue,
                       </button>
                   </div>
               </div>
+
+              {/* Facebook Login for Web (Optional) */}
+              {isWebMode && !fbLoggedIn && (
+                  <div className="px-4 pb-2">
+                      <button 
+                        onClick={handleFbLogin}
+                        className="w-full py-2 bg-[#1877F2] hover:bg-[#155fc4] text-white text-xs font-bold rounded-lg flex items-center justify-center gap-2 transition-colors"
+                      >
+                          <Facebook size={14} fill="currentColor" /> Connect Facebook
+                      </button>
+                  </div>
+              )}
 
               {/* Collapsible Stats Panel */}
               <AnimatePresence>

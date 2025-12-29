@@ -46,7 +46,9 @@ const getDefaultProfile = (): PlayerProfile => ({
     activeTilesetId: 'DEFAULT',
     unlockedLore: [],
     earnedMedals: {},
-    unlockedPowerups: []
+    unlockedPowerups: [],
+    skillPoints: 0,
+    unlockedSkills: ['ROOT']
 });
 
 export const syncPlayerProfile = async (): Promise<PlayerProfile> => {
@@ -78,6 +80,8 @@ export const syncPlayerProfile = async (): Promise<PlayerProfile> => {
     // 4. Validate & Fill missing fields
     if (!finalProfile.unlockedClasses) finalProfile.unlockedClasses = [HeroClass.ADVENTURER];
     if (!finalProfile.activeBounties) finalProfile.activeBounties = [];
+    if (!finalProfile.skillPoints) finalProfile.skillPoints = 0;
+    if (!finalProfile.unlockedSkills) finalProfile.unlockedSkills = ['ROOT'];
     
     const today = new Date().toISOString().split('T')[0];
     if (finalProfile.lastBountyDate !== today) {
@@ -152,7 +156,7 @@ export const unlockClass = (cls: HeroClass) => {
 };
 
 export interface UnlockReward {
-    type: 'CLASS' | 'FEATURE' | 'TILESET' | 'POWERUP';
+    type: 'CLASS' | 'FEATURE' | 'TILESET' | 'POWERUP' | 'SKILL_POINT';
     id: string;
     label: string;
     desc: string;
@@ -223,6 +227,9 @@ export const finalizeRun = (finalState: GameState): { profile: PlayerProfile, le
     const nextLevelXp = getXpForLevel(profile.accountLevel);
     if (profile.totalAccountXp >= nextLevelXp) {
         profile.accountLevel += 1;
+        profile.skillPoints = (profile.skillPoints || 0) + 1; // Award Skill Point
+        newUnlocks.push({ type: 'SKILL_POINT', id: 'SP', label: 'Skill Point', desc: 'Spend in Grimoire.', level: profile.accountLevel });
+        
         leveledUp = true;
         const level = profile.accountLevel;
 

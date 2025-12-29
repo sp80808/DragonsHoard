@@ -11,6 +11,7 @@ import { GameStatsModal } from './components/GameStatsModal';
 import { Settings } from './components/Settings';
 import { HelpScreen } from './components/HelpScreen';
 import { Grimoire } from './components/Grimoire';
+import { SkillTree } from './components/SkillTree';
 import { Leaderboard } from './components/Leaderboard';
 import { RunSummary } from './components/RunSummary';
 import { TutorialOverlay } from './components/TutorialOverlay';
@@ -44,7 +45,9 @@ type Action =
   | { type: 'UPDATE_SETTINGS', settings: InputSettings }
   | { type: 'RESTORE_STATE', state: GameState }
   | { type: 'PROCESS_PASSIVES' }
-  | { type: 'CLAIM_BOUNTY', reward: number };
+  | { type: 'CLAIM_BOUNTY', reward: number }
+  | { type: 'INVALID_MOVE' }
+  | { type: 'CLEAR_INVALID_MOVE' };
 
 const gameReducer = (state: GameState, action: Action): GameState => {
     switch(action.type) {
@@ -76,7 +79,9 @@ const gameReducer = (state: GameState, action: Action): GameState => {
                 state.difficulty,
                 state.stats
             );
-            if (!res.moved) return state;
+            if (!res.moved) {
+                return { ...state, isInvalidMove: true }; // Trigger shake
+            }
 
             // Trigger Move Audio
             audioService.playMove();
@@ -153,9 +158,14 @@ const gameReducer = (state: GameState, action: Action): GameState => {
                 lastTurnMedals: res.medalsEarned,
                 abilities: updatedAbilities,
                 achievements: [...state.achievements, ...newAchievements],
-                logs: [...state.logs, ...res.logs].slice(-5)
+                logs: [...state.logs, ...res.logs].slice(-5),
+                isInvalidMove: false // Reset
             };
         }
+        case 'INVALID_MOVE':
+            return { ...state, isInvalidMove: true };
+        case 'CLEAR_INVALID_MOVE':
+            return { ...state, isInvalidMove: false };
         case 'PROCESS_PASSIVES': {
             const res = processPassiveAbilities(state);
             if (res.triggered.length === 0) return state;
@@ -346,6 +356,9 @@ const GameContent: React.FC = () => {
   const [itemFeedback, setItemFeedback] = useState<{ slot: number, status: 'SUCCESS' | 'ERROR', id: string } | undefined>(undefined);
   const [globalShake, setGlobalShake] = useState(false);
   
+  // Input Throttling State
+  const [isProcessingMove, setIsProcessingMove] = useState(false);
+  
   // Bounty State
   const [challengeTarget, setChallengeTarget] = useState<{score: number, name: string} | null>(null);
   const [bountyClaimed, setBountyClaimed] = useState(false);
@@ -354,6 +367,16 @@ const GameContent: React.FC = () => {
   const scrollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { isFullscreen, toggleFullscreen } = useFullscreen();
   const { spawnLoot } = useLootSystem();
+
+  // Reset invalid move shake after a short delay
+  useEffect(() => {
+      if (state.isInvalidMove) {
+          const t = setTimeout(() => {
+              dispatch({ type: 'CLEAR_INVALID_MOVE' });
+          }, 400); // Slightly longer than CSS animation (300ms)
+          return () => clearTimeout(t);
+      }
+  }, [state.isInvalidMove]);
 
   // Dynamic Audio Intensity
   // We map Score 0 -> 0.0 intensity, Score 15000 -> 1.0 intensity
@@ -518,6 +541,17 @@ const GameContent: React.FC = () => {
       }
   }, [state.isCascading]);
 
+  const handleMove = useCallback((direction: Direction) => {
+      if (isProcessingMove) return;
+      
+      // Throttle input to prevent animation glitches
+      setIsProcessingMove(true);
+      dispatch({ type: 'MOVE', direction });
+      
+      // Unlock input after animation typically finishes (faster than actual animation to feel responsive)
+      setTimeout(() => setIsProcessingMove(false), state.settings.slideSpeed * 0.7); 
+  }, [isProcessingMove, state.settings.slideSpeed]);
+
   // Handle Input
   useEffect(() => {
       if (view !== 'GAME') return;
@@ -547,7 +581,7 @@ const GameContent: React.FC = () => {
                        else if (direction === Direction.LEFT) direction = Direction.RIGHT;
                        else if (direction === Direction.RIGHT) direction = Direction.LEFT;
                    }
-                   dispatch({ type: 'MOVE', direction });
+                   handleMove(direction);
               }
           }
           dragStartRef.current = null;
@@ -573,18 +607,19 @@ const GameContent: React.FC = () => {
                        else if (direction === Direction.LEFT) direction = Direction.RIGHT;
                        else if (direction === Direction.RIGHT) direction = Direction.LEFT;
                   }
-                  dispatch({ type: 'MOVE', direction });
+                  handleMove(direction);
                   scrollTimeoutRef.current = setTimeout(() => { scrollTimeoutRef.current = null; }, 300);
               }
           }
       };
 
       const onTouchStart = (e: TouchEvent) => {
-          e.preventDefault(); 
+          // Prevent scroll bounce on iOS
+          // e.preventDefault(); 
           handleStart(e.touches[0].clientX, e.touches[0].clientY);
       };
       const onTouchEnd = (e: TouchEvent) => {
-          e.preventDefault();
+          // e.preventDefault();
           handleEnd(e.changedTouches[0].clientX, e.changedTouches[0].clientY);
       };
       
@@ -604,7 +639,7 @@ const GameContent: React.FC = () => {
           window.removeEventListener('mouseup', onMouseUp);
           window.removeEventListener('wheel', handleWheel);
       };
-  }, [view, state.gameOver, state.isCascading, showStore, showStats, state.settings, showTutorial, feedbackQueue.length]);
+  }, [view, state.gameOver, state.isCascading, showStore, showStats, state.settings, showTutorial, feedbackQueue.length, handleMove]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -613,10 +648,10 @@ const GameContent: React.FC = () => {
         if (state.gameOver || view !== 'GAME' || state.isCascading || showStore || showStats || feedbackQueue.length > 0) return;
         
         switch(e.key) {
-            case 'ArrowUp': case 'w': case 'W': dispatch({ type: 'MOVE', direction: Direction.UP }); break;
-            case 'ArrowDown': case 's': case 'S': dispatch({ type: 'MOVE', direction: Direction.DOWN }); break;
-            case 'ArrowLeft': case 'a': case 'A': dispatch({ type: 'MOVE', direction: Direction.LEFT }); break;
-            case 'ArrowRight': case 'd': case 'D': dispatch({ type: 'MOVE', direction: Direction.RIGHT }); break;
+            case 'ArrowUp': case 'w': case 'W': handleMove(Direction.UP); break;
+            case 'ArrowDown': case 's': case 'S': handleMove(Direction.DOWN); break;
+            case 'ArrowLeft': case 'a': case 'A': handleMove(Direction.LEFT); break;
+            case 'ArrowRight': case 'd': case 'D': handleMove(Direction.RIGHT); break;
             case '1': 
                 if (state.inventory[0]) {
                     dispatch({ type: 'USE_ITEM', item: state.inventory[0] });
@@ -645,7 +680,7 @@ const GameContent: React.FC = () => {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [state.gameOver, view, state.isCascading, showStore, showStats, state.settings, showTutorial, feedbackQueue.length, state.inventory]);
+  }, [state.gameOver, view, state.isCascading, showStore, showStats, state.settings, showTutorial, feedbackQueue.length, state.inventory, handleMove]);
 
   // Process Medals & Events
   useEffect(() => {
@@ -705,6 +740,7 @@ const GameContent: React.FC = () => {
           case 'HELP': return <HelpScreen onBack={() => setView('SPLASH')} />;
           case 'GRIMOIRE': return <Grimoire profile={getPlayerProfile()} onBack={() => setView('SPLASH')} onSelectTileset={(id) => dispatch({ type: 'START_GAME', heroClass: state.selectedClass, mode: state.gameMode, tileset: id })} />;
           case 'VERSUS': return <VersusGame onBack={() => setView('SPLASH')} />;
+          case 'SKILLS': return <SkillTree onBack={() => setView('GAME')} />; // Accessed from Menu
           case 'GAME':
               return (
                 <>
@@ -716,7 +752,7 @@ const GameContent: React.FC = () => {
                         <AmbientBackground graphicsQuality={state.settings.graphicsQuality} />
                     </div>
 
-                    <div className={`relative w-full h-full max-w-lg mx-auto flex flex-col p-2 md:p-4 z-10 transition-transform duration-100 ${globalShake ? 'animate-shake-lg' : ''}`}>
+                    <div className={`relative w-full h-full max-w-xl lg:max-w-2xl max-h-[90vh] aspect-[9/16] md:aspect-[3/4] mx-auto flex flex-col p-2 md:p-4 z-10 transition-transform duration-100 ${globalShake ? 'animate-shake-lg' : ''} ${state.isInvalidMove ? 'animate-shake-horizontal' : ''} justify-center`}>
                         <div className="relative z-10 flex flex-col h-full gap-4">
                             <HUD 
                                 score={state.score}
@@ -744,7 +780,7 @@ const GameContent: React.FC = () => {
                                 }}
                                 onReroll={() => dispatch({ type: 'REROLL' })}
                                 onMenu={() => setView('SPLASH')}
-                                onOpenStats={() => setShowStats(true)}
+                                onOpenStats={() => setView('SKILLS')}
                                 itemFeedback={itemFeedback}
                             />
                             

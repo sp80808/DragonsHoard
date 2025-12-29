@@ -1,6 +1,6 @@
 
-import { TileType, ItemType, GameStats, GameState, Stage, Achievement, HeroClass, CraftingRecipe, DailyModifier, StoryEntry, PlayerProfile, Medal } from './types';
-import { Trophy, Star, Shield, Zap, Swords, LayoutGrid, Map, Flame, Target, Hexagon, Crosshair, Medal as MedalIcon, Crown, Skull } from 'lucide-react';
+import { TileType, ItemType, GameStats, GameState, Stage, Achievement, HeroClass, CraftingRecipe, DailyModifier, StoryEntry, PlayerProfile, Medal, SkillNodeDefinition } from './types';
+import { Trophy, Star, Shield, Zap, Swords, LayoutGrid, Map, Flame, Target, Hexagon, Crosshair, Medal as MedalIcon, Crown, Skull, Coins, Hourglass, Eye, Feather, Rocket } from 'lucide-react';
 import React from 'react';
 
 export const GRID_SIZE_INITIAL = 4;
@@ -96,6 +96,25 @@ export const SHOP_ITEMS = [
     { id: ItemType.VOID_STONE, name: "Void Stone", desc: "Consumes 1 weak tile per turn (10 turns).", price: 1000, category: 'MAGIC', icon: '🌑' },
     { id: ItemType.RADIANT_AURA, name: "Radiant Aura", desc: "+50% XP for 20 turns.", price: 900, category: 'MAGIC', icon: '☀️' },
     { id: ItemType.THUNDER_SCROLL, name: "Thunder Scroll", desc: "Instantly triggers a Cascade chain.", price: 1200, category: 'BATTLE', icon: '⚡' },
+];
+
+export const SKILL_TREE: SkillNodeDefinition[] = [
+    { id: 'ROOT', title: 'Awakening', description: 'The start of your journey.', icon: React.createElement(Star, {size: 20}), x: 50, y: 90, cost: 0 },
+    
+    // Left Branch (Combat)
+    { id: 'WARRIOR_PATH', title: 'Warrior\'s Way', description: '+5% Boss Damage.', icon: React.createElement(Swords, {size: 20}), x: 30, y: 75, parentId: 'ROOT', cost: 1 },
+    { id: 'DEMOLITION', title: 'Demolition', description: 'Bomb Scrolls effect radius increased.', icon: React.createElement(Skull, {size: 20}), x: 20, y: 60, parentId: 'WARRIOR_PATH', cost: 2 },
+    { id: 'GIANT_SLAYER', title: 'Giant Slayer', description: '+10% Boss Damage.', icon: React.createElement(Trophy, {size: 20}), x: 30, y: 45, parentId: 'WARRIOR_PATH', cost: 3 },
+    
+    // Center Branch (Magic/Utility)
+    { id: 'ARCANE_PATH', title: 'Arcane Knowledge', description: '+5% XP Gain.', icon: React.createElement(Zap, {size: 20}), x: 50, y: 70, parentId: 'ROOT', cost: 1 },
+    { id: 'TIME_KEEPER', title: 'Time Keeper', description: 'Reroll Tokens cost 10% less.', icon: React.createElement(Hourglass, {size: 20}), x: 50, y: 50, parentId: 'ARCANE_PATH', cost: 2 },
+    { id: 'DIVINE_SPARK', title: 'Divine Spark', description: 'Start runs with 1 Random Item.', icon: React.createElement(Rocket, {size: 20}), x: 50, y: 30, parentId: 'TIME_KEEPER', cost: 5 },
+
+    // Right Branch (Greed)
+    { id: 'THIEF_PATH', title: 'Thief\'s Guile', description: '+5% Gold Gain.', icon: React.createElement(Coins, {size: 20}), x: 70, y: 75, parentId: 'ROOT', cost: 1 },
+    { id: 'LUCKY_FIND', title: 'Lucky Find', description: 'Increased loot drop chance.', icon: React.createElement(Eye, {size: 20}), x: 80, y: 60, parentId: 'THIEF_PATH', cost: 2 },
+    { id: 'MIDAS_TOUCH', title: 'Midas Touch', description: 'Golden Tiles worth 3x.', icon: React.createElement(Crown, {size: 20}), x: 70, y: 45, parentId: 'THIEF_PATH', cost: 3 },
 ];
 
 export const getItemDefinition = (type: string) => SHOP_ITEMS.find(i => i.id === type) || { name: type, desc: 'Unknown Item', icon: '?' };

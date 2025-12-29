@@ -71,7 +71,7 @@ export interface AbilityState {
 export type GameMode = 'RPG' | 'CLASSIC' | 'VERSUS' | 'DAILY' | 'BOSS_RUSH';
 export type Difficulty = 'NORMAL' | 'HARD';
 
-export type View = 'SPLASH' | 'GAME' | 'LEADERBOARD' | 'SETTINGS' | 'HELP' | 'VERSUS' | 'GRIMOIRE';
+export type View = 'SPLASH' | 'GAME' | 'LEADERBOARD' | 'SETTINGS' | 'HELP' | 'VERSUS' | 'GRIMOIRE' | 'SKILLS';
 
 export interface InventoryItem {
   id: string;
@@ -191,6 +191,20 @@ export interface PlayerProfile {
   unlockedLore: string[]; // IDs of unlocked story fragments
   earnedMedals: Record<string, number>; // Medal ID -> Count
   unlockedPowerups: AbilityType[]; // Persistent unlocks
+  skillPoints: number;
+  unlockedSkills: string[]; // IDs of unlocked skill nodes
+}
+
+export interface SkillNodeDefinition {
+    id: string;
+    title: string;
+    description: string;
+    icon: React.ReactNode;
+    x: number; // 0-100 percentage
+    y: number; // 0-100 percentage
+    parentId?: string;
+    cost: number;
+    effect?: (state: GameState) => Partial<GameState>; // Runtime effect hook
 }
 
 export interface Achievement {
@@ -299,6 +313,7 @@ export interface GameState {
   activeModifiers: DailyModifier[]; // New: List of active modifiers for Daily/Challenge runs
   lootEvents: LootEvent[];
   lastTurnMedals: Medal[]; // Medals earned in the most recent move (cleared by UI)
+  isInvalidMove?: boolean; // Visual feedback for invalid swipes
   
   // Powerup System
   abilities: Record<AbilityType, AbilityState>;

@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, Zap, Skull, Swords, Scroll, Coins, Trophy, Sparkles, Package, Sparkles as MagicIcon, Sword, Book, Eye, Feather } from 'lucide-react';
+import { ArrowLeft, Zap, Skull, Swords, Scroll, Coins, Trophy, Sparkles, Package, Sparkles as MagicIcon, Sword, Book, Eye, Feather, Ghost } from 'lucide-react';
 import { SHOP_ITEMS, TILE_STYLES, STORY_ENTRIES } from '../constants';
 import { TileType } from '../types';
 import { getPlayerProfile } from '../services/storageService';
@@ -159,23 +159,31 @@ export const HelpScreen: React.FC<HelpScreenProps> = ({ onBack }) => {
                             whileInView={{ opacity: 1, y: 0 }}
                             viewport={{ once: true, margin: "-50px" }}
                             transition={{ delay: idx * 0.05, type: "spring", stiffness: 100 }}
-                            className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden group hover:border-slate-600 transition-colors"
+                            className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden group hover:border-slate-600 transition-colors shadow-lg hover:shadow-xl hover:shadow-purple-900/20"
                           >
-                              <div className={`h-24 bg-gradient-to-br ${m.color} relative overflow-hidden flex items-center justify-center`}>
-                                   {m.imageUrl && (
-                                       <img src={m.imageUrl} alt={m.label} className="absolute inset-0 w-full h-full object-cover opacity-60 mix-blend-overlay group-hover:scale-110 transition-transform duration-500" />
+                              {/* Monster Visual */}
+                              <div className={`h-32 bg-gradient-to-br ${m.color} relative overflow-hidden flex items-center justify-center`}>
+                                   {m.imageUrl ? (
+                                       <img src={m.imageUrl} alt={m.label} className="absolute inset-0 w-full h-full object-cover group-hover:scale-110 transition-transform duration-700 ease-out" />
+                                   ) : (
+                                       <Ghost size={48} className="text-white/20" />
                                    )}
-                                   <div className="relative z-10 text-4xl drop-shadow-md">{m.icon}</div>
+                                   {/* Removed emoji icon */}
+                                   <div className="absolute inset-0 bg-gradient-to-t from-slate-900 via-transparent to-transparent"></div>
                               </div>
-                              <div className="p-3">
+                              
+                              {/* Info */}
+                              <div className="p-3 bg-slate-900 relative">
                                   <div className="flex justify-between items-center mb-1">
-                                      <span className="font-bold text-white text-xs uppercase tracking-wide">{m.label}</span>
-                                      <span className="text-[10px] font-mono text-slate-500">{m.value}</span>
+                                      <span className="font-bold text-white text-xs uppercase tracking-widest">{m.label}</span>
+                                      <div className="px-2 py-0.5 rounded bg-slate-800 text-[10px] font-mono text-yellow-500 font-bold border border-slate-700">
+                                          LVL {Math.log2(m.value)}
+                                      </div>
                                   </div>
-                                  <div className="text-[10px] text-slate-400">
-                                      {m.value >= 2048 ? "Legendary Deity." : 
-                                       m.value >= 512 ? "Mythical Beast." : 
-                                       m.value >= 64 ? "Dangerous Foe." : "Common Monster."}
+                                  <div className="text-[10px] text-slate-400 leading-tight border-t border-slate-800 pt-2 mt-2">
+                                      {m.value >= 2048 ? "A legendary deity of immense power." : 
+                                       m.value >= 512 ? "A mythical beast feared by kings." : 
+                                       m.value >= 64 ? "A dangerous foe for any hero." : "Common fodder for the dungeon."}
                                   </div>
                               </div>
                           </motion.div>

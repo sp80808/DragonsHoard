@@ -3,11 +3,14 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     <title>Dragon's Hoard 2048</title>
     
-    <!-- Facebook Instant Games SDK -->
+    <!-- Facebook Instant Games SDK (Keep for FB Platform) -->
     <script src="https://connect.facebook.net/en_US/fbinstant.6.3.js"></script>
+    
+    <!-- Facebook JS SDK (For Web/itch.io Hosting) -->
+    <script async defer crossorigin="anonymous" src="https://connect.facebook.net/en_US/sdk.js"></script>
     
     <!-- Meta Pixel Code -->
     <script>
@@ -37,6 +40,17 @@
         --biome-threshold: #1c1917;
         --biome-hall: #1e1b4b;
         --biome-hoard: #451a03;
+        
+        /* Dynamic Mouse Variables */
+        --mouse-x: 0.5;
+        --mouse-y: 0.5;
+      }
+
+      html, body {
+        height: 100%;
+        width: 100%;
+        margin: 0;
+        padding: 0;
       }
 
       body {
@@ -47,6 +61,11 @@
         touch-action: none; /* Disable browser handling of gestures */
         user-select: none; /* Prevent text highlighting during play */
         -webkit-user-select: none;
+      }
+      
+      #root {
+        height: 100%;
+        width: 100%;
       }
       
       h1, h2, h3, .fantasy-font {
@@ -254,9 +273,17 @@
         25% { transform: translate(-1px, 1px); }
         75% { transform: translate(1px, -1px); }
       }
+      /* Invalid Move Shake */
+      @keyframes shakeHorizontal {
+        0%, 100% { transform: translateX(0); }
+        10%, 30%, 50%, 70%, 90% { transform: translateX(-4px); }
+        20%, 40%, 60%, 80% { transform: translateX(4px); }
+      }
+      
       .animate-shake-sm { animation: shakeSmall 0.2s ease-in-out; } 
       .animate-shake-md { animation: shakeSmall 0.3s ease-in-out infinite; } 
       .animate-shake-lg { animation: shakeSmall 0.4s ease-in-out infinite; }
+      .animate-shake-horizontal { animation: shakeHorizontal 0.3s cubic-bezier(.36,.07,.19,.97) both; }
 
       /* XP Bar Shimmer */
       @keyframes shimmer {
@@ -327,6 +354,21 @@
         0% { opacity: 1; }
         100% { opacity: 0; }
       }
+      
+      /* New Holographic & Torch Effects */
+      .holo-sheen {
+        background: linear-gradient(
+          115deg, 
+          transparent 0%, 
+          rgba(255, 255, 255, 0.05) 30%, 
+          rgba(255, 255, 255, 0.3) 45%, 
+          rgba(255, 255, 255, 0.05) 60%, 
+          transparent 100%
+        );
+        background-size: 200% 200%;
+        background-position: calc(var(--mouse-x, 0.5) * 100%) calc(var(--mouse-y, 0.5) * 100%);
+        mix-blend-mode: overlay;
+      }
     </style>
   <script type="importmap">
 {
@@ -346,6 +388,11 @@
 }
 </script>
   <script>
+    // Ensure window.focus() on click for itch.io iframe compatibility
+    window.addEventListener('mousedown', function() {
+      window.focus();
+    });
+
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
         navigator.serviceWorker.register('/sw.js').then(registration => {

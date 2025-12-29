@@ -68,7 +68,7 @@ export const Grid = React.memo(({ grid, size, mergeEvents, lootEvents, slideSpee
       const rect = containerRef.current.getBoundingClientRect();
       const padding = 8; // approx p-2
       const availableWidth = rect.width - (padding * 2);
-      const availableHeight = rect.height - (padding * 2);
+      // const availableHeight = rect.height - (padding * 2); // Unused
       const cellSize = availableWidth / size;
 
       lootEvents.forEach(loot => {
@@ -245,7 +245,7 @@ export const Grid = React.memo(({ grid, size, mergeEvents, lootEvents, slideSpee
   }, [isLowQuality]);
 
   return (
-    <div ref={containerRef} className="relative w-full aspect-square group mx-auto">
+    <div ref={containerRef} className="relative w-full aspect-square group mx-auto will-change-transform">
         {!isLowQuality && <div className={`absolute -inset-4 bg-gradient-to-r ${ambientGlowClass} rounded-3xl blur-2xl -z-10 transition-colors duration-500`}></div>}
         
         {/* Main Grid Container (Clipped for rounded corners and particles) */}

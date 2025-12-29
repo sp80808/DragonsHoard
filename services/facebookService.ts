@@ -1,201 +1,261 @@
 
-// Wrapper for Facebook Instant Games SDK 6.3 (API 8.0 compatible)
+// Wrapper for Facebook Instant Games SDK 6.3 (API 8.0 compatible) AND Standard Web SDK
 // Handles initialization, data saving, ads, and social features.
 
 declare global {
     interface Window {
         FBInstant: any;
+        FB: any;
         fbq: any;
+        fbAsyncInit: any;
     }
 }
 
 class FacebookService {
     private isInitialized = false;
-    private isMock = false;
+    private mode: 'INSTANT' | 'WEB' | 'MOCK' = 'MOCK';
+    private webProfile: { name: string; photo: string; id: string } | null = null;
 
     constructor() {
-        if (typeof window !== 'undefined' && !window.FBInstant) {
-            this.isMock = true;
-            console.log("FBInstant not found. Running in MOCK mode.");
-        }
+        // Constructor logic if needed
     }
 
     async initialize(): Promise<void> {
         if (this.isInitialized) return;
 
-        if (this.isMock) {
-            this.isInitialized = true;
-            return;
+        // 1. Try Instant Games (Mobile/FB App)
+        if (typeof window !== 'undefined' && window.FBInstant) {
+            try {
+                await window.FBInstant.initializeAsync();
+                this.mode = 'INSTANT';
+                this.isInitialized = true;
+                console.log("FBInstant Initialized");
+                return;
+            } catch (error) {
+                console.warn("FBInstant init failed, falling back...");
+            }
         }
 
-        try {
-            await window.FBInstant.initializeAsync();
-            this.isInitialized = true;
-            console.log("FBInstant Initialized");
-        } catch (error) {
-            console.error("FBInstant Init Failed:", error);
-            this.isMock = true;
+        // 2. Try Standard Web SDK (itch.io / Web)
+        // We wait a bit for the async script to load if it hasn't yet
+        if (typeof window !== 'undefined') {
+            if (window.FB) {
+                this.initWebSDK();
+            } else {
+                window.fbAsyncInit = () => {
+                    this.initWebSDK();
+                };
+            }
         }
     }
 
-    setLoadingProgress(percentage: number): void {
-        if (this.isMock) return;
+    private initWebSDK() {
         try {
-            window.FBInstant.setLoadingProgress(percentage);
-        } catch(e) {}
+            window.FB.init({
+                appId: '1734049544181820',
+                cookie: true,
+                xfbml: true,
+                version: 'v18.0'
+            });
+            this.mode = 'WEB';
+            this.isInitialized = true;
+            console.log("FB Web SDK Initialized");
+
+            // Check if already logged in
+            window.FB.getLoginStatus((response: any) => {
+                if (response.status === 'connected') {
+                    this.fetchWebProfile();
+                }
+            });
+        } catch (e) {
+            console.error("FB Web Init Failed:", e);
+            this.mode = 'MOCK';
+            this.isInitialized = true;
+        }
+    }
+
+    // --- WEB AUTHENTICATION ---
+
+    async loginWeb(): Promise<boolean> {
+        if (this.mode !== 'WEB') return false;
+        
+        return new Promise((resolve) => {
+            window.FB.login((response: any) => {
+                if (response.authResponse) {
+                    this.fetchWebProfile().then(() => resolve(true));
+                } else {
+                    console.log("User cancelled login or did not fully authorize.");
+                    resolve(false);
+                }
+            }, { scope: 'public_profile' });
+        });
+    }
+
+    async fetchWebProfile(): Promise<void> {
+        if (this.mode !== 'WEB') return;
+        return new Promise((resolve) => {
+            window.FB.api('/me', { fields: 'name,picture.width(100).height(100)' }, (response: any) => {
+                if (response && !response.error) {
+                    this.webProfile = {
+                        id: response.id,
+                        name: response.name,
+                        photo: response.picture?.data?.url
+                    };
+                    console.log("FB Web Profile Loaded:", this.webProfile);
+                }
+                resolve();
+            });
+        });
+    }
+
+    isWebMode(): boolean {
+        return this.mode === 'WEB';
+    }
+
+    isInstantMode(): boolean {
+        return this.mode === 'INSTANT';
+    }
+
+    isLoggedIn(): boolean {
+        if (this.mode === 'INSTANT') return true; // Instant games are always logged in
+        if (this.mode === 'WEB') return !!this.webProfile;
+        return false;
+    }
+
+    // --- GAME LIFECYCLE ---
+
+    setLoadingProgress(percentage: number): void {
+        if (this.mode === 'INSTANT') {
+            try { window.FBInstant.setLoadingProgress(percentage); } catch(e) {}
+        }
     }
 
     async startGame(): Promise<void> {
-        if (this.isMock) return;
-        try {
-            await window.FBInstant.startGameAsync();
-            console.log("FBInstant Game Started");
-        } catch (error) {
-            console.error("FBInstant Start Failed:", error);
+        if (this.mode === 'INSTANT') {
+            try {
+                await window.FBInstant.startGameAsync();
+                console.log("FBInstant Game Started");
+            } catch (error) {
+                console.error("FBInstant Start Failed:", error);
+            }
         }
     }
 
     onPause(callback: () => void): void {
-        if (this.isMock) return;
-        try {
-            window.FBInstant.onPause(callback);
-        } catch (e) {
-            console.error("FB onPause failed:", e);
+        if (this.mode === 'INSTANT') {
+            try { window.FBInstant.onPause(callback); } catch (e) {}
         }
     }
 
     // --- PLAYER DATA ---
 
     getPlayerName(): string {
-        if (this.isMock) return "Local Hero";
-        try {
-            return window.FBInstant.player.getName() || "Adventurer";
-        } catch (e) { return "Adventurer"; }
+        if (this.mode === 'INSTANT') {
+            try { return window.FBInstant.player.getName() || "Adventurer"; } catch (e) { return "Adventurer"; }
+        } else if (this.mode === 'WEB' && this.webProfile) {
+            return this.webProfile.name;
+        }
+        return "Local Hero";
     }
 
     getPlayerPhoto(): string | null {
-        if (this.isMock) return null;
-        try {
-            return window.FBInstant.player.getPhoto();
-        } catch (e) { return null; }
+        if (this.mode === 'INSTANT') {
+            try { return window.FBInstant.player.getPhoto(); } catch (e) { return null; }
+        } else if (this.mode === 'WEB' && this.webProfile) {
+            return this.webProfile.photo;
+        }
+        return null;
     }
 
     getPlayerID(): string {
-        if (this.isMock) return "local-user";
-        try {
-            return window.FBInstant.player.getID();
-        } catch (e) { return "local-user"; }
+        if (this.mode === 'INSTANT') {
+            try { return window.FBInstant.player.getID(); } catch (e) { return "local-user"; }
+        } else if (this.mode === 'WEB' && this.webProfile) {
+            return this.webProfile.id;
+        }
+        return "local-user";
     }
 
     // --- CLOUD STORAGE ---
 
     async saveData(key: string, data: any): Promise<void> {
-        if (this.isMock) {
-            localStorage.setItem(key, JSON.stringify(data));
-            return;
-        }
-        try {
-            await window.FBInstant.player.setDataAsync({ [key]: data });
-        } catch (error) {
-            console.error("FB Save Failed:", error);
+        if (this.mode === 'INSTANT') {
+            try { await window.FBInstant.player.setDataAsync({ [key]: data }); } catch (e) { console.error(e); }
+        } else {
+            // For Web/Mock, we rely on LocalStorage which is handled in storageService.ts
+            // But we could implement a cloud save mock here if we had a backend.
+            // For now, no-op or specific handling if we wanted to mirror to a DB.
         }
     }
 
     async loadData(keys: string[]): Promise<Record<string, any>> {
-        if (this.isMock) {
-            const result: Record<string, any> = {};
-            keys.forEach(k => {
-                const val = localStorage.getItem(k);
-                if (val) result[k] = JSON.parse(val);
-            });
-            return result;
+        if (this.mode === 'INSTANT') {
+            try { return await window.FBInstant.player.getDataAsync(keys); } catch (e) { return {}; }
         }
-        try {
-            return await window.FBInstant.player.getDataAsync(keys);
-        } catch (error) {
-            console.error("FB Load Failed:", error);
-            return {};
-        }
+        return {}; // storageService.ts handles localstorage fallback
     }
 
     async setStats(stats: Record<string, number>): Promise<void> {
-        if (this.isMock) {
-            console.log("Mock Stats Update:", stats);
-            return;
-        }
-        try {
-            await window.FBInstant.player.setStatsAsync(stats);
-        } catch (error) {
-            console.error("FB Stats Update Failed:", error);
+        if (this.mode === 'INSTANT') {
+            try { await window.FBInstant.player.setStatsAsync(stats); } catch (e) {}
         }
     }
 
     // --- SOCIAL & CONTEXT ---
 
     async chooseContext(): Promise<boolean> {
-        if (this.isMock) {
-            alert("Mock: Opening Friend Selector");
+        if (this.mode === 'INSTANT') {
+            try {
+                await window.FBInstant.context.chooseAsync();
+                return true;
+            } catch (e) { return false; }
+        }
+        if (this.mode === 'MOCK' || this.mode === 'WEB') {
+            alert("Context switching is only available on Facebook Instant Games.");
             return true;
         }
-        try {
-            await window.FBInstant.context.chooseAsync();
-            console.log("Context Switched:", window.FBInstant.context.getID());
-            return true;
-        } catch (e) {
-            console.log("Context selection cancelled/failed", e);
-            return false;
-        }
+        return false;
     }
 
     getEntryPointData(): any {
-        if (this.isMock) return null;
-        try {
-            return window.FBInstant.getEntryPointData();
-        } catch (e) { return null; }
+        if (this.mode === 'INSTANT') {
+            try { return window.FBInstant.getEntryPointData(); } catch (e) { return null; }
+        }
+        return null;
     }
 
     // --- LEADERBOARDS ---
 
     async submitScore(leaderboardName: string, score: number, extraData: string = ''): Promise<void> {
-        if (this.isMock) return;
-        try {
-            const leaderboard = await window.FBInstant.getLeaderboardAsync(leaderboardName);
-            await leaderboard.setScoreAsync(score, extraData);
-        } catch (error) {
-            // Suppress error for "Leaderboard not found" during dev until created in dashboard
-            console.warn("FB Leaderboard Submit Failed (Check Dashboard configuration):", error);
+        if (this.mode === 'INSTANT') {
+            try {
+                const leaderboard = await window.FBInstant.getLeaderboardAsync(leaderboardName);
+                await leaderboard.setScoreAsync(score, extraData);
+            } catch (e) { console.warn("FB Leaderboard Error:", e); }
         }
     }
 
     postSessionScore(score: number): void {
-        if (this.isMock) {
-            console.log("Mock Post Session Score:", score);
-            return;
-        }
-        try {
-            window.FBInstant.postSessionScoreAsync(score);
-        } catch (e) {
-            console.error("FB Post Session Score failed:", e);
+        if (this.mode === 'INSTANT') {
+            try { window.FBInstant.postSessionScoreAsync(score); } catch (e) {}
         }
     }
 
-    async getConnectedLeaderboard(leaderboardName: string): Promise<any[]> {
-        if (this.isMock) {
-            // Return fake friend data
-            return [
-                { getRank: () => 1, getScore: () => 15000, getExtraData: () => JSON.stringify({level: 5}), getPlayer: () => ({ getName: () => "Alice", getPhoto: () => null }) },
-                { getRank: () => 2, getScore: () => 12000, getExtraData: () => JSON.stringify({level: 4}), getPlayer: () => ({ getName: () => "Bob", getPhoto: () => null }) },
-                { getRank: () => 3, getScore: () => 5000, getExtraData: () => JSON.stringify({level: 2}), getPlayer: () => ({ getName: () => "You", getPhoto: () => null }) },
-            ];
+    async getLeaderboardEntries(leaderboardName: string, type: 'GLOBAL' | 'FRIENDS'): Promise<any[]> {
+        if (this.mode === 'INSTANT') {
+            try {
+                const leaderboard = await window.FBInstant.getLeaderboardAsync(leaderboardName);
+                if (type === 'GLOBAL') {
+                    return await leaderboard.getEntriesAsync(10, 0);
+                } else {
+                    return await leaderboard.getConnectedPlayerEntriesAsync(10, 0);
+                }
+            } catch (e) {
+                console.error("FB Leaderboard Error:", e);
+                return [];
+            }
         }
-        try {
-            const leaderboard = await window.FBInstant.getLeaderboardAsync(leaderboardName);
-            const entries = await leaderboard.getConnectedPlayerEntriesAsync(10, 0);
-            return entries;
-        } catch (error) {
-            console.error("FB Leaderboard Fetch Failed", error);
-            return [];
-        }
+        return [];
     }
 
     // --- MESSENGER UPDATES ---
@@ -204,23 +264,19 @@ class FacebookService {
         try {
             const canvas = document.createElement('canvas');
             canvas.width = 1200;
-            canvas.height = 630; // FB optimal share size
+            canvas.height = 630;
             const ctx = canvas.getContext('2d');
             if (!ctx) return '';
 
-            // Background
             ctx.fillStyle = '#0f172a';
             ctx.fillRect(0, 0, 1200, 630);
-            
-            // Gradient overlay
             const grad = ctx.createLinearGradient(0, 0, 0, 630);
             grad.addColorStop(0, '#1e293b');
             grad.addColorStop(1, '#020617');
             ctx.fillStyle = grad;
             ctx.fillRect(0, 0, 1200, 630);
 
-            // Text
-            ctx.fillStyle = '#fbbf24'; // Amber
+            ctx.fillStyle = '#fbbf24';
             ctx.font = 'bold 80px sans-serif';
             ctx.textAlign = 'center';
             ctx.fillText("DRAGON'S HOARD", 600, 150);
@@ -238,42 +294,39 @@ class FacebookService {
             ctx.fillText("CAN YOU BEAT ME?", 600, 520);
 
             return canvas.toDataURL('image/png');
-        } catch (e) {
-            console.error("Canvas generation failed", e);
-            return '';
-        }
+        } catch (e) { return ''; }
     }
 
     async challengeFriend(score: number, heroClass: string): Promise<void> {
-        if (this.isMock) {
-            alert(`Mock: Challenge sent! Score: ${score}`);
-            return;
-        }
-
-        try {
-            const base64Image = this.createChallengeImage(score, heroClass);
-            
-            // NOTE: 'play_turn' must match the custom_update_templates in fbapp-config.json
-            const payload = {
-                action: 'CUSTOM',
-                ctime: Date.now(),
-                template: 'play_turn', 
-                image: base64Image,
-                text: {
-                    default: `I just scored ${score} in Dragon's Hoard!`,
-                    localizations: {
-                        en_US: `I just scored ${score} in Dragon's Hoard!`
-                    }
-                },
-                data: { score: score, challenger: this.getPlayerName() },
-                strategy: 'IMMEDIATE',
-                notification: 'NO_PUSH'
-            };
-
-            await window.FBInstant.updateAsync(payload);
-            console.log("Message sent!");
-        } catch (e) {
-            console.error("Challenge failed", e);
+        if (this.mode === 'INSTANT') {
+            try {
+                const base64Image = this.createChallengeImage(score, heroClass);
+                const payload = {
+                    action: 'CUSTOM',
+                    ctime: Date.now(),
+                    template: 'play_turn', 
+                    image: base64Image,
+                    text: {
+                        default: `I just scored ${score} in Dragon's Hoard!`,
+                        localizations: { en_US: `I just scored ${score} in Dragon's Hoard!` }
+                    },
+                    data: { score: score, challenger: this.getPlayerName() },
+                    strategy: 'IMMEDIATE',
+                    notification: 'NO_PUSH'
+                };
+                await window.FBInstant.updateAsync(payload);
+            } catch (e) { console.error(e); }
+        } else {
+            // Web Share Fallback
+            if (navigator.share) {
+                navigator.share({
+                    title: "Dragon's Hoard",
+                    text: `I just scored ${score} as a ${heroClass}! Can you beat me?`,
+                    url: window.location.href
+                }).catch(console.error);
+            } else {
+                alert(`Challenge Score: ${score}! Share this with your friends.`);
+            }
         }
     }
 
@@ -281,8 +334,6 @@ class FacebookService {
     trackPixelEvent(eventName: string, data?: object) {
         if (typeof window.fbq === 'function') {
             window.fbq('track', eventName, data);
-        } else if (this.isMock) {
-            console.log(`[Mock Pixel] Track: ${eventName}`, data);
         }
     }
 }
