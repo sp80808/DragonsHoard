@@ -269,17 +269,17 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({ onStart, onContinue,
 
               {/* Version Tag */}
               <div className="mt-4 md:mt-8 text-[9px] md:text-[10px] text-slate-500 font-mono border border-slate-700/50 px-2 py-1 rounded bg-black/40 backdrop-blur-sm">
-                  v0.9.9 BETA
+                  v1 BETA
               </div>
           </div>
 
-          {/* Footer */}
-          <div className="absolute bottom-4 text-center z-10 hidden md:block">
+          {/* Footer - Optimized for Mobile & Desktop */}
+          <div className="absolute bottom-2 md:bottom-4 left-0 right-0 text-center z-20 pointer-events-none">
               <a 
                 href="https://instagram.com/sp8m8" 
                 target="_blank" 
                 rel="noopener noreferrer" 
-                className="text-[10px] text-slate-600 font-bold uppercase tracking-widest opacity-70 hover:opacity-100 hover:text-yellow-500 transition-colors"
+                className="pointer-events-auto inline-block text-[10px] text-white/30 font-bold uppercase tracking-widest hover:text-yellow-500 transition-colors bg-black/20 px-3 py-1 rounded-full backdrop-blur-sm"
               >
                   Made with &lt;3 by Sp8
               </a>

@@ -5,7 +5,7 @@ import { TileComponent } from './TileComponent';
 import { TILE_STYLES, BOSS_STYLE, RUNE_STYLES, FALLBACK_STYLE, STONE_STYLE } from '../constants';
 import { Coins, Star } from 'lucide-react';
 import { useLootSystem } from './LootSystem';
-import { AnimatePresence } from 'framer-motion';
+import { AnimatePresence, motion } from 'framer-motion';
 
 interface GridProps {
   grid: Tile[];
@@ -250,7 +250,7 @@ export const Grid = React.memo(({ grid, size, mergeEvents, lootEvents, slideSpee
         <div ref={containerRef} className="relative aspect-square max-h-full max-w-full m-auto group will-change-transform">
             {!isLowQuality && <div className={`absolute -inset-4 bg-gradient-to-r ${ambientGlowClass} rounded-3xl blur-2xl -z-10 transition-colors duration-500`}></div>}
             
-            {/* Main Grid Container (Clipped for rounded corners and particles) */}
+            {/* Main Grid Container */}
             <div className={`relative w-full h-full bg-black/90 rounded-xl p-1 sm:p-2 border-2 border-slate-700/50 shadow-2xl overflow-hidden ${isLowQuality ? '' : 'backdrop-blur-md'}`}>
                 <div className="absolute inset-0 opacity-20 pointer-events-none" style={{ backgroundImage: 'radial-gradient(circle at 50% 50%, rgba(255,255,255,0.1) 1px, transparent 1px)', backgroundSize: '20px 20px' }}></div>
                 {backgroundCells}
@@ -275,47 +275,54 @@ export const Grid = React.memo(({ grid, size, mergeEvents, lootEvents, slideSpee
                 {!isLowQuality && <canvas ref={canvasRef} className="absolute inset-0 z-20 pointer-events-none w-full h-full"></canvas>}
             </div>
 
-            {/* Floating Text Layer - MOVED OUTSIDE to prevent clipping */}
+            {/* Floating Text Layer - Uses Framer Motion for Smooth Travel Exit */}
             <div className="absolute inset-0 p-1 sm:p-2 pointer-events-none z-50">
                 <div className="relative w-full h-full">
-                    {lootEvents.map((loot) => {
-                            const tileSize = 100 / size;
-                            const top = loot.y * tileSize;
-                            const left = loot.x * tileSize;
-                            
-                            let animationClass = 'animate-loot-float';
-                            let content = null;
+                    <AnimatePresence>
+                        {lootEvents.map((loot) => {
+                                const tileSize = 100 / size;
+                                const top = loot.y * tileSize;
+                                const left = loot.x * tileSize;
+                                
+                                let content = null;
 
-                            if (loot.type === 'XP') {
-                                animationClass = 'animate-float-xp';
-                                content = (
-                                    <div className="fantasy-font font-black text-lg md:text-2xl text-transparent bg-clip-text bg-gradient-to-b from-cyan-300 to-blue-600 drop-shadow-[0_2px_2px_rgba(0,0,0,0.8)] stroke-black" style={{ WebkitTextStroke: '1px rgba(0,0,0,0.5)' }}>
-                                        +{loot.value} XP
-                                    </div>
-                                );
-                            } else if (loot.type === 'GOLD') {
-                                animationClass = 'animate-float-gold';
-                                content = (
-                                    <div className="fantasy-font font-black text-lg md:text-2xl text-transparent bg-clip-text bg-gradient-to-b from-yellow-300 to-orange-600 drop-shadow-[0_2px_2px_rgba(0,0,0,0.8)] flex items-center gap-1" style={{ WebkitTextStroke: '1px rgba(0,0,0,0.5)' }}>
-                                        +{loot.value} G
-                                    </div>
-                                );
-                            } else {
-                                // Item
-                                content = (
-                                    <div className="flex items-center gap-1 px-2 py-1 rounded-full border shadow-lg bg-indigo-900/80 border-indigo-500 text-indigo-200 backdrop-blur-md">
-                                        <span className="text-base">{loot.icon}</span>
-                                        <span className="text-xs font-black whitespace-nowrap">{loot.value}</span>
-                                    </div>
-                                );
-                            }
+                                if (loot.type === 'XP') {
+                                    content = (
+                                        <div className="fantasy-font font-black text-lg md:text-2xl text-transparent bg-clip-text bg-gradient-to-b from-cyan-300 to-blue-600 drop-shadow-[0_2px_2px_rgba(0,0,0,0.8)] stroke-black" style={{ WebkitTextStroke: '1px rgba(0,0,0,0.5)' }}>
+                                            +{loot.value} XP
+                                        </div>
+                                    );
+                                } else if (loot.type === 'GOLD') {
+                                    content = (
+                                        <div className="fantasy-font font-black text-lg md:text-2xl text-transparent bg-clip-text bg-gradient-to-b from-yellow-300 to-orange-600 drop-shadow-[0_2px_2px_rgba(0,0,0,0.8)] flex items-center gap-1" style={{ WebkitTextStroke: '1px rgba(0,0,0,0.5)' }}>
+                                            +{loot.value} G
+                                        </div>
+                                    );
+                                } else {
+                                    // Item
+                                    content = (
+                                        <div className="flex items-center gap-1 px-2 py-1 rounded-full border shadow-lg bg-indigo-900/80 border-indigo-500 text-indigo-200 backdrop-blur-md">
+                                            <span className="text-base">{loot.icon}</span>
+                                            <span className="text-xs font-black whitespace-nowrap">{loot.value}</span>
+                                        </div>
+                                    );
+                                }
 
-                            return (
-                                <div key={loot.id} className={`absolute flex flex-col items-center justify-center ${animationClass}`} style={{ width: `${tileSize}%`, height: `${tileSize}%`, top: `${top}%`, left: `${left}%` }}>
-                                    {content}
-                                </div>
-                            );
-                    })}
+                                return (
+                                    <motion.div 
+                                        key={loot.id} 
+                                        initial={{ opacity: 0, y: 10, scale: 0.5 }}
+                                        animate={{ opacity: 1, y: 0, scale: 1.2 }}
+                                        exit={{ opacity: 0, y: -50, scale: 0.8, transition: { duration: 0.6, ease: "easeIn" } }}
+                                        transition={{ type: "spring", stiffness: 300, damping: 20 }}
+                                        className="absolute flex flex-col items-center justify-center z-50" 
+                                        style={{ width: `${tileSize}%`, height: `${tileSize}%`, top: `${top}%`, left: `${left}%` }}
+                                    >
+                                        {content}
+                                    </motion.div>
+                                );
+                        })}
+                    </AnimatePresence>
                 </div>
             </div>
         </div>

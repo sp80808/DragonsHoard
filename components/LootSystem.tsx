@@ -82,8 +82,8 @@ export const LootProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
 const FlyingParticle: React.FC<{ particle: LootParticle, onComplete: () => void }> = ({ particle, onComplete }) => {
   // Random spread for the "burst" effect
-  const spreadX = (Math.random() - 0.5) * 100;
-  const spreadY = (Math.random() - 0.5) * 100;
+  const spreadX = (Math.random() - 0.5) * 120;
+  const spreadY = (Math.random() - 0.5) * 120;
 
   return (
     <motion.div
@@ -96,12 +96,12 @@ const FlyingParticle: React.FC<{ particle: LootParticle, onComplete: () => void 
       animate={{ 
         x: [particle.startX, particle.startX + spreadX, particle.targetX],
         y: [particle.startY, particle.startY + spreadY, particle.targetY],
-        scale: [0.5, 1.2, 0.5],
+        scale: [0.8, 1.5, 0.5],
         opacity: [1, 1, 0],
         rotate: [0, Math.random() * 360]
       }}
       transition={{ 
-        duration: 0.8, 
+        duration: 0.7, 
         times: [0, 0.4, 1],
         ease: "easeInOut"
       }}
@@ -109,12 +109,12 @@ const FlyingParticle: React.FC<{ particle: LootParticle, onComplete: () => void 
       className="absolute top-0 left-0"
     >
       {particle.type === 'GOLD' ? (
-        <div className="text-yellow-400 drop-shadow-[0_0_8px_rgba(250,204,21,0.8)]">
-          <Coins size={20} fill="currentColor" />
+        <div className="text-yellow-400 drop-shadow-[0_0_10px_rgba(250,204,21,0.8)] filter brightness-125">
+          <Coins size={24} fill="currentColor" />
         </div>
       ) : (
-        <div className="text-cyan-400 drop-shadow-[0_0_8px_rgba(34,211,238,0.8)]">
-          <Star size={20} fill="currentColor" />
+        <div className="text-cyan-400 drop-shadow-[0_0_10px_rgba(34,211,238,0.8)] filter brightness-125">
+          <Star size={24} fill="currentColor" />
         </div>
       )}
     </motion.div>

@@ -304,7 +304,6 @@ export const initializeGame = (restart = false, heroClass: HeroClass = HeroClass
   };
 };
 
-// ... remaining functions
 export const moveGrid = (
     grid: Tile[], 
     direction: Direction, 
@@ -315,13 +314,14 @@ export const moveGrid = (
     difficulty: Difficulty = 'NORMAL',
     stats?: GameStats
 ): MoveResult => {
-  let newGrid = grid.filter(t => !t.isDying).map(t => ({...t}));
+  // ROBUSTNESS: Ensure we don't start with any 'isDying' or malformed tiles
+  let newGrid = grid.filter(t => !t.isDying && t.value !== undefined && t.x >= 0 && t.x < size && t.y >= 0 && t.y < size).map(t => ({...t}));
   let score = 0;
   let xpGained = 0;
   let goldGained = 0;
   let itemsFound: InventoryItem[] = [];
   let moved = false;
-  let mergedIds: string[];
+  let mergedIds: string[] = [];
   let powerUpTriggered: TileType | undefined;
   let bossDefeated = false;
   let lootEvents: LootEvent[] = [];
@@ -329,6 +329,7 @@ export const moveGrid = (
   const medalsEarned: Medal[] = [];
   const abilitiesTriggered: string[] = [];
 
+  // Reset transient flags
   newGrid.forEach(t => { delete t.isNew; delete t.isCascade; delete t.mergedFrom; });
 
   const vector = {
@@ -338,36 +339,55 @@ export const moveGrid = (
     [Direction.RIGHT]: { x: 1, y: 0 },
   }[direction];
 
-  const traversalX = Array.from({ length: size }, (_, i) => i);
-  const traversalY = Array.from({ length: size }, (_, i) => i);
+  // ROBUSTNESS: Sort tiles based on traversal direction to avoid double-processing
+  // If moving Right (x=1), process Right-most tiles first (Desc X)
+  // If moving Left (x=-1), process Left-most tiles first (Asc X)
+  // If moving Down (y=1), process Bottom-most tiles first (Desc Y)
+  // If moving Up (y=-1), process Top-most tiles first (Asc Y)
+  newGrid.sort((a, b) => {
+      if (vector.x === 1) return b.x - a.x;
+      if (vector.x === -1) return a.x - b.x;
+      if (vector.y === 1) return b.y - a.y;
+      if (vector.y === -1) return a.y - b.y;
+      return 0;
+  });
 
-  if (vector.x === 1) traversalX.reverse();
-  if (vector.y === 1) traversalY.reverse();
+  // Track occupied positions during this move to handle collisions robustly
+  // We cannot rely on 'newGrid.find' because we are mutating tile positions
+  const occupancyMap = new Map<string, Tile>();
+  newGrid.forEach(t => occupancyMap.set(`${t.x},${t.y}`, t));
 
   let combo = 0;
   let mergedCount = 0;
-  mergedIds = [];
 
-  traversalX.forEach(x => {
-    traversalY.forEach(y => {
-      const tile = newGrid.find(t => t.x === x && t.y === y && !t.isDying);
-      if (!tile) return;
+  // Iterate over sorted tiles
+  for (const tile of newGrid) {
+      if (tile.isDying) continue; // Skip if already merged/killed in this pass
 
-      const cell = { x: tile.x, y: tile.y };
+      let cell = { x: tile.x, y: tile.y };
       let next = { x: cell.x + vector.x, y: cell.y + vector.y };
       
-      if (tile.type === TileType.BOSS) return;
+      // Remove self from map before moving
+      occupancyMap.delete(`${tile.x},${tile.y}`);
+
+      // Bosses don't move
+      if (tile.type === TileType.BOSS) {
+          occupancyMap.set(`${tile.x},${tile.y}`, tile);
+          continue;
+      }
 
       while (next.x >= 0 && next.x < size && next.y >= 0 && next.y < size) {
-        const nextTile = newGrid.find(t => t.x === next.x && t.y === next.y && !t.isDying);
+        const nextKey = `${next.x},${next.y}`;
+        const nextTile = occupancyMap.get(nextKey);
         
         if (!nextTile) {
-          cell.x = next.x;
-          cell.y = next.y;
+          // Can move into empty space
+          cell = { ...next };
           next = { x: cell.x + vector.x, y: cell.y + vector.y };
           continue;
         } 
         
+        // INTERACTION: Hit Boss
         if (nextTile.type === TileType.BOSS) {
             const projectileValue = tile.value;
             let siegeMultiplier = (effectCounters['SIEGE_BREAKER'] || 0) > 0 ? 3 : 1;
@@ -377,8 +397,9 @@ export const moveGrid = (
             const damage = baseDmg * siegeMultiplier;
             
             nextTile.health = Math.max(0, (nextTile.health || 0) - damage);
-            nextTile.mergedFrom = ['damage']; 
+            nextTile.mergedFrom = ['damage']; // Visual flash
 
+            // Current tile dies on impact
             tile.x = next.x;
             tile.y = next.y;
             tile.isDying = true; 
@@ -386,7 +407,10 @@ export const moveGrid = (
             lootEvents.push({ id: createId(), x: next.x, y: next.y, type: 'XP', value: damage });
 
             if ((nextTile.health || 0) <= 0) {
+                // Boss dies
                 nextTile.isDying = true; 
+                occupancyMap.delete(nextKey); // Remove boss from map so others can move there next turn (or same turn if logic allows, but usually blocking)
+                
                 score += 500;
                 xpGained += 2000;
                 goldGained += 100;
@@ -405,9 +429,11 @@ export const moveGrid = (
                 if (dist >= 3) medalsEarned.push(MEDALS.SNIPER);
             }
             moved = true;
-            return;
+            // Tile is dead, don't add back to map
+            break; 
         }
 
+        // INTERACTION: Hit Rune
         if ((nextTile.type as any).startsWith('RUNE_')) {
              if (nextTile.type === TileType.RUNE_MIDAS) {
                  goldGained += 50;
@@ -419,15 +445,20 @@ export const moveGrid = (
                  score += 500;
                  lootEvents.push({ id: createId(), x: nextTile.x, y: nextTile.y, type: 'XP', value: 500, icon: '⚫' });
              }
+             
+             // Rune is consumed
              nextTile.isDying = true;
+             occupancyMap.delete(nextKey);
              powerUpTriggered = nextTile.type;
-             cell.x = next.x;
-             cell.y = next.y;
+             
+             // Tile moves into rune's spot
+             cell = { ...next };
              next = { x: cell.x + vector.x, y: cell.y + vector.y };
              moved = true;
-             continue;
+             continue; // Continue moving past the rune
         }
 
+        // INTERACTION: Merge
         if (nextTile.value === tile.value && !nextTile.mergedFrom) {
           const mergedValue = tile.value * 2;
           const mergedTile: Tile = {
@@ -447,18 +478,24 @@ export const moveGrid = (
               lootEvents.push({ id: createId(), x: next.x, y: next.y, type: 'GOLD', value: mergedValue });
           }
 
+          // Mark old tiles as dying
           tile.x = next.x;
           tile.y = next.y;
           tile.isDying = true; 
           nextTile.isDying = true; 
 
+          // Update grid array with new tile
           newGrid.push(mergedTile);
+          
+          // Update map: Replace nextTile with mergedTile
+          occupancyMap.set(nextKey, mergedTile);
 
           score += mergedValue;
           xpGained += mergedValue;
           
           lootEvents.push({ id: createId(), x: next.x, y: next.y, type: 'XP', value: mergedValue });
 
+          // Loot & Effects Logic
           if (mode !== 'CLASSIC' && rng.next() < 0.05) {
                goldGained += Math.floor(mergedValue / 5); 
           }
@@ -511,20 +548,26 @@ export const moveGrid = (
           combo++;
           mergedCount++;
           moved = true;
-        } else {
-          cell.x = next.x - vector.x;
-          cell.y = next.y - vector.y;
-        }
+          
+          // Stop processing this tile
+          break; 
+        } 
+        
+        // Blocked by non-matching tile
         break;
       }
       
-      if (tile.x !== cell.x || tile.y !== cell.y) {
-          tile.x = cell.x;
-          tile.y = cell.y;
-          moved = true;
+      // Final Position Assignment (if not dying)
+      if (!tile.isDying) {
+          if (tile.x !== cell.x || tile.y !== cell.y) {
+              tile.x = cell.x;
+              tile.y = cell.y;
+              moved = true;
+          }
+          // Place back into map at new position
+          occupancyMap.set(`${tile.x},${tile.y}`, tile);
       }
-    });
-  });
+  }
 
   if (moved) {
       if (stats && stats.totalMerges === 0 && mergedCount > 0) medalsEarned.push(MEDALS.FIRST_MERGE);

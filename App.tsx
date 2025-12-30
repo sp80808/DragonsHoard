@@ -4,7 +4,7 @@ import { GameState, Direction, HeroClass, GameMode, Difficulty, FeedbackEvent, I
 import { initializeGame, moveGrid, isGameOver, useInventoryItem, executeAutoCascade, checkAchievements, checkLoreUnlocks, spawnTile, executePowerupAction, updateCooldowns, saveHighscore, processPassiveAbilities, createId } from './services/gameLogic';
 import { audioService } from './services/audioService';
 import { Grid } from './components/Grid';
-import { HUD, HUDHeader, HUDControls } from './components/HUD';
+import { HUD, HUDHeader, HUDControls, BuffDisplay } from './components/HUD';
 import { Store } from './components/Store';
 import { SplashScreen } from './components/SplashScreen';
 import { GameStatsModal } from './components/GameStatsModal';
@@ -55,6 +55,8 @@ type Action =
   | { type: 'CLAIM_DAILY_LOGIN' }
   | { type: 'CLEAR_LOOT_EVENTS' };
 
+const TURN_BASED_EFFECTS = ['MIDAS_POTION', 'CHAIN_CATALYST', 'VOID_STONE', 'RADIANT_AURA', 'FLOW_STATE', 'HARMONIC_RESONANCE', 'LUCKY_LOOT', 'LUCKY_DICE'];
+
 const gameReducer = (state: GameState, action: Action): GameState => {
     switch(action.type) {
         case 'START_GAME':
@@ -95,11 +97,19 @@ const gameReducer = (state: GameState, action: Action): GameState => {
                 navigator.vibrate(50);
             }
 
+            // Decrement Turn-Based Effects
+            const nextEffectCounters = { ...state.effectCounters };
+            TURN_BASED_EFFECTS.forEach(key => {
+                if (nextEffectCounters[key] > 0) {
+                    nextEffectCounters[key]--;
+                }
+            });
+
             let newGrid = spawnTile(res.grid, state.gridSize, state.level, { 
                 modifiers: state.activeModifiers,
                 difficulty: state.difficulty,
                 isClassic: state.gameMode === 'CLASSIC',
-                powerUpChanceBonus: (state.effectCounters['LUCKY_DICE'] ? 0.1 : 0)
+                powerUpChanceBonus: (nextEffectCounters['LUCKY_DICE'] ? 0.1 : 0)
             });
 
             const bossSpawned = newGrid.some(t => t.type === TileType.BOSS && t.isNew);
@@ -155,7 +165,8 @@ const gameReducer = (state: GameState, action: Action): GameState => {
                 abilities: updatedAbilities,
                 achievements: [...state.achievements, ...newAchievements],
                 logs: [...state.logs, ...res.logs].slice(-5),
-                isInvalidMove: false
+                isInvalidMove: false,
+                effectCounters: nextEffectCounters
             };
         }
         case 'INVALID_MOVE':
@@ -546,7 +557,8 @@ const GameContent: React.FC = () => {
         onMenu: () => setView('SPLASH'),
         onOpenStats: () => setView('SKILLS'),
         itemFeedback: itemFeedback,
-        isLandscape: isLandscape // Pass correct orientation
+        isLandscape: isLandscape,
+        showBuffs: !isLandscape // Hide buffs in HUD header for landscape
   };
 
   const renderView = () => {
@@ -618,11 +630,16 @@ const GameContent: React.FC = () => {
                             <div className="flex-1 flex flex-col items-center justify-center relative min-h-0 min-w-0 w-full h-full p-2">
                                  
                                  {/* Landscape Overlays (Top of Grid) */}
-                                 <div className="hidden landscape:flex w-full justify-center items-center h-16 min-h-[4rem] z-20 gap-8 mb-2">
+                                 <div className="hidden landscape:flex w-full justify-center items-center h-16 min-h-[4rem] z-20 gap-8 mb-2 relative">
                                      <AnimatePresence>
                                         {state.combo >= 2 && <ComboMeter combo={state.combo} />}
                                      </AnimatePresence>
                                      <MedalFeed queue={medalQueue} inline={true} />
+                                     
+                                     {/* Landscape Buffs (Top Right of Grid Area) */}
+                                     <div className="absolute top-0 right-0">
+                                         <BuffDisplay effectCounters={state.effectCounters} className="justify-end" />
+                                     </div>
                                  </div>
 
                                  {/* Grid Container */}

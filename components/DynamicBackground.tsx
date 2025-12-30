@@ -24,7 +24,6 @@ export const DynamicBackground: React.FC<DynamicBackgroundProps> = ({ score }) =
 
   return (
     <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none">
-      {/* Removed mode="wait" to allow cross-fading overlap, preventing black flashes */}
       <AnimatePresence>
         <motion.div
           key={currentBiome.id}
@@ -41,7 +40,6 @@ export const DynamicBackground: React.FC<DynamicBackgroundProps> = ({ score }) =
           
           {currentBiome.id === 'OUTSKIRTS' && (
             <>
-              {/* Seamless Fog Layer */}
               <div className="absolute inset-0 bg-fog-layer opacity-40 mix-blend-screen bg-[length:100%_100%]"></div>
               <div className="absolute bottom-0 w-full h-1/2 bg-gradient-to-t from-black/80 to-transparent"></div>
               <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/stardust.png')] opacity-20 animate-[pulse_10s_infinite]"></div>
@@ -50,9 +48,7 @@ export const DynamicBackground: React.FC<DynamicBackgroundProps> = ({ score }) =
 
           {currentBiome.id === 'THRESHOLD' && (
             <>
-              {/* Rock Texture Overlay */}
               <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/dark-stone.png')] opacity-30 mix-blend-multiply"></div>
-              {/* Torchlight Flickers on Edges */}
               <div className="absolute inset-0 bg-torch-light mix-blend-hard-light"></div>
               <div className="absolute bottom-0 left-0 w-full h-32 bg-gradient-to-t from-orange-900/20 to-transparent animate-pulse"></div>
             </>
@@ -60,7 +56,6 @@ export const DynamicBackground: React.FC<DynamicBackgroundProps> = ({ score }) =
 
           {currentBiome.id === 'HALL' && (
             <>
-              {/* Pillar Silhouettes (CSS Gradients) */}
               <div 
                 className="absolute inset-0 opacity-40 mix-blend-multiply" 
                 style={{ 
@@ -76,7 +71,6 @@ export const DynamicBackground: React.FC<DynamicBackgroundProps> = ({ score }) =
             <>
               <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/black-scales.png')] opacity-20 mix-blend-multiply"></div>
               <div className="absolute inset-0 bg-gradient-to-tr from-amber-900/40 via-transparent to-purple-900/40"></div>
-              {/* Floating dust/magic */}
               <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/stardust.png')] opacity-30 animate-pulse"></div>
             </>
           )}
@@ -86,7 +80,6 @@ export const DynamicBackground: React.FC<DynamicBackgroundProps> = ({ score }) =
               <div className="absolute inset-0 bg-gold-shimmer mix-blend-overlay opacity-30"></div>
               <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/gold-scale.png')] opacity-20 mix-blend-color-dodge"></div>
               <div className="absolute inset-0 bg-gradient-to-tr from-yellow-600/30 via-transparent to-amber-500/20"></div>
-              {/* Sparkles */}
               <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/stardust.png')] opacity-40 animate-pulse"></div>
             </>
           )}
@@ -101,14 +94,14 @@ export const DynamicBackground: React.FC<DynamicBackgroundProps> = ({ score }) =
             </>
           )}
 
-          {/* Vignette for focus */}
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_0%,rgba(0,0,0,0.6)_100%)]"></div>
         </motion.div>
       </AnimatePresence>
       
-      {/* Biome Name Toast */}
-      <div className="absolute bottom-4 left-0 w-full flex justify-center opacity-50">
-          <span className="text-[10px] uppercase tracking-[0.5em] text-white/50 font-serif shadow-black drop-shadow-md">
+      {/* Biome Name Toast - Responsive Position */}
+      <div className="absolute bottom-4 left-0 w-full flex justify-center opacity-50 
+          landscape:bottom-auto landscape:top-1/2 landscape:-translate-y-1/2 landscape:right-2 landscape:left-auto landscape:w-auto landscape:[writing-mode:vertical-rl] landscape:rotate-180">
+          <span className="text-[10px] uppercase tracking-[0.5em] text-white/50 font-serif shadow-black drop-shadow-md whitespace-nowrap">
               {currentBiome.name}
           </span>
       </div>

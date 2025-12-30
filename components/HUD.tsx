@@ -31,6 +31,7 @@ interface HUDProps {
   onOpenStats: () => void;
   itemFeedback?: { slot: number, status: 'SUCCESS' | 'ERROR', id: string };
   isLandscape?: boolean;
+  showBuffs?: boolean;
 }
 
 // --- Sub-Components ---
@@ -125,7 +126,7 @@ const InventorySlot: React.FC<InventorySlotProps> = ({ index, item, onUseItem, i
       <motion.div 
           animate={feedback === 'SUCCESS' ? { scale: [1, 1.1, 1], borderColor: '#4ade80' } : feedback === 'ERROR' ? { x: [-5, 5, -5, 5, 0], borderColor: '#ef4444' } : { scale: 1, x: 0, borderColor: '#1e293b' }}
           transition={{ duration: 0.3 }}
-          className={`flex-1 w-full aspect-square bg-slate-900/50 border-2 rounded-xl relative flex items-center justify-center group overflow-hidden active:scale-95 transition-colors duration-200
+          className={`flex-1 w-full aspect-square bg-slate-900/50 border-2 rounded-xl relative flex items-center justify-center group overflow-hidden active:scale-95 transition-colors duration-200 shadow-lg
               ${feedback === 'ERROR' ? 'bg-red-900/20 shadow-[0_0_15px_rgba(239,68,68,0.3)]' : ''}
               ${feedback === 'SUCCESS' ? 'bg-green-900/20 shadow-[0_0_15px_rgba(74,222,128,0.3)]' : 'border-slate-800 hover:border-slate-600'}
           `}
@@ -180,6 +181,37 @@ const InventorySlot: React.FC<InventorySlotProps> = ({ index, item, onUseItem, i
     );
 };
 
+export const BuffDisplay: React.FC<{ effectCounters: Record<string, number>, className?: string }> = ({ effectCounters, className }) => {
+    const buffs = [];
+    if ((effectCounters['LUCKY_LOOT'] || 0) > 0) buffs.push({ id: 'luck', icon: <Clover size={12} className="text-green-400" />, label: 'LUCK', count: effectCounters['LUCKY_LOOT'], color: 'bg-green-900/40 border-green-500/30' });
+    if ((effectCounters['ASCENDANT_SPAWN'] || 0) > 0) buffs.push({ id: 'asc', icon: <Star size={12} className="text-yellow-400" />, label: 'RUNE', count: effectCounters['ASCENDANT_SPAWN'], color: 'bg-yellow-900/40 border-yellow-500/30' });
+    if ((effectCounters['DEMON_CURSE'] || 0) > 0) buffs.push({ id: 'curse', icon: <Skull size={12} className="text-red-400" />, label: 'CURSE', count: effectCounters['DEMON_CURSE'], color: 'bg-red-900/40 border-red-500/30' });
+    if ((effectCounters['LUCKY_DICE'] || 0) > 0) buffs.push({ id: 'dice', icon: <Coins size={12} className="text-blue-400" />, label: 'FATE', count: effectCounters['LUCKY_DICE'], color: 'bg-blue-900/40 border-blue-500/30' });
+    if ((effectCounters['CHAIN_CATALYST'] || 0) > 0) buffs.push({ id: 'chain', icon: <Flame size={12} className="text-orange-400" />, label: 'CHAIN', count: effectCounters['CHAIN_CATALYST'], color: 'bg-orange-900/40 border-orange-500/30' });
+    if ((effectCounters['MIDAS_POTION'] || 0) > 0) buffs.push({ id: 'midas', icon: <Coins size={12} className="text-yellow-400" />, label: 'MIDAS', count: effectCounters['MIDAS_POTION'], color: 'bg-yellow-900/40 border-yellow-500/30' });
+    if ((effectCounters['SIEGE_BREAKER'] || 0) > 0) buffs.push({ id: 'siege', icon: <Hammer size={12} className="text-red-400" />, label: 'MIGHT', count: effectCounters['SIEGE_BREAKER'], color: 'bg-red-900/40 border-red-500/30' });
+    if ((effectCounters['VOID_STONE'] || 0) > 0) buffs.push({ id: 'void', icon: <Moon size={12} className="text-purple-400" />, label: 'VOID', count: effectCounters['VOID_STONE'], color: 'bg-purple-900/40 border-purple-500/30' });
+    if ((effectCounters['RADIANT_AURA'] || 0) > 0) buffs.push({ id: 'radiant', icon: <Sun size={12} className="text-amber-200" />, label: 'AURA', count: effectCounters['RADIANT_AURA'], color: 'bg-amber-900/40 border-amber-500/30' });
+    if ((effectCounters['FLOW_STATE'] || 0) > 0) buffs.push({ id: 'flow', icon: <Waves size={12} className="text-cyan-400" />, label: 'FLOW', count: effectCounters['FLOW_STATE'], color: 'bg-cyan-900/40 border-cyan-500/30' });
+    if ((effectCounters['HARMONIC_RESONANCE'] || 0) > 0) buffs.push({ id: 'harmony', icon: <Gem size={12} className="text-pink-400" />, label: 'ECHO', count: effectCounters['HARMONIC_RESONANCE'], color: 'bg-pink-900/40 border-pink-500/30' });
+
+    if (buffs.length === 0) return null;
+
+    return (
+        <div className={`flex gap-1 flex-wrap ${className || 'justify-center min-h-[20px]'}`}>
+            {buffs.map(buff => (
+                <div key={buff.id} className={`flex items-center gap-1 px-1.5 py-0.5 rounded-md border ${buff.color} animate-in zoom-in`}>
+                    {buff.icon}
+                    <div className="flex flex-col leading-none">
+                        <span className="text-[8px] font-bold opacity-70">{buff.label}</span>
+                        <span className="text-[10px] font-black">{buff.count}</span>
+                    </div>
+                </div>
+            ))}
+        </div>
+    );
+};
+
 // --- Exports ---
 
 export const HUDHeader = React.memo(({ 
@@ -197,7 +229,8 @@ export const HUDHeader = React.memo(({
     effectCounters,
     onMenu,
     onOpenStats,
-    isLandscape
+    isLandscape,
+    showBuffs = true
 }: HUDProps) => {
     const { registerTarget } = useLootSystem();
     const xpRef = useRef<HTMLDivElement>(null);
@@ -249,19 +282,6 @@ export const HUDHeader = React.memo(({
       }
       prevGold.current = gold;
     }, [gold, goldControls]);
-
-    const buffs = [];
-    if ((effectCounters['LUCKY_LOOT'] || 0) > 0) buffs.push({ id: 'luck', icon: <Clover size={12} className="text-green-400" />, label: 'LUCK', count: effectCounters['LUCKY_LOOT'], color: 'bg-green-900/40 border-green-500/30' });
-    if ((effectCounters['ASCENDANT_SPAWN'] || 0) > 0) buffs.push({ id: 'asc', icon: <Star size={12} className="text-yellow-400" />, label: 'RUNE', count: effectCounters['ASCENDANT_SPAWN'], color: 'bg-yellow-900/40 border-yellow-500/30' });
-    if ((effectCounters['DEMON_CURSE'] || 0) > 0) buffs.push({ id: 'curse', icon: <Skull size={12} className="text-red-400" />, label: 'CURSE', count: effectCounters['DEMON_CURSE'], color: 'bg-red-900/40 border-red-500/30' });
-    if ((effectCounters['LUCKY_DICE'] || 0) > 0) buffs.push({ id: 'dice', icon: <Coins size={12} className="text-blue-400" />, label: 'FATE', count: effectCounters['LUCKY_DICE'], color: 'bg-blue-900/40 border-blue-500/30' });
-    if ((effectCounters['CHAIN_CATALYST'] || 0) > 0) buffs.push({ id: 'chain', icon: <Flame size={12} className="text-orange-400" />, label: 'CHAIN', count: effectCounters['CHAIN_CATALYST'], color: 'bg-orange-900/40 border-orange-500/30' });
-    if ((effectCounters['MIDAS_POTION'] || 0) > 0) buffs.push({ id: 'midas', icon: <Coins size={12} className="text-yellow-400" />, label: 'MIDAS', count: effectCounters['MIDAS_POTION'], color: 'bg-yellow-900/40 border-yellow-500/30' });
-    if ((effectCounters['SIEGE_BREAKER'] || 0) > 0) buffs.push({ id: 'siege', icon: <Hammer size={12} className="text-red-400" />, label: 'MIGHT', count: effectCounters['SIEGE_BREAKER'], color: 'bg-red-900/40 border-red-500/30' });
-    if ((effectCounters['VOID_STONE'] || 0) > 0) buffs.push({ id: 'void', icon: <Moon size={12} className="text-purple-400" />, label: 'VOID', count: effectCounters['VOID_STONE'], color: 'bg-purple-900/40 border-purple-500/30' });
-    if ((effectCounters['RADIANT_AURA'] || 0) > 0) buffs.push({ id: 'radiant', icon: <Sun size={12} className="text-amber-200" />, label: 'AURA', count: effectCounters['RADIANT_AURA'], color: 'bg-amber-900/40 border-amber-500/30' });
-    if ((effectCounters['FLOW_STATE'] || 0) > 0) buffs.push({ id: 'flow', icon: <Waves size={12} className="text-cyan-400" />, label: 'FLOW', count: effectCounters['FLOW_STATE'], color: 'bg-cyan-900/40 border-cyan-500/30' });
-    if ((effectCounters['HARMONIC_RESONANCE'] || 0) > 0) buffs.push({ id: 'harmony', icon: <Gem size={12} className="text-pink-400" />, label: 'ECHO', count: effectCounters['HARMONIC_RESONANCE'], color: 'bg-pink-900/40 border-pink-500/30' });
 
     return (
         <div className="flex flex-col gap-2 w-full">
@@ -350,20 +370,8 @@ export const HUDHeader = React.memo(({
                 </div>
             )}
 
-            {/* Buff Bar */}
-            {buffs.length > 0 && (
-                <div className="flex gap-1 justify-center min-h-[20px] flex-wrap">
-                    {buffs.map(buff => (
-                        <div key={buff.id} className={`flex items-center gap-1 px-1.5 py-0.5 rounded-md border ${buff.color} animate-in zoom-in`}>
-                            {buff.icon}
-                            <div className="flex flex-col leading-none">
-                                <span className="text-[8px] font-bold opacity-70">{buff.label}</span>
-                                <span className="text-[10px] font-black">{buff.count}</span>
-                            </div>
-                        </div>
-                    ))}
-                </div>
-            )}
+            {/* Buff Bar (Conditional) */}
+            {showBuffs && <BuffDisplay effectCounters={effectCounters} />}
         </div>
     );
 });
@@ -408,7 +416,7 @@ export const HUDControls = React.memo(({
                 <motion.button 
                     whileTap={{ scale: 0.95 }}
                     onClick={onOpenStore}
-                    className="relative group flex flex-col items-center justify-center rounded-xl border-2 transition-all duration-200 overflow-hidden w-full h-24 bg-slate-900 border-slate-700 hover:border-yellow-500 hover:bg-slate-800"
+                    className="relative group flex flex-col items-center justify-center rounded-xl border-2 transition-all duration-200 overflow-hidden w-full h-24 bg-slate-900 border-slate-700 hover:border-yellow-500 hover:bg-slate-800 shadow-lg shadow-yellow-900/5"
                 >
                     <div className="relative z-10 flex flex-col items-center">
                         <StoreIcon size={32} className="text-yellow-500 mb-1 drop-shadow-md group-hover:scale-110 transition-transform" />
@@ -447,7 +455,7 @@ export const HUDControls = React.memo(({
             <motion.button 
                 whileTap={{ scale: 0.95 }}
                 onClick={onOpenStore}
-                className="relative group flex flex-col items-center justify-center rounded-xl border-2 transition-all duration-200 overflow-hidden aspect-square h-full bg-slate-900 border-slate-700 hover:border-yellow-500 hover:bg-slate-800"
+                className="relative group flex flex-col items-center justify-center rounded-xl border-2 transition-all duration-200 overflow-hidden aspect-square h-full bg-slate-900 border-slate-700 hover:border-yellow-500 hover:bg-slate-800 shadow-lg shadow-yellow-900/5"
             >
                 <div className="relative z-10 flex flex-col items-center">
                     <StoreIcon size={24} className="text-yellow-500 mb-1 drop-shadow-md group-hover:scale-110 transition-transform" />
