@@ -5,14 +5,6 @@
     "orientation": "PORTRAIT",
     "override_web_orientation": "LANDSCAPE",
     "navigation_menu_version": "NAV_BAR",
-    "custom_update_templates": {
-      "play_turn": {
-        "example": "Hero just scored 1,059 in the Hoard!"
-      },
-      "challenge_beat": {
-        "example": "I just beat your score! Can you take back the lead?"
-      }
-    },
     "surfaceable_stats": {
       "hoard_rank": {
         "priority": 1,
@@ -30,7 +22,11 @@
     },
     "match_player_config": {
       "min_context_size": 2,
-      "max_context_size": 20
+      "max_context_size": 50
+    },
+    "entry_point_data": {
+      "ref": "feed_post",
+      "gift_id": "none"
     }
   }
 }

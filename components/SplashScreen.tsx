@@ -8,6 +8,7 @@ import { facebookService } from '../services/facebookService';
 import { AnimatePresence, motion } from 'framer-motion';
 import { genUrl } from '../constants';
 import { useFullscreen } from '../hooks/useFullscreen';
+import { useOrientation } from '../hooks/useOrientation';
 
 interface SplashScreenProps {
   onStart: (heroClass: HeroClass, mode: GameMode, seed?: number, difficulty?: Difficulty, tileset?: string) => void;
@@ -16,6 +17,7 @@ interface SplashScreenProps {
   onOpenSettings: () => void;
   onOpenHelp: () => void;
   onOpenGrimoire: () => void;
+  onOpenVersus: () => void;
   hasSave: boolean;
 }
 
@@ -78,7 +80,7 @@ const GoldDust = () => {
     return <canvas ref={canvasRef} className="absolute inset-0 pointer-events-none z-10 opacity-60 mix-blend-screen" />;
 };
 
-const MenuButton = ({ onClick, label, icon, primary = false, subtitle, color = 'blue', disabled = false }: { onClick: () => void, label: string, icon: React.ReactNode, primary?: boolean, subtitle?: string, color?: string, disabled?: boolean }) => {
+const MenuButton = ({ onClick, label, icon, primary = false, subtitle, color = 'blue', disabled = false, isLandscape }: { onClick: () => void, label: string, icon: React.ReactNode, primary?: boolean, subtitle?: string, color?: string, disabled?: boolean, isLandscape?: boolean }) => {
     const baseColor = disabled 
         ? 'bg-slate-900 border-slate-800 text-slate-600 cursor-not-allowed opacity-70' 
         : primary 
@@ -87,39 +89,50 @@ const MenuButton = ({ onClick, label, icon, primary = false, subtitle, color = '
     
     const hoverColor = primary && !disabled ? 'hover:bg-yellow-500' : '';
     
+    // Conditional styling for short landscape mode (mobile rotated) vs desktop landscape
+    const landscapeCompact = isLandscape ? 'max-h-[500px]:p-2 max-h-[500px]:min-h-[50px]' : '';
+    
     return (
         <button 
             onClick={!disabled ? onClick : undefined}
             disabled={disabled}
-            className={`w-full group relative flex items-center p-4 rounded-xl border-2 transition-all duration-100 transform ${!disabled ? 'active:scale-95 shadow-lg' : ''}
-                ${baseColor} ${hoverColor}
+            className={`w-full group relative flex items-center p-3 md:p-4 rounded-xl border-2 transition-all duration-100 transform ${!disabled ? 'active:scale-95 shadow-lg' : ''}
+                ${baseColor} ${hoverColor} ${landscapeCompact}
             `}
         >
-            <div className={`p-2 rounded-lg bg-black/20 mr-4 transition-transform ${!disabled ? 'group-hover:scale-110 group-hover:rotate-3' : ''}`}>
+            <div className={`p-2 rounded-lg bg-black/20 mr-3 md:mr-4 transition-transform ${!disabled ? 'group-hover:scale-110 group-hover:rotate-3' : ''} ${isLandscape ? 'max-h-[500px]:mr-2 max-h-[500px]:p-1.5' : ''}`}>
                 {disabled ? <Lock size={20} /> : icon}
             </div>
-            <div className="flex flex-col items-start flex-1">
-                <span className="font-black uppercase tracking-wide text-sm md:text-base leading-none mb-1">{label}</span>
-                {subtitle && <span className="text-[10px] font-bold opacity-60 uppercase tracking-wider">{subtitle}</span>}
+            <div className="flex flex-col items-start flex-1 min-w-0">
+                <span className="font-black uppercase tracking-wide text-xs md:text-base leading-none mb-1 truncate w-full text-left">{label}</span>
+                {subtitle && <span className="text-[9px] md:text-[10px] font-bold opacity-60 uppercase tracking-wider truncate w-full text-left hidden sm:block">{subtitle}</span>}
             </div>
-            {!disabled && <ChevronRight size={16} className="opacity-0 group-hover:opacity-100 transition-opacity -translate-x-2 group-hover:translate-x-0" />}
+            {!disabled && <ChevronRight size={16} className="opacity-0 group-hover:opacity-100 transition-opacity -translate-x-2 group-hover:translate-x-0 hidden md:block" />}
         </button>
     );
 };
 
-export const SplashScreen: React.FC<SplashScreenProps> = ({ onStart, onContinue, onOpenLeaderboard, onOpenSettings, onOpenHelp, onOpenGrimoire, hasSave }) => {
+export const SplashScreen: React.FC<SplashScreenProps> = ({ onStart, onContinue, onOpenLeaderboard, onOpenSettings, onOpenHelp, onOpenGrimoire, onOpenVersus, hasSave }) => {
   const [profile, setProfile] = useState<PlayerProfile | null>(null);
   const [showProfileStats, setShowProfileStats] = useState(false);
   const [bgUrl, setBgUrl] = useState('');
   const { toggleFullscreen } = useFullscreen();
   const [fbLoggedIn, setFbLoggedIn] = useState(facebookService.isLoggedIn());
+  const [isDesktop, setIsDesktop] = useState(false);
   
   // Facebook Player Info
   const playerName = facebookService.getPlayerName();
   const playerPhoto = facebookService.getPlayerPhoto();
 
+  // Settings for Orientation
+  const [settings, setSettings] = useState(getPlayerProfile().accountLevel ? JSON.parse(localStorage.getItem('2048_rpg_state_v3') || '{}').settings || { orientation: 'AUTO' } : { orientation: 'AUTO' });
+  const isLandscape = useOrientation(settings.orientation);
+  const isFacebook = facebookService.isInstantMode();
+
   useEffect(() => {
     setProfile(getPlayerProfile());
+    // Robust desktop check
+    setIsDesktop(window.matchMedia('(pointer: fine)').matches && !('ontouchstart' in window));
     
     // Pick a random background for variety
     const bgs = [
@@ -141,7 +154,7 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({ onStart, onContinue,
       onStart(HeroClass.ADVENTURER, 'DAILY', seed, 'NORMAL', profile?.activeTilesetId);
   };
 
-  const handleVersus = async () => {
+  const handleFriendMatch = async () => {
       const success = await facebookService.chooseContext();
       if (success) {
           onStart(HeroClass.ADVENTURER, 'VERSUS', undefined, 'NORMAL', profile?.activeTilesetId);
@@ -163,26 +176,74 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({ onStart, onContinue,
   const isWebMode = facebookService.isWebMode();
 
   return (
-    <div className="absolute inset-0 z-50 flex flex-col md:flex-row bg-[#050505] overflow-hidden font-sans">
+    <div className={`absolute inset-0 z-50 flex overflow-hidden font-sans bg-[#050505] ${isLandscape ? 'flex-row' : 'flex-col'}`}>
       
-      {/* LEFT COLUMN (Desktop) / TOP (Mobile): HERO ART */}
-      <div className="flex-1 md:flex-[1.2] relative overflow-hidden bg-slate-900 flex flex-col items-center justify-center p-8 shrink-0">
-          {/* Animated Background - Using Textless Prompt */}
+      {/* MOBILE PORTRAIT FLOATING HEADER */}
+      {/* Only show if NOT landscape */}
+      {!isLandscape && (
+          <div className="absolute top-0 left-0 w-full p-4 z-[60] flex justify-between items-start pointer-events-none">
+              {/* Profile & Stats Toggle */}
+              <div className="pointer-events-auto flex items-center gap-2">
+                {profile && (
+                    <button 
+                        onClick={() => setShowProfileStats(!showProfileStats)}
+                        className="flex items-center gap-2 group"
+                    >
+                        <div className="w-10 h-10 rounded-full bg-slate-900/60 border border-slate-500/50 flex items-center justify-center overflow-hidden shadow-lg backdrop-blur-md group-active:scale-95 transition-transform">
+                            {playerPhoto ? (
+                                <img src={playerPhoto} alt="Player" className="w-full h-full object-cover" />
+                            ) : (
+                                <User size={18} className="text-slate-300" />
+                            )}
+                        </div>
+                        {/* Minimal Level Badge */}
+                        <div className="bg-black/40 backdrop-blur-md px-2 py-1 rounded-full border border-white/10 text-[10px] font-mono font-bold text-slate-300 shadow-lg">
+                            LVL {profile?.accountLevel}
+                        </div>
+                    </button>
+                )}
+              </div>
+
+              {/* Right Actions */}
+              <div className="flex gap-2 pointer-events-auto">
+                  <button 
+                    onClick={toggleFullscreen}
+                    className="w-10 h-10 bg-slate-900/60 hover:bg-black/80 rounded-full text-white border border-slate-500/50 flex items-center justify-center shadow-lg backdrop-blur-md active:scale-95 transition-all"
+                  >
+                      <Maximize size={18} />
+                  </button>
+                  <button 
+                    onClick={onOpenSettings} 
+                    className="w-10 h-10 bg-slate-900/60 hover:bg-black/80 rounded-full text-white border border-slate-500/50 flex items-center justify-center shadow-lg backdrop-blur-md active:scale-95 transition-all"
+                  >
+                      <Settings size={18} />
+                  </button>
+              </div>
+          </div>
+      )}
+
+      {/* HERO ART SECTION */}
+      <div className={`relative overflow-hidden bg-slate-900 flex flex-col items-center justify-center p-8 shrink-0 
+          ${isLandscape ? 'flex-[1.4] bg-gradient-to-r from-transparent to-[#0b0f15]' : 'flex-[1.5] bg-gradient-to-t from-black via-transparent to-black/60'}
+      `}>
+          {/* Animated Background */}
           <div 
             className="absolute inset-0 bg-cover bg-center opacity-60 transition-transform duration-[40s] scale-110 animate-[pulse_15s_ease-in-out_infinite]"
             style={{ backgroundImage: `url('${bgUrl}')` }}
           ></div>
-          <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-black/60 md:bg-gradient-to-r md:from-transparent md:to-[#0b0f15]"></div>
+          <div className={`absolute inset-0 ${isLandscape ? 'bg-gradient-to-r from-transparent to-[#0b0f15]' : 'bg-gradient-to-t from-black via-transparent to-black/60'}`}></div>
           
           <GoldDust />
 
-          {/* Fullscreen Toggle (Absolute Top Right) */}
-          <button 
-            onClick={toggleFullscreen}
-            className="absolute top-4 right-4 z-50 p-2 bg-black/40 hover:bg-black/60 rounded-lg text-white border border-white/20 transition-all active:scale-95"
-          >
-              <Maximize size={24} />
-          </button>
+          {/* Fullscreen Toggle (Desktop/Landscape Only) */}
+          {isLandscape && (
+              <button 
+                onClick={toggleFullscreen}
+                className="absolute top-4 right-4 z-50 p-2 bg-black/40 hover:bg-black/60 rounded-lg text-white border border-white/20 transition-all active:scale-95"
+              >
+                  <Maximize size={24} />
+              </button>
+          )}
 
           {/* Logo Content */}
           <div className="relative z-10 text-center flex flex-col items-center max-w-[80vw]">
@@ -225,101 +286,129 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({ onStart, onContinue,
           </div>
       </div>
 
-      {/* RIGHT COLUMN (Desktop) / BOTTOM (Mobile): MENU */}
-      <div className="flex-1 relative bg-[#0b0f15] flex flex-col border-t md:border-t-0 md:border-l border-slate-800 shadow-2xl z-20 min-h-[50vh]">
+      {/* RIGHT COLUMN (Desktop/Landscape) / BOTTOM (Mobile Portrait): MENU */}
+      <div className={`relative bg-[#0b0f15] flex flex-col border-slate-800 shadow-2xl z-20 
+          ${isLandscape ? 'flex-1 border-l min-h-0 w-96 flex-none' : 'flex-1 border-t'}
+      `}>
           
-          {/* Profile Header */}
-          <div className="relative border-b border-slate-800/50 bg-slate-900/50 z-20">
-              <div className="p-4 md:p-6 flex justify-between items-center">
-                  {profile && (
-                      <button 
-                        onClick={() => setShowProfileStats(!showProfileStats)}
-                        className="flex items-center gap-3 text-left hover:bg-slate-800/50 -ml-2 p-2 rounded-xl transition-all group"
-                      >
-                          <div className="w-10 h-10 md:w-12 md:h-12 rounded-full bg-gradient-to-br from-indigo-600 to-blue-900 flex items-center justify-center border-2 border-slate-700 shadow-inner group-hover:border-indigo-400 transition-colors relative overflow-hidden">
-                              {playerPhoto ? (
-                                  <img src={playerPhoto} alt="Player" className="w-full h-full object-cover" />
-                              ) : (
-                                  <User size={20} className="text-white" />
-                              )}
-                          </div>
-                          <div className="flex flex-col">
-                              <span className="text-[10px] text-indigo-300 font-bold uppercase tracking-wider">{playerName}</span>
-                              <div className="flex items-center gap-1">
-                                  <span className="text-xs font-mono text-white font-bold">Lvl {profile.accountLevel}</span>
-                                  <ChevronDown size={10} className={`text-slate-500 transition-transform ${showProfileStats ? 'rotate-180' : ''}`} />
-                              </div>
-                          </div>
-                      </button>
-                  )}
-                  <div className="flex gap-2">
-                      <button onClick={onOpenSettings} className="p-2 hover:bg-slate-800 rounded-full text-slate-400 hover:text-white transition-colors">
-                          <Settings size={20} />
-                      </button>
-                  </div>
+          {/* COMPACT TOOLBAR (For Short Landscape) */}
+          {isLandscape && (
+              <div className="hidden landscape:max-h-[500px]:flex justify-end p-2 gap-2 absolute top-0 right-0 z-30 pointer-events-auto">
+                  <button 
+                    onClick={() => setShowProfileStats(true)} 
+                    className="p-2 bg-slate-900/80 rounded-lg text-slate-300 border border-slate-700 hover:bg-slate-800"
+                  >
+                      {playerPhoto ? <img src={playerPhoto} className="w-5 h-5 rounded-full" alt="P" /> : <User size={20} />}
+                  </button>
+                  <button 
+                    onClick={onOpenSettings} 
+                    className="p-2 bg-slate-900/80 rounded-lg text-slate-300 border border-slate-700 hover:bg-slate-800"
+                  >
+                      <Settings size={20} />
+                  </button>
               </div>
+          )}
 
-              {/* Facebook Login for Web (Optional) */}
-              {isWebMode && !fbLoggedIn && (
-                  <div className="px-4 pb-2">
-                      <button 
-                        onClick={handleFbLogin}
-                        className="w-full py-2 bg-[#1877F2] hover:bg-[#155fc4] text-white text-xs font-bold rounded-lg flex items-center justify-center gap-2 transition-colors"
-                      >
-                          <Facebook size={14} fill="currentColor" /> Connect Facebook
-                      </button>
+          {/* FULL PROFILE HEADER (Desktop/Landscape) */}
+          {isLandscape && (
+              <div className="relative border-b border-slate-800/50 bg-slate-900/50 z-20 hidden md:block landscape:block landscape:max-h-[500px]:hidden">
+                  <div className="p-4 md:p-6 flex justify-between items-center">
+                      {profile && (
+                          <button 
+                            onClick={() => setShowProfileStats(!showProfileStats)}
+                            className="flex items-center gap-3 text-left hover:bg-slate-800/50 -ml-2 p-2 rounded-xl transition-all group"
+                          >
+                              <div className="w-10 h-10 md:w-12 md:h-12 rounded-full bg-gradient-to-br from-indigo-600 to-blue-900 flex items-center justify-center border-2 border-slate-700 shadow-inner group-hover:border-indigo-400 transition-colors relative overflow-hidden">
+                                  {playerPhoto ? (
+                                      <img src={playerPhoto} alt="Player" className="w-full h-full object-cover" />
+                                  ) : (
+                                      <User size={20} className="text-white" />
+                                  )}
+                              </div>
+                              <div className="flex flex-col">
+                                  <span className="text-[10px] text-indigo-300 font-bold uppercase tracking-wider">{playerName}</span>
+                                  <div className="flex items-center gap-1">
+                                      <span className="text-xs font-mono text-white font-bold">Lvl {profile.accountLevel}</span>
+                                      <ChevronDown size={10} className={`text-slate-500 transition-transform ${showProfileStats ? 'rotate-180' : ''}`} />
+                                  </div>
+                              </div>
+                          </button>
+                      )}
+                      <div className="flex gap-2">
+                          <button onClick={onOpenSettings} className="p-2 hover:bg-slate-800 rounded-full text-slate-400 hover:text-white transition-colors">
+                              <Settings size={20} />
+                          </button>
+                      </div>
                   </div>
-              )}
 
-              {/* Collapsible Stats Panel */}
-              <AnimatePresence>
-                  {showProfileStats && profile && (
-                      <motion.div 
-                        initial={{ height: 0, opacity: 0 }}
-                        animate={{ height: 'auto', opacity: 1 }}
-                        exit={{ height: 0, opacity: 0 }}
-                        className="bg-slate-950/80 border-t border-slate-800 overflow-hidden absolute top-full left-0 right-0 z-30 shadow-xl"
-                      >
-                          <div className="p-4 grid grid-cols-2 gap-4">
-                              <div className="col-span-2">
-                                  <div className="flex justify-between text-[10px] uppercase font-bold text-slate-500 mb-1">
-                                      <span>Progress to Level {profile.accountLevel + 1}</span>
-                                      <span>{Math.floor((profile.totalAccountXp / getNextLevelXp(profile.accountLevel)) * 100)}%</span>
-                                  </div>
-                                  <div className="h-2 bg-slate-900 rounded-full overflow-hidden border border-slate-800">
-                                      <div 
-                                        className="h-full bg-gradient-to-r from-indigo-600 to-blue-500" 
-                                        style={{ width: `${(profile.totalAccountXp / getNextLevelXp(profile.accountLevel)) * 100}%` }}
-                                      ></div>
-                                  </div>
+                  {/* Facebook Login for Web (Optional) */}
+                  {isWebMode && !fbLoggedIn && (
+                      <div className="px-4 pb-2">
+                          <button 
+                            onClick={handleFbLogin}
+                            className="w-full py-2 bg-[#1877F2] hover:bg-[#155fc4] text-white text-xs font-bold rounded-lg flex items-center justify-center gap-2 transition-colors"
+                          >
+                              <Facebook size={14} fill="currentColor" /> Connect Facebook
+                          </button>
+                      </div>
+                  )}
+              </div>
+          )}
+
+          {/* Collapsible Stats Panel (Absolute Overlay) */}
+          <AnimatePresence>
+              {showProfileStats && profile && (
+                  <motion.div 
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: 'auto', opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    className="bg-slate-950/95 border-b border-slate-800 overflow-hidden absolute top-0 left-0 right-0 z-40 shadow-xl landscape:max-h-[500px]:top-0"
+                  >
+                      <div className="p-4 grid grid-cols-2 gap-4">
+                          <div className="col-span-2 flex justify-between items-center mb-2">
+                              <h3 className="text-white font-bold">Profile Stats</h3>
+                              <button onClick={() => setShowProfileStats(false)} className="text-slate-400 p-2"><ChevronDown className="rotate-180"/></button>
+                          </div>
+                          <div className="col-span-2">
+                              <div className="flex justify-between text-[10px] uppercase font-bold text-slate-500 mb-1">
+                                  <span>Progress to Level {profile.accountLevel + 1}</span>
+                                  <span>{Math.floor((profile.totalAccountXp / getNextLevelXp(profile.accountLevel)) * 100)}%</span>
                               </div>
-                              <div className="bg-slate-900 p-2 rounded-lg border border-slate-800 flex items-center gap-3">
-                                  <Gamepad2 size={16} className="text-slate-500" />
-                                  <div>
-                                      <div className="text-[10px] text-slate-500 uppercase font-bold">Games Played</div>
-                                      <div className="text-sm font-mono text-white font-bold">{profile.gamesPlayed}</div>
-                                  </div>
-                              </div>
-                              <div className="bg-slate-900 p-2 rounded-lg border border-slate-800 flex items-center gap-3">
-                                  <Award size={16} className="text-yellow-600" />
-                                  <div>
-                                      <div className="text-[10px] text-slate-500 uppercase font-bold">High Score</div>
-                                      <div className="text-sm font-mono text-white font-bold">{profile.highScore.toLocaleString()}</div>
-                                  </div>
+                              <div className="h-2 bg-slate-900 rounded-full overflow-hidden border border-slate-800">
+                                  <div 
+                                    className="h-full bg-gradient-to-r from-indigo-600 to-blue-500" 
+                                    style={{ width: `${(profile.totalAccountXp / getNextLevelXp(profile.accountLevel)) * 100}%` }}
+                                  ></div>
                               </div>
                           </div>
-                      </motion.div>
-                  )}
-              </AnimatePresence>
-          </div>
+                          <div className="bg-slate-900 p-2 rounded-lg border border-slate-800 flex items-center gap-3">
+                              <Gamepad2 size={16} className="text-slate-500" />
+                              <div>
+                                  <div className="text-[10px] text-slate-500 uppercase font-bold">Games Played</div>
+                                  <div className="text-sm font-mono text-white font-bold">{profile.gamesPlayed}</div>
+                              </div>
+                          </div>
+                          <div className="bg-slate-900 p-2 rounded-lg border border-slate-800 flex items-center gap-3">
+                              <Award size={16} className="text-yellow-600" />
+                              <div>
+                                  <div className="text-[10px] text-slate-500 uppercase font-bold">High Score</div>
+                                  <div className="text-sm font-mono text-white font-bold">{profile.highScore.toLocaleString()}</div>
+                              </div>
+                          </div>
+                      </div>
+                  </motion.div>
+              )}
+          </AnimatePresence>
 
           {/* Menu Items */}
-          <div className="flex-1 overflow-y-auto p-6 md:p-10 flex flex-col justify-center gap-3 md:gap-4 pb-40 md:pb-10">
+          <div className="flex-1 overflow-y-auto p-6 md:p-10 flex flex-col justify-center gap-3 md:gap-4 pb-6 md:pb-10
+              landscape:max-h-[500px]:grid landscape:max-h-[500px]:grid-cols-2 landscape:max-h-[500px]:gap-2 landscape:max-h-[500px]:p-2 landscape:max-h-[500px]:pb-2 landscape:max-h-[500px]:place-content-center
+          ">
               
               {hasSave ? (
-                  <MenuButton onClick={onContinue} label="Continue Journey" icon={<Play fill="currentColor" />} primary subtitle="Resume your last run" />
+                  <MenuButton onClick={onContinue} label="Continue" icon={<Play fill="currentColor" />} primary subtitle="Resume" />
               ) : (
-                  <MenuButton onClick={handleStartGame} label="New Adventure" icon={<Swords />} primary subtitle="Start a fresh run" />
+                  <MenuButton onClick={handleStartGame} label="Start" icon={<Swords />} primary subtitle="New Run" />
               )}
 
               {isBossRushUnlocked && (
@@ -327,31 +416,46 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({ onStart, onContinue,
                       onClick={handleBossRush} 
                       label="Boss Rush" 
                       icon={<Skull />} 
-                      subtitle="Face the Gauntlet" 
+                      subtitle="Gauntlet" 
                   />
               )}
 
-              <div className="grid grid-cols-2 gap-3 mt-2">
-                  <button onClick={handleDaily} className="bg-indigo-900/20 hover:bg-indigo-900/40 border border-indigo-500/30 hover:border-indigo-500/60 p-3 md:p-4 rounded-xl flex flex-col items-center gap-2 transition-all group active:scale-95 duration-100">
+              {/* DYNAMIC SECONDARY BUTTONS */}
+              <div className={`grid gap-3 mt-2 landscape:max-h-[500px]:mt-0 landscape:max-h-[500px]:contents ${(!isFacebook && !isDesktop) ? 'grid-cols-1' : 'grid-cols-2'}`}>
+                  
+                  {/* Daily always visible */}
+                  <button onClick={handleDaily} className="bg-indigo-900/20 hover:bg-indigo-900/40 border border-indigo-500/30 hover:border-indigo-500/60 p-3 md:p-4 rounded-xl flex flex-col items-center gap-2 transition-all group active:scale-95 duration-100 landscape:max-h-[500px]:flex-row landscape:max-h-[500px]:p-2 landscape:max-h-[500px]:justify-center">
                       <Calendar size={20} className="text-indigo-400 group-hover:scale-110 transition-transform md:w-6 md:h-6" />
-                      <span className="text-[10px] md:text-xs font-bold text-indigo-100 uppercase">Daily Run</span>
+                      <span className="text-[10px] md:text-xs font-bold text-indigo-100 uppercase">Daily</span>
                   </button>
-                  <button onClick={handleVersus} className="bg-red-900/20 hover:bg-red-900/40 border border-red-500/30 hover:border-red-500/60 p-3 md:p-4 rounded-xl flex flex-col items-center gap-2 transition-all group active:scale-95 duration-100">
-                      <Users size={20} className="text-red-400 group-hover:scale-110 transition-transform md:w-6 md:h-6" />
-                      <span className="text-[10px] md:text-xs font-bold text-red-100 uppercase">Friend Match</span>
-                  </button>
+
+                  {/* Friend Match ONLY on Facebook */}
+                  {isFacebook && (
+                      <button onClick={handleFriendMatch} className="bg-red-900/20 hover:bg-red-900/40 border border-red-500/30 hover:border-red-500/60 p-3 md:p-4 rounded-xl flex flex-col items-center gap-2 transition-all group active:scale-95 duration-100 landscape:max-h-[500px]:flex-row landscape:max-h-[500px]:p-2 landscape:max-h-[500px]:justify-center">
+                          <Users size={20} className="text-red-400 group-hover:scale-110 transition-transform md:w-6 md:h-6" />
+                          <span className="text-[10px] md:text-xs font-bold text-red-100 uppercase">Friend Match</span>
+                      </button>
+                  )}
+
+                  {/* Local Versus ONLY on Desktop (and NOT FB, typically) */}
+                  {!isFacebook && isDesktop && (
+                      <button onClick={onOpenVersus} className="bg-cyan-900/20 hover:bg-cyan-900/40 border border-cyan-500/30 hover:border-cyan-500/60 p-3 md:p-4 rounded-xl flex flex-col items-center gap-2 transition-all group active:scale-95 duration-100 landscape:max-h-[500px]:flex-row landscape:max-h-[500px]:p-2 landscape:max-h-[500px]:justify-center">
+                          <Swords size={20} className="text-cyan-400 group-hover:scale-110 transition-transform md:w-6 md:h-6" />
+                          <span className="text-[10px] md:text-xs font-bold text-cyan-100 uppercase">Local VS</span>
+                      </button>
+                  )}
               </div>
 
-              <div className="h-px bg-slate-800 w-full my-1 md:my-2"></div>
+              <div className="h-px bg-slate-800 w-full my-1 md:my-2 landscape:max-h-[500px]:hidden"></div>
 
-              <MenuButton onClick={onOpenLeaderboard} label="Hall of Heroes" icon={<Trophy />} subtitle="Global Leaderboards" />
+              <MenuButton onClick={onOpenLeaderboard} label="Heroes" icon={<Trophy />} subtitle="Leaderboards" />
               
-              <div className="flex gap-3">
-                  <button onClick={onOpenGrimoire} className="flex-1 bg-slate-900 border border-slate-800 hover:border-slate-600 p-3 rounded-xl flex items-center justify-center gap-2 text-slate-400 hover:text-white transition-all text-xs font-bold uppercase active:scale-95 duration-100">
-                      <Palette size={16} /> Collection
+              <div className="flex gap-3 landscape:max-h-[500px]:contents">
+                  <button onClick={onOpenGrimoire} className="flex-1 bg-slate-900 border border-slate-800 hover:border-slate-600 p-3 rounded-xl flex items-center justify-center gap-2 text-slate-400 hover:text-white transition-all text-xs font-bold uppercase active:scale-95 duration-100 landscape:max-h-[500px]:p-2">
+                      <Palette size={16} /> <span className="landscape:max-h-[500px]:hidden xl:inline">Collection</span>
                   </button>
-                  <button onClick={onOpenHelp} className="flex-1 bg-slate-900 border border-slate-800 hover:border-slate-600 p-3 rounded-xl flex items-center justify-center gap-2 text-slate-400 hover:text-white transition-all text-xs font-bold uppercase active:scale-95 duration-100">
-                      <HelpCircle size={16} /> Codex
+                  <button onClick={onOpenHelp} className="flex-1 bg-slate-900 border border-slate-800 hover:border-slate-600 p-3 rounded-xl flex items-center justify-center gap-2 text-slate-400 hover:text-white transition-all text-xs font-bold uppercase active:scale-95 duration-100 landscape:max-h-[500px]:p-2">
+                      <HelpCircle size={16} /> <span className="landscape:max-h-[500px]:hidden xl:inline">Codex</span>
                   </button>
               </div>
 

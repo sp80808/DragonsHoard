@@ -1,8 +1,9 @@
+
 import React, { useState } from 'react';
-import { ArrowLeft, Volume2, VolumeX, Trash2, AlertCircle, Music, Keyboard, MousePointer, Monitor, MessageSquare, Gauge, Zap, Sparkles, Database, Save, Activity, Layers, Image as ImageIcon, Box, Smartphone, Eye, EyeOff, Move } from 'lucide-react';
+import { ArrowLeft, Volume2, VolumeX, Trash2, AlertCircle, Music, Keyboard, MousePointer, Monitor, MessageSquare, Gauge, Zap, Sparkles, Database, Save, Activity, Layers, Image as ImageIcon, Box, Smartphone, Eye, EyeOff, Move, RotateCcw } from 'lucide-react';
 import { audioService } from '../services/audioService';
 import { clearSaveData } from '../services/gameLogic';
-import { InputSettings, GraphicsQuality } from '../types';
+import { InputSettings, GraphicsQuality, OrientationSetting } from '../types';
 
 interface SettingsProps {
   settings: InputSettings;
@@ -46,7 +47,7 @@ const Toggle = ({ checked, onChange, size = 'md' }: { checked: boolean, onChange
     </label>
 );
 
-const QualityButton = ({ value, label, current, onClick, desc }: { value: GraphicsQuality, label: string, current: GraphicsQuality, onClick: (v: GraphicsQuality) => void, desc: string }) => {
+const QualityButton = ({ value, label, current, onClick, desc }: { value: any, label: string, current: any, onClick: (v: any) => void, desc: string }) => {
     const isActive = value === current;
     return (
         <button 
@@ -90,7 +91,6 @@ export const Settings: React.FC<SettingsProps> = ({ settings, onUpdateSettings, 
   };
 
   const handleQualityChange = (q: GraphicsQuality) => {
-      // When quality changes, set defaults for that tier
       const updates: Partial<InputSettings> = { graphicsQuality: q };
       if (q === 'LOW') {
           updates.enableScreenShake = false;
@@ -103,6 +103,10 @@ export const Settings: React.FC<SettingsProps> = ({ settings, onUpdateSettings, 
           updates.enableParticles = true;
       }
       onUpdateSettings({ ...settings, ...updates });
+  };
+
+  const handleOrientationChange = (o: OrientationSetting) => {
+      onUpdateSettings({ ...settings, orientation: o });
   };
 
   const handleSlideSpeedChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -152,6 +156,35 @@ export const Settings: React.FC<SettingsProps> = ({ settings, onUpdateSettings, 
             {activeTab === 'GAMEPLAY' && (
                 <div className="space-y-6 animate-in slide-in-from-right-4 duration-300">
                     
+                    {/* Layout Section */}
+                    <Section title="Display & Layout" icon={<RotateCcw size={18} className="text-orange-400"/>}>
+                        <div className="bg-slate-900/80 border border-slate-700 rounded-xl p-4 mb-4">
+                            <div className="flex gap-2 mb-2">
+                                <QualityButton 
+                                    value="AUTO" 
+                                    label="Auto" 
+                                    desc="Follow device." 
+                                    current={settings.orientation} 
+                                    onClick={handleOrientationChange} 
+                                />
+                                <QualityButton 
+                                    value="PORTRAIT" 
+                                    label="Portrait" 
+                                    desc="Vertical Stack." 
+                                    current={settings.orientation} 
+                                    onClick={handleOrientationChange} 
+                                />
+                                <QualityButton 
+                                    value="LANDSCAPE" 
+                                    label="Landscape" 
+                                    desc="Side-by-side." 
+                                    current={settings.orientation} 
+                                    onClick={handleOrientationChange} 
+                                />
+                            </div>
+                        </div>
+                    </Section>
+
                     {/* Visual Quality Section */}
                     <Section title="Graphics Profile" icon={<Layers size={18} className="text-green-400"/>}>
                         <div className="bg-slate-900/80 border border-slate-700 rounded-xl p-4 mb-4">

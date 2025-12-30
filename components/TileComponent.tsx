@@ -44,13 +44,10 @@ export const TileComponent = React.memo(({ tile, gridSize, slideSpeed, themeId, 
   const xPos = tile.x * 100;
   const yPos = tile.y * 100;
 
-  // Only apply new animation if NOT merged (merged tiles have their own animation)
-  const isNewClass = !isLowQuality && tile.isNew && !tile.mergedFrom ? 'tile-animation-enter' : '';
+  // UPDATED: Using 'animate-spawn-tint' for dynamic color spawn
+  const isNewClass = !isLowQuality && tile.isNew && !tile.mergedFrom ? 'animate-spawn-tint' : '';
   const isDyingClass = tile.isDying ? 'tile-exit-animation' : ''; 
   
-  // Delay the appearance of NEW tiles so they don't visually clip through moving tiles.
-  // We sync this delay roughly with the slide speed.
-  // Dying tiles (merging or destroyed) don't need delay.
   const animDelay = (tile.isNew || tile.mergedFrom) ? `${Math.max(100, slideSpeed * 0.9)}ms` : '0ms';
 
   let mergeClass = '';
@@ -66,22 +63,28 @@ export const TileComponent = React.memo(({ tile, gridSize, slideSpeed, themeId, 
       } else {
           // Tiered Merge Animations
           if (!isLowQuality) {
-              // Default
               mergeClass = 'tile-animation-merge';
               shakeClass = 'animate-shake-sm';
               showRipple = true;
 
-              // Heavy (32 - 256)
-              if (tile.value >= 32) {
-                  mergeClass = 'tile-animation-merge-heavy';
-                  showShockwave = isHighQuality;
+              if (tile.value >= 64) {
+                  mergeClass = 'tile-animation-merge-mid';
                   shakeClass = 'animate-shake-md';
               }
-
-              // Epic (512+)
-              if (tile.value >= 512) {
+              if (tile.value >= 256) {
+                  mergeClass = 'tile-animation-merge-high';
+                  showShockwave = isHighQuality;
+                  shakeClass = 'animate-shake-md';
+                  showRipple = false; 
+              }
+              if (tile.value >= 1024) {
                   mergeClass = 'tile-animation-merge-epic';
-                  showGodwave = isHighQuality;
+                  showShockwave = true;
+                  shakeClass = 'animate-shake-lg';
+              }
+              if (tile.value >= 2048) {
+                  mergeClass = 'tile-animation-merge-god';
+                  showGodwave = true;
                   shakeClass = 'animate-shake-lg';
               }
           }
@@ -97,18 +100,26 @@ export const TileComponent = React.memo(({ tile, gridSize, slideSpeed, themeId, 
   const healthPercent = tile.maxHealth ? Math.max(0, (tile.health || 0) / tile.maxHealth) * 100 : 0;
   const isHighTier = tile.value >= 128 && !isLowQuality;
   const isGodTier = tile.value >= 2048 && !isLowQuality;
-  const isMetallic = tile.value >= 128; // Add gradient text for 128+
+  const isMetallic = tile.value >= 128;
 
-  const shadowColor = style.particleColor || '#000000';
+  const shadowColor = style.particleColor || '#ffffff';
   
-  // Enhanced 3D Bezel with Color Depth (Only High/Med)
+  // Inject the specific tile color into CSS variable for the animation to use
+  const dynamicStyle = {
+      '--tile-color': shadowColor,
+      width: `${size}%`,
+      height: `${size}%`,
+      transform: `translate(${xPos}%, ${yPos}%)`,
+      transitionDuration: `${slideSpeed}ms`,
+      zIndex: tile.isDying ? 5 : 10
+  } as React.CSSProperties;
+
   const boxDepthStyle = isLowQuality ? {} : {
       boxShadow: isHighTier 
         ? `0 0 15px ${shadowColor}30, inset 0 1px 0 rgba(255, 255, 255, 0.25), inset 0 -2px 0 rgba(0, 0, 0, 0.4)`
         : `0 4px 12px ${shadowColor}40, inset 0 1px 0 rgba(255, 255, 255, 0.25), inset 0 -2px 0 rgba(0, 0, 0, 0.4)`
   };
 
-  // Modern RPG Typography with potential metallic gradient
   const textGradientClass = isGodTier ? 'bg-gradient-to-b from-yellow-100 via-amber-200 to-yellow-500 text-transparent bg-clip-text' : 
                             isMetallic ? 'bg-gradient-to-b from-white via-slate-100 to-slate-400 text-transparent bg-clip-text' : 'text-white';
 
@@ -118,11 +129,7 @@ export const TileComponent = React.memo(({ tile, gridSize, slideSpeed, themeId, 
       paintOrder: 'stroke fill'
   };
 
-  // Living Tile Animation Class
   const livingClass = isHighQuality ? (isGodTier ? 'animate-living-fast' : isHighTier ? 'animate-living-slow' : '') : '';
-
-  // Dying tiles should be behind normal ones to allow "merging into" effect
-  const zIndex = tile.isDying ? 5 : 10;
 
   return (
     <div
@@ -133,19 +140,21 @@ export const TileComponent = React.memo(({ tile, gridSize, slideSpeed, themeId, 
               onInteract();
           }
       }}
-      style={{
-        width: `${size}%`,
-        height: `${size}%`,
-        transform: `translate(${xPos}%, ${yPos}%)`,
-        transitionDuration: `${slideSpeed}ms`,
-        zIndex: zIndex
-      }}
+      style={dynamicStyle}
     >
       <div 
         className={`w-full h-full relative ${isNewClass} ${isDyingClass} ${mergeClass} group select-none`}
         style={{ animationDelay: animDelay }}
       >
         
+        {/* NEW SPAWN FLASH: Dynamic Color Tint */}
+        {tile.isNew && !tile.mergedFrom && !isLowQuality && (
+            <div 
+                className="absolute inset-[-20%] animate-summon-flash z-50 pointer-events-none rounded-full mix-blend-screen blur-md"
+                style={{ animationDelay: animDelay }}
+            ></div>
+        )}
+
         {/* Boss Spawn Effect: Lightning & Flash */}
         {tile.type === TileType.BOSS && tile.isNew && !isLowQuality && (
              <div className="absolute inset-0 z-50 pointer-events-none overflow-visible">
@@ -154,7 +163,7 @@ export const TileComponent = React.memo(({ tile, gridSize, slideSpeed, themeId, 
              </div>
         )}
 
-        {/* Satisfying merge ripple - using border for cleaner expansion */}
+        {/* Satisfying merge ripple */}
         {showRipple && !isLowQuality && (
              <div className={`absolute inset-0 z-0 rounded-xl border-2 ${style.ringColor.replace('ring-', 'border-')} animate-ripple pointer-events-none mix-blend-screen`}></div>
         )}
@@ -172,7 +181,6 @@ export const TileComponent = React.memo(({ tile, gridSize, slideSpeed, themeId, 
                 className={`w-full h-full rounded-lg overflow-hidden relative bg-[#0b0f19] ${isCascadeClass} ${isSlash}`}
                 style={boxDepthStyle}
             >
-                
                 {/* Dynamic Shine/Facets for High Tiers */}
                 {isHighQuality && isHighTier && (
                     <>
@@ -217,7 +225,7 @@ export const TileComponent = React.memo(({ tile, gridSize, slideSpeed, themeId, 
                                 {isHighQuality && <div className="absolute inset-0 bg-radial-gradient from-black/60 to-transparent opacity-60 blur-md scale-75"></div>}
                                 
                                 <span 
-                                    className={`fantasy-font font-black text-4xl sm:text-5xl lg:text-6xl leading-none z-20 tracking-wide ${textGradientClass}`}
+                                    className={`fantasy-font font-black text-3xl sm:text-4xl lg:text-5xl leading-none z-20 tracking-wide ${textGradientClass}`}
                                     style={textStyle}
                                 >
                                     {tile.value}

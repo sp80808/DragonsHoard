@@ -5,6 +5,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 
 interface MedalFeedProps {
     queue: { id: string, medal: Medal }[];
+    inline?: boolean;
 }
 
 const MedalItem: React.FC<{ medal: Medal }> = ({ medal }) => {
@@ -49,10 +50,22 @@ const MedalItem: React.FC<{ medal: Medal }> = ({ medal }) => {
     );
 };
 
-export const MedalFeed: React.FC<MedalFeedProps> = ({ queue }) => {
+export const MedalFeed: React.FC<MedalFeedProps> = ({ queue, inline }) => {
     // FIFO Queue: Show the first item (oldest). 
     // App.tsx removes index 0 after a timeout, causing index 1 to become index 0 and display next.
     const displayQueue = queue.slice(0, 1);
+
+    if (inline) {
+        return (
+            <div className="w-full flex flex-col items-center justify-end h-10 pointer-events-none mt-2">
+                <AnimatePresence mode="wait">
+                    {displayQueue.map(({ id, medal }) => (
+                        <MedalItem key={id} medal={medal} />
+                    ))}
+                </AnimatePresence>
+            </div>
+        );
+    }
 
     // Z-index 30 puts it below HUD header (40) and Combo Meter
     // Moved down to top-36 to avoid clashing with the lower parts of the HUD

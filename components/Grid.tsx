@@ -5,6 +5,7 @@ import { TileComponent } from './TileComponent';
 import { TILE_STYLES, BOSS_STYLE, RUNE_STYLES, FALLBACK_STYLE, STONE_STYLE } from '../constants';
 import { Coins, Star } from 'lucide-react';
 import { useLootSystem } from './LootSystem';
+import { AnimatePresence } from 'framer-motion';
 
 interface GridProps {
   grid: Tile[];
@@ -245,75 +246,77 @@ export const Grid = React.memo(({ grid, size, mergeEvents, lootEvents, slideSpee
   }, [isLowQuality]);
 
   return (
-    <div ref={containerRef} className="relative w-full aspect-square group mx-auto will-change-transform">
-        {!isLowQuality && <div className={`absolute -inset-4 bg-gradient-to-r ${ambientGlowClass} rounded-3xl blur-2xl -z-10 transition-colors duration-500`}></div>}
-        
-        {/* Main Grid Container (Clipped for rounded corners and particles) */}
-        <div className={`relative w-full h-full bg-black/90 rounded-xl p-1 sm:p-2 border-2 border-slate-700/50 shadow-2xl overflow-hidden ${isLowQuality ? '' : 'backdrop-blur-md'}`}>
-            <div className="absolute inset-0 opacity-20 pointer-events-none" style={{ backgroundImage: 'radial-gradient(circle at 50% 50%, rgba(255,255,255,0.1) 1px, transparent 1px)', backgroundSize: '20px 20px' }}></div>
-            {backgroundCells}
-
-            <div className="absolute inset-0 p-1 sm:p-2 z-10">
-                <div className="relative w-full h-full">
-                    {grid.map((tile) => (
-                    <TileComponent 
-                      key={tile.id} 
-                      tile={tile} 
-                      gridSize={size} 
-                      slideSpeed={slideSpeed} 
-                      themeId={themeId} 
-                      graphicsQuality={graphicsQuality} 
-                      tilesetId={tilesetId} 
-                      onInteract={onTileClick ? () => onTileClick(tile.id, tile.y) : undefined}
-                    />
-                    ))}
-                </div>
-            </div>
+    <div className="w-full h-full flex items-center justify-center relative">
+        <div ref={containerRef} className="relative aspect-square max-h-full max-w-full m-auto group will-change-transform">
+            {!isLowQuality && <div className={`absolute -inset-4 bg-gradient-to-r ${ambientGlowClass} rounded-3xl blur-2xl -z-10 transition-colors duration-500`}></div>}
             
-            {!isLowQuality && <canvas ref={canvasRef} className="absolute inset-0 z-20 pointer-events-none w-full h-full"></canvas>}
-        </div>
+            {/* Main Grid Container (Clipped for rounded corners and particles) */}
+            <div className={`relative w-full h-full bg-black/90 rounded-xl p-1 sm:p-2 border-2 border-slate-700/50 shadow-2xl overflow-hidden ${isLowQuality ? '' : 'backdrop-blur-md'}`}>
+                <div className="absolute inset-0 opacity-20 pointer-events-none" style={{ backgroundImage: 'radial-gradient(circle at 50% 50%, rgba(255,255,255,0.1) 1px, transparent 1px)', backgroundSize: '20px 20px' }}></div>
+                {backgroundCells}
 
-        {/* Floating Text Layer - MOVED OUTSIDE to prevent clipping */}
-        <div className="absolute inset-0 p-1 sm:p-2 pointer-events-none z-50">
-            <div className="relative w-full h-full">
-                {lootEvents.map((loot) => {
-                        const tileSize = 100 / size;
-                        const top = loot.y * tileSize;
-                        const left = loot.x * tileSize;
-                        
-                        let animationClass = 'animate-loot-float';
-                        let content = null;
+                <div className="absolute inset-0 p-1 sm:p-2 z-10">
+                    <div className="relative w-full h-full">
+                        {grid.map((tile) => (
+                        <TileComponent 
+                        key={tile.id} 
+                        tile={tile} 
+                        gridSize={size} 
+                        slideSpeed={slideSpeed} 
+                        themeId={themeId} 
+                        graphicsQuality={graphicsQuality} 
+                        tilesetId={tilesetId} 
+                        onInteract={onTileClick ? () => onTileClick(tile.id, tile.y) : undefined}
+                        />
+                        ))}
+                    </div>
+                </div>
+                
+                {!isLowQuality && <canvas ref={canvasRef} className="absolute inset-0 z-20 pointer-events-none w-full h-full"></canvas>}
+            </div>
 
-                        if (loot.type === 'XP') {
-                            animationClass = 'animate-float-xp';
-                            content = (
-                                <div className="fantasy-font font-black text-lg md:text-2xl text-transparent bg-clip-text bg-gradient-to-b from-cyan-300 to-blue-600 drop-shadow-[0_2px_2px_rgba(0,0,0,0.8)] stroke-black" style={{ WebkitTextStroke: '1px rgba(0,0,0,0.5)' }}>
-                                    +{loot.value} XP
+            {/* Floating Text Layer - MOVED OUTSIDE to prevent clipping */}
+            <div className="absolute inset-0 p-1 sm:p-2 pointer-events-none z-50">
+                <div className="relative w-full h-full">
+                    {lootEvents.map((loot) => {
+                            const tileSize = 100 / size;
+                            const top = loot.y * tileSize;
+                            const left = loot.x * tileSize;
+                            
+                            let animationClass = 'animate-loot-float';
+                            let content = null;
+
+                            if (loot.type === 'XP') {
+                                animationClass = 'animate-float-xp';
+                                content = (
+                                    <div className="fantasy-font font-black text-lg md:text-2xl text-transparent bg-clip-text bg-gradient-to-b from-cyan-300 to-blue-600 drop-shadow-[0_2px_2px_rgba(0,0,0,0.8)] stroke-black" style={{ WebkitTextStroke: '1px rgba(0,0,0,0.5)' }}>
+                                        +{loot.value} XP
+                                    </div>
+                                );
+                            } else if (loot.type === 'GOLD') {
+                                animationClass = 'animate-float-gold';
+                                content = (
+                                    <div className="fantasy-font font-black text-lg md:text-2xl text-transparent bg-clip-text bg-gradient-to-b from-yellow-300 to-orange-600 drop-shadow-[0_2px_2px_rgba(0,0,0,0.8)] flex items-center gap-1" style={{ WebkitTextStroke: '1px rgba(0,0,0,0.5)' }}>
+                                        +{loot.value} G
+                                    </div>
+                                );
+                            } else {
+                                // Item
+                                content = (
+                                    <div className="flex items-center gap-1 px-2 py-1 rounded-full border shadow-lg bg-indigo-900/80 border-indigo-500 text-indigo-200 backdrop-blur-md">
+                                        <span className="text-base">{loot.icon}</span>
+                                        <span className="text-xs font-black whitespace-nowrap">{loot.value}</span>
+                                    </div>
+                                );
+                            }
+
+                            return (
+                                <div key={loot.id} className={`absolute flex flex-col items-center justify-center ${animationClass}`} style={{ width: `${tileSize}%`, height: `${tileSize}%`, top: `${top}%`, left: `${left}%` }}>
+                                    {content}
                                 </div>
                             );
-                        } else if (loot.type === 'GOLD') {
-                            animationClass = 'animate-float-gold';
-                            content = (
-                                <div className="fantasy-font font-black text-lg md:text-2xl text-transparent bg-clip-text bg-gradient-to-b from-yellow-300 to-orange-600 drop-shadow-[0_2px_2px_rgba(0,0,0,0.8)] flex items-center gap-1" style={{ WebkitTextStroke: '1px rgba(0,0,0,0.5)' }}>
-                                    +{loot.value} G
-                                </div>
-                            );
-                        } else {
-                            // Item
-                            content = (
-                                <div className="flex items-center gap-1 px-2 py-1 rounded-full border shadow-lg bg-indigo-900/80 border-indigo-500 text-indigo-200 backdrop-blur-md">
-                                    <span className="text-base">{loot.icon}</span>
-                                    <span className="text-xs font-black whitespace-nowrap">{loot.value}</span>
-                                </div>
-                            );
-                        }
-
-                        return (
-                            <div key={loot.id} className={`absolute flex flex-col items-center justify-center ${animationClass}`} style={{ width: `${tileSize}%`, height: `${tileSize}%`, top: `${top}%`, left: `${left}%` }}>
-                                {content}
-                            </div>
-                        );
-                })}
+                    })}
+                </div>
             </div>
         </div>
     </div>

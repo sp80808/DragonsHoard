@@ -71,9 +71,40 @@ export class AudioService {
     this.playTone(150, 'sine', 0.1);
   }
 
-  playMerge(score: number, combo: number) {
+  playMerge(score: number, combo: number, value: number = 0) {
     this.resume();
     const baseFreq = 220 + (Math.min(combo, 10) * 50);
+
+    if (value >= 2048) {
+        // God Tier: Full Chord, Long Sustain
+        this.playTone(110, 'sawtooth', 1.5, 0); // Root
+        this.playTone(165, 'sine', 1.5, 0);     // Fifth
+        this.playTone(220, 'square', 1.5, 0.1); // Octave
+        this.playTone(440, 'sine', 1.0, 0.2);   // Shimmer
+        return;
+    } 
+    
+    if (value >= 1024) {
+        // Demon Tier: Aggressive, Dissonant
+        this.playTone(150, 'sawtooth', 0.6);
+        this.playTone(220, 'square', 0.4, 0.1);
+        return;
+    }
+
+    if (value >= 256) {
+        // High Tier: Metallic, Sharp
+        this.playTone(baseFreq, 'square', 0.3);
+        this.playTone(baseFreq * 1.5, 'sine', 0.4, 0.05);
+        return;
+    }
+
+    if (value >= 64) {
+        // Mid Tier: Punchy
+        this.playTone(baseFreq, 'sawtooth', 0.25);
+        return;
+    }
+
+    // Default
     this.playTone(baseFreq, 'triangle', 0.2);
     if (combo > 1) {
       this.playTone(baseFreq * 1.5, 'sine', 0.3, 0.1);

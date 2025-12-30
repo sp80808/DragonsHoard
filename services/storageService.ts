@@ -1,7 +1,9 @@
 
-import { PlayerProfile, GameState, RunStats, HeroClass, DailyBounty, AbilityType } from '../types';
+import { PlayerProfile, GameState, RunStats, HeroClass, DailyBounty, AbilityType, ItemType } from '../types';
 import { v4 as uuidv4 } from 'uuid';
 import { facebookService } from './facebookService';
+import { SHOP_ITEMS, getItemDefinition } from '../constants';
+import { createId } from './gameLogic';
 
 const STORAGE_KEY = 'dragons_hoard_profile';
 
@@ -48,7 +50,9 @@ const getDefaultProfile = (): PlayerProfile => ({
     earnedMedals: {},
     unlockedPowerups: [],
     skillPoints: 0,
-    unlockedSkills: ['ROOT']
+    unlockedSkills: ['ROOT'],
+    loginStreak: 0,
+    lastLoginRewardDate: ''
 });
 
 export const syncPlayerProfile = async (): Promise<PlayerProfile> => {
@@ -82,6 +86,8 @@ export const syncPlayerProfile = async (): Promise<PlayerProfile> => {
     if (!finalProfile.activeBounties) finalProfile.activeBounties = [];
     if (!finalProfile.skillPoints) finalProfile.skillPoints = 0;
     if (!finalProfile.unlockedSkills) finalProfile.unlockedSkills = ['ROOT'];
+    if (finalProfile.loginStreak === undefined) finalProfile.loginStreak = 0;
+    if (!finalProfile.lastLoginRewardDate) finalProfile.lastLoginRewardDate = '';
     
     const today = new Date().toISOString().split('T')[0];
     if (finalProfile.lastBountyDate !== today) {
@@ -107,6 +113,95 @@ const saveProfile = (p: PlayerProfile) => {
     // Fire and forget cloud save
     facebookService.saveData(STORAGE_KEY, p);
 };
+
+// --- DAILY LOGIN SYSTEM ---
+
+export interface DailyRewardConfig {
+    day: number;
+    gold: number;
+    item?: ItemType;
+    sp?: number;
+}
+
+export const DAILY_REWARDS: DailyRewardConfig[] = [
+    { day: 1, gold: 150 },
+    { day: 2, gold: 300 },
+    { day: 3, gold: 0, item: ItemType.XP_POTION },
+    { day: 4, gold: 600 },
+    { day: 5, gold: 0, item: ItemType.REROLL_TOKEN },
+    { day: 6, gold: 1000 },
+    { day: 7, gold: 1500, item: ItemType.GOLDEN_RUNE, sp: 1 },
+];
+
+export const checkDailyLoginStatus = (profile: PlayerProfile): { canClaim: boolean, streak: number, reward: DailyRewardConfig } => {
+    const today = new Date().toISOString().split('T')[0];
+    const lastClaim = profile.lastLoginRewardDate;
+    
+    let streak = profile.loginStreak;
+
+    // Check if missed a day (Logic: if last claim was BEFORE yesterday)
+    if (lastClaim) {
+        const lastDate = new Date(lastClaim);
+        const currentDate = new Date(today);
+        const diffTime = Math.abs(currentDate.getTime() - lastDate.getTime());
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
+        
+        if (diffDays > 1) {
+            streak = 0; // Reset streak if missed more than 1 day
+        }
+    }
+
+    // Determine current reward day (1-based, modulo 7)
+    // If streak is 0, we are on Day 1. If streak is 1 (claimed yesterday), we are on Day 2.
+    // However, the streak variable in profile usually tracks CLAIMED days.
+    // If we claimed yesterday (streak 1), today we are claiming streak 2 reward.
+    // If we claimed today, canClaim is false.
+    
+    const canClaim = lastClaim !== today;
+    const currentDayIndex = streak % 7; // 0 = Day 1, 6 = Day 7
+    
+    return {
+        canClaim,
+        streak: streak,
+        reward: DAILY_REWARDS[currentDayIndex]
+    };
+};
+
+export const claimDailyReward = (state: GameState): GameState => {
+    const profile = getPlayerProfile();
+    const { canClaim, reward, streak } = checkDailyLoginStatus(profile);
+    
+    if (!canClaim) return state;
+
+    const today = new Date().toISOString().split('T')[0];
+    profile.lastLoginRewardDate = today;
+    profile.loginStreak = streak + 1; // Increment streak
+    if (reward.sp) profile.skillPoints = (profile.skillPoints || 0) + reward.sp;
+    
+    saveProfile(profile);
+
+    // Update Game State
+    let newState = { ...state, gold: state.gold + reward.gold };
+    
+    // Add Item if exists
+    if (reward.item) {
+        const def = getItemDefinition(reward.item);
+        if (def) {
+            const newItem = { 
+                id: createId(), 
+                type: reward.item, 
+                name: def.name, 
+                description: def.desc, 
+                icon: def.icon 
+            };
+            newState.inventory = [...newState.inventory, newItem];
+        }
+    }
+
+    return newState;
+};
+
+// --- END DAILY LOGIN SYSTEM ---
 
 export const completeTutorial = () => {
     const profile = getPlayerProfile();

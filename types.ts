@@ -193,6 +193,10 @@ export interface PlayerProfile {
   unlockedPowerups: AbilityType[]; // Persistent unlocks
   skillPoints: number;
   unlockedSkills: string[]; // IDs of unlocked skill nodes
+  
+  // Login Streak
+  loginStreak: number;
+  lastLoginRewardDate: string; // YYYY-MM-DD
 }
 
 export interface SkillNodeDefinition {
@@ -227,6 +231,7 @@ export interface StoryEntry {
 }
 
 export type GraphicsQuality = 'HIGH' | 'MEDIUM' | 'LOW';
+export type OrientationSetting = 'AUTO' | 'PORTRAIT' | 'LANDSCAPE';
 
 export interface InputSettings {
   enableKeyboard: boolean;
@@ -244,6 +249,9 @@ export interface InputSettings {
   enableScreenShake: boolean;
   enableParticles: boolean;
   reduceMotion: boolean;
+  
+  // Orientation
+  orientation: OrientationSetting;
 }
 
 export interface ShopItemState {

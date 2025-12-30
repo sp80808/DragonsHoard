@@ -2,11 +2,16 @@
 import { Direction, GameState, Tile, TileType, MoveResult, LootResult, ItemType, InventoryItem, Stage, LeaderboardEntry, GameStats, Achievement, HeroClass, CraftingRecipe, DailyModifier, StoryEntry, PlayerProfile, Medal, AbilityType, AbilityState, Difficulty, LootEvent, ShopState, GameMode, RunStats } from '../types';
 import { GRID_SIZE_INITIAL, SHOP_ITEMS, getXpThreshold, getStage, getStageBackground, ACHIEVEMENTS, TILE_STYLES, FALLBACK_STYLE, getItemDefinition, BOSS_DEFINITIONS, SHOP_CONFIG, DAILY_MODIFIERS, STORY_ENTRIES, MEDALS } from '../constants';
 import { RNG, rng, generateId } from '../utils/rng';
+import { audioService } from './audioService'; // Needed for type checking if needed, but not used directly here as audio is triggered in App or via events
+
+// ... existing code ...
 
 export const createId = () => generateId();
 const LEADERBOARD_KEY = 'dragon_hoard_leaderboard';
 const ACHIEVEMENTS_STORAGE_KEY = 'dragon_hoard_unlocked_achievements';
 const PROFILE_STORAGE_KEY = 'dragons_hoard_profile';
+
+// ... existing helper functions (getEmptyCells, spawnTile, etc.) ...
 
 export const getEmptyCells = (grid: Tile[], size: number) => {
   const cells: { x: number; y: number }[] = [];
@@ -175,6 +180,7 @@ export const initializeGame = (restart = false, heroClass: HeroClass = HeroClass
                 if (parsed.settings.enableScreenShake === undefined) parsed.settings.enableScreenShake = true;
                 if (parsed.settings.enableParticles === undefined) parsed.settings.enableParticles = true;
                 if (parsed.settings.reduceMotion === undefined) parsed.settings.reduceMotion = false;
+                if (parsed.settings.orientation === undefined) parsed.settings.orientation = 'AUTO';
             }
             // Ensure baseline exists if recovering old save
             if (parsed.baselineAccountXp === undefined) {
@@ -279,7 +285,8 @@ export const initializeGame = (restart = false, heroClass: HeroClass = HeroClass
         graphicsQuality: 'HIGH',
         enableScreenShake: true,
         enableParticles: true,
-        reduceMotion: false
+        reduceMotion: false,
+        orientation: 'AUTO'
     },
     selectedClass: heroClass,
     gameMode: mode,
@@ -297,6 +304,7 @@ export const initializeGame = (restart = false, heroClass: HeroClass = HeroClass
   };
 };
 
+// ... remaining functions
 export const moveGrid = (
     grid: Tile[], 
     direction: Direction, 
@@ -548,6 +556,7 @@ export const moveGrid = (
   };
 };
 
+// ... remaining functions
 export const isGameOver = (grid: Tile[], size: number): boolean => {
     if (grid.length < size * size) return false;
 
