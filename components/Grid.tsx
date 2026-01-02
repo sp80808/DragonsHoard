@@ -19,9 +19,10 @@ interface GridProps {
   tilesetId?: string;
   lowPerformanceMode?: boolean; // Legacy
   onTileClick?: (id: string, row: number) => void;
+  isHitstopping?: boolean; // New prop for hitstop
 }
 
-export const Grid = React.memo(({ grid, size, mergeEvents, lootEvents, slideSpeed, themeId, graphicsQuality = 'HIGH', combo, tilesetId = 'DEFAULT', lowPerformanceMode, onTileClick }: GridProps) => {
+export const Grid = React.memo(({ grid, size, mergeEvents, lootEvents, slideSpeed, themeId, graphicsQuality = 'HIGH', combo, tilesetId = 'DEFAULT', lowPerformanceMode, onTileClick, isHitstopping = false }: GridProps) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const particlesRef = useRef<any[]>([]);
   const animationFrameRef = useRef<number>(0);
@@ -41,6 +42,7 @@ export const Grid = React.memo(({ grid, size, mergeEvents, lootEvents, slideSpee
       return "from-slate-900/40 to-slate-800/40";
   }, [combo, isLowQuality]);
 
+  // ... (Keep existing backgroundCells and useEffects for Loot/Particles) ...
   const backgroundCells = useMemo(() => {
       const cells = Array.from({ length: size * size });
       return (
@@ -267,6 +269,7 @@ export const Grid = React.memo(({ grid, size, mergeEvents, lootEvents, slideSpee
                         graphicsQuality={graphicsQuality} 
                         tilesetId={tilesetId} 
                         onInteract={onTileClick ? () => onTileClick(tile.id, tile.y) : undefined}
+                        isFrozen={isHitstopping}
                         />
                         ))}
                     </div>

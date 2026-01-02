@@ -25,6 +25,7 @@ export const getEmptyCells = (grid: Tile[], size: number) => {
   return cells;
 };
 
+// ... existing spawnTile function ...
 interface SpawnOptions {
   forcedValue?: number;
   type?: TileType;
@@ -117,6 +118,7 @@ export const spawnTile = (grid: Tile[], size: number, level: number, options?: S
   return [...grid, newTile];
 };
 
+// ... existing helper functions ...
 const getInitialShopState = (modifiers?: DailyModifier[]): ShopState => {
     const items: Record<string, { stock: number; priceMultiplier: number }> = {};
     SHOP_ITEMS.forEach(item => {
@@ -328,6 +330,7 @@ export const moveGrid = (
   const logs: string[] = [];
   const medalsEarned: Medal[] = [];
   const abilitiesTriggered: string[] = [];
+  let maxMergedValue = 0; // Track max value for hitstop
 
   // Reset transient flags
   newGrid.forEach(t => { delete t.isNew; delete t.isCascade; delete t.mergedFrom; });
@@ -461,6 +464,8 @@ export const moveGrid = (
         // INTERACTION: Merge
         if (nextTile.value === tile.value && !nextTile.mergedFrom) {
           const mergedValue = tile.value * 2;
+          maxMergedValue = Math.max(maxMergedValue, mergedValue); // Track max value
+
           const mergedTile: Tile = {
             id: createId(),
             x: next.x,
@@ -569,6 +574,14 @@ export const moveGrid = (
       }
   }
 
+  // Calculate Hitstop Duration
+  let hitstopDuration = 0;
+  if (moved && maxMergedValue >= 512) {
+      if (maxMergedValue >= 2048) hitstopDuration = 120; // God Tier
+      else if (maxMergedValue >= 1024) hitstopDuration = 80; // Demon Tier
+      else hitstopDuration = 40; // High Tier
+  }
+
   if (moved) {
       if (stats && stats.totalMerges === 0 && mergedCount > 0) medalsEarned.push(MEDALS.FIRST_MERGE);
       if (mergedCount === 2) medalsEarned.push(MEDALS.DOUBLE_MERGE);
@@ -595,7 +608,8 @@ export const moveGrid = (
       bossDefeated,
       lootEvents,
       medalsEarned,
-      abilitiesTriggered
+      abilitiesTriggered,
+      hitstopDuration
   };
 };
 
@@ -757,6 +771,7 @@ export const executeAutoCascade = (grid: Tile[], size: number, step: number, eff
     let moved = false;
     let newGrid = grid.map(t => ({...t}));
     
+    // 1. Gravity: Pull tiles down
     for (let x = 0; x < size; x++) {
         const col = newGrid.filter(t => t.x === x).sort((a, b) => a.y - b.y);
         let writeY = size - 1;
@@ -771,25 +786,65 @@ export const executeAutoCascade = (grid: Tile[], size: number, step: number, eff
     }
     
     const mergedIds: string[] = [];
+    const lootEvents: LootEvent[] = [];
     let xp = 0;
     let gold = 0;
     
+    // Multiplier increases with step (1.0x, 1.5x, 2.0x, etc.)
+    const multiplier = 1 + (step * 0.5);
+
+    // 2. Vertical Merges
     for (let x = 0; x < size; x++) {
+        // Iterate from bottom up
         for (let y = size - 1; y > 0; y--) {
             const current = newGrid.find(t => t.x === x && t.y === y && !mergedIds.includes(t.id));
             const above = newGrid.find(t => t.x === x && t.y === y - 1 && !mergedIds.includes(t.id));
             
             if (current && above && current.value === above.value && current.value > 0) {
-                current.value *= 2;
+                const newValue = current.value * 2;
+                current.value = newValue;
                 current.isCascade = true;
                 current.mergedFrom = [current.id, above.id]; 
                 
-                newGrid = newGrid.filter(t => t.id !== above.id);
+                // Remove the tile that was "above" and merged into "current"
+                const removeIdx = newGrid.findIndex(t => t.id === above.id);
+                if (removeIdx > -1) newGrid.splice(removeIdx, 1);
+
                 mergedIds.push(current.id); 
                 
-                xp += current.value;
-                gold += Math.floor(current.value / 10);
+                const gainedXp = Math.floor(newValue * multiplier);
+                const gainedGold = Math.floor((newValue / 10) * multiplier);
+
+                xp += gainedXp;
+                gold += gainedGold;
+                
+                lootEvents.push({ id: createId(), x: current.x, y: current.y, type: 'XP', value: gainedXp });
+                if (gainedGold > 0) {
+                    lootEvents.push({ id: createId(), x: current.x, y: current.y, type: 'GOLD', value: gainedGold });
+                }
+
                 moved = true;
+            }
+        }
+    }
+
+    // 3. Harmonic Resonance: Spawn new tiles in empty top spots to extend combo
+    if (effectCounters['HARMONIC_RESONANCE'] && effectCounters['HARMONIC_RESONANCE'] > 0) {
+        const topRowY = 0;
+        for (let x = 0; x < size; x++) {
+            const occupied = newGrid.some(t => t.x === x && t.y === topRowY);
+            if (!occupied) {
+                // Spawn a level 1 or 2 tile (Value 2 or 4)
+                const val = Math.random() > 0.5 ? 2 : 4;
+                newGrid.push({
+                    id: createId(),
+                    x,
+                    y: topRowY, // Starts at top
+                    value: val,
+                    type: TileType.NORMAL,
+                    isNew: true
+                });
+                moved = true; // Spawning counts as activity to keep cascade loop going
             }
         }
     }
@@ -797,7 +852,7 @@ export const executeAutoCascade = (grid: Tile[], size: number, step: number, eff
     return {
         grid: newGrid,
         rewards: { xp, gold },
-        lootEvents: [], 
+        lootEvents, 
         occurred: moved
     };
 };

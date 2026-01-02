@@ -1,10 +1,11 @@
 
-import React, { useState, useEffect } from 'react';
-import { ArrowLeft, Zap, Skull, Swords, Scroll, Coins, Trophy, Sparkles, Package, Sparkles as MagicIcon, Sword, Book, Eye, Feather, Ghost } from 'lucide-react';
-import { SHOP_ITEMS, TILE_STYLES, STORY_ENTRIES } from '../constants';
+import React, { useState, useEffect, useMemo } from 'react';
+import { ArrowLeft, Zap, Skull, Swords, Scroll, Coins, Trophy, Sparkles, Package, Sparkles as MagicIcon, Sword, Book, Eye, Feather, Ghost, Loader2 } from 'lucide-react';
+import { SHOP_ITEMS, TILE_STYLES, STORY_ENTRIES, FALLBACK_BESTIARY_LORE } from '../constants';
 import { TileType } from '../types';
 import { getPlayerProfile } from '../services/storageService';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
+import { GoogleGenAI } from "@google/genai";
 
 interface HelpScreenProps {
   onBack: () => void;
@@ -15,25 +16,79 @@ type TabType = 'GUIDE' | 'BESTIARY' | 'ITEMS' | 'LORE';
 export const HelpScreen: React.FC<HelpScreenProps> = ({ onBack }) => {
   const [activeTab, setActiveTab] = useState<TabType>('GUIDE');
   const [unlockedLore, setUnlockedLore] = useState<string[]>([]);
-
-  useEffect(() => {
-      const p = getPlayerProfile();
-      setUnlockedLore(p.unlockedLore);
-  }, []);
-
-  const battleItems = SHOP_ITEMS.filter(i => i.category === 'BATTLE');
-  const magicItems = SHOP_ITEMS.filter(i => i.category === 'MAGIC');
-  const consumables = SHOP_ITEMS.filter(i => i.category === 'CONSUMABLE');
+  // Initialize with fallback lore to ensure it's never empty
+  const [aiLore, setAiLore] = useState<Record<string, string>>(FALLBACK_BESTIARY_LORE);
+  const [loadingLore, setLoadingLore] = useState(false);
 
   // Generate Monster List from Tile Styles (Powers of 2)
-  const monsters = Object.keys(TILE_STYLES).map(key => {
+  const monsters = useMemo(() => Object.keys(TILE_STYLES).map(key => {
       const val = parseInt(key);
       const style = TILE_STYLES[val];
       return {
           value: val,
           ...style
       };
-  }).sort((a,b) => a.value - b.value);
+  }).sort((a,b) => a.value - b.value), []);
+
+  useEffect(() => {
+      const p = getPlayerProfile();
+      setUnlockedLore(p.unlockedLore);
+
+      // 1. Try to load cached lore
+      try {
+          const cached = localStorage.getItem('dragons_hoard_bestiary_lore');
+          if (cached) {
+              const parsed = JSON.parse(cached);
+              // Merge fallback with cache to ensure no keys are missing
+              setAiLore(prev => ({ ...prev, ...parsed }));
+          } else {
+              // 2. If no cache, trigger background generation immediately
+              generateBestiaryLore();
+          }
+      } catch (e) {
+          console.error("Failed to load cached lore", e);
+      }
+  }, []);
+
+  const generateBestiaryLore = async () => {
+      setLoadingLore(true);
+      try {
+          const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+          const monsterNames = monsters.map(m => m.label).join(', ');
+          
+          const prompt = `
+              You are the keeper of a dark fantasy dungeon bestiary. 
+              Write short, evocative, gritty flavor text (max 15 words each) for the following monsters: ${monsterNames}.
+              Focus on their appearance, smell, or danger.
+              Return ONLY a JSON object where keys are the exact monster names provided (e.g. "SLIME", "RAT") and values are the descriptions.
+              Do not use Markdown formatting.
+          `;
+          
+          const response = await ai.models.generateContent({
+              model: 'gemini-3-flash-preview',
+              contents: prompt,
+              config: { responseMimeType: 'application/json' }
+          });
+          
+          if (response.text) {
+              const data = JSON.parse(response.text);
+              setAiLore(prev => {
+                  const combined = { ...prev, ...data };
+                  localStorage.setItem('dragons_hoard_bestiary_lore', JSON.stringify(combined));
+                  return combined;
+              });
+          }
+      } catch (e) {
+          console.error("Failed to fetch lore, keeping fallback.", e);
+          // Keep using fallback lore which is already in state
+      } finally {
+          setLoadingLore(false);
+      }
+  };
+
+  const battleItems = SHOP_ITEMS.filter(i => i.category === 'BATTLE');
+  const magicItems = SHOP_ITEMS.filter(i => i.category === 'MAGIC');
+  const consumables = SHOP_ITEMS.filter(i => i.category === 'CONSUMABLE');
 
   const TabButton = ({ id, label, icon }: { id: TabType, label: string, icon: React.ReactNode }) => (
       <button 
@@ -148,7 +203,15 @@ export const HelpScreen: React.FC<HelpScreenProps> = ({ onBack }) => {
               <div className="space-y-6">
                   <div className="text-center mb-6">
                       <h3 className="text-2xl font-black text-white fantasy-font">Monster Log</h3>
-                      <p className="text-slate-400 text-sm">Know your enemy.</p>
+                      <p className="text-slate-400 text-sm h-6">
+                          {loadingLore ? (
+                              <span className="flex items-center justify-center gap-2 animate-pulse text-yellow-500">
+                                  <Loader2 size={14} className="animate-spin"/> Transcribing ancient knowledge...
+                              </span>
+                          ) : (
+                              "Know your enemy."
+                          )}
+                      </p>
                   </div>
                   
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
@@ -168,7 +231,6 @@ export const HelpScreen: React.FC<HelpScreenProps> = ({ onBack }) => {
                                    ) : (
                                        <Ghost size={48} className="text-white/20" />
                                    )}
-                                   {/* Removed emoji icon */}
                                    <div className="absolute inset-0 bg-gradient-to-t from-slate-900 via-transparent to-transparent"></div>
                               </div>
                               
@@ -180,10 +242,10 @@ export const HelpScreen: React.FC<HelpScreenProps> = ({ onBack }) => {
                                           LVL {Math.log2(m.value)}
                                       </div>
                                   </div>
-                                  <div className="text-[10px] text-slate-400 leading-tight border-t border-slate-800 pt-2 mt-2">
-                                      {m.value >= 2048 ? "A legendary deity of immense power." : 
-                                       m.value >= 512 ? "A mythical beast feared by kings." : 
-                                       m.value >= 64 ? "A dangerous foe for any hero." : "Common fodder for the dungeon."}
+                                  <div className="text-[10px] text-slate-400 leading-tight border-t border-slate-800 pt-2 mt-2 h-10 overflow-hidden font-serif italic opacity-80">
+                                      <span className="animate-in fade-in duration-500">
+                                          {aiLore[m.label] || FALLBACK_BESTIARY_LORE[m.label] || "Unknown entity."}
+                                      </span>
                                   </div>
                               </div>
                           </motion.div>

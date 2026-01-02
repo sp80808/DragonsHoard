@@ -4,6 +4,7 @@ import { ArrowLeft, Lock, CheckCircle, Palette, Flame, Ghost, Grid, Droplets, Za
 import { PlayerProfile, Medal } from '../types';
 import { THEME_STYLES, MEDALS } from '../constants';
 import { setActiveTileset } from '../services/storageService';
+import { TiltContainer } from './TiltContainer';
 
 interface GrimoireProps {
   profile: PlayerProfile;
@@ -86,54 +87,55 @@ export const Grimoire: React.FC<GrimoireProps> = ({ profile, onBack, onSelectTil
                             const previewTile = styleSet[16] || styleSet[8]; 
 
                             return (
-                                <button 
-                                    key={theme.id}
-                                    disabled={!theme.unlocked}
-                                    onClick={() => handleSelect(theme.id)}
-                                    className={`relative group flex flex-col text-left rounded-2xl border-2 transition-all duration-300 overflow-hidden
-                                        ${isActive ? 'border-indigo-500 bg-indigo-900/20 shadow-[0_0_20px_rgba(99,102,241,0.2)]' : 
-                                        theme.unlocked ? 'border-slate-700 bg-slate-900/40 hover:border-slate-500 hover:bg-slate-800' : 'border-slate-800 bg-black/40 opacity-70 cursor-not-allowed'}
-                                    `}
-                                >
-                                    {/* Preview Banner */}
-                                    <div className={`h-32 w-full relative overflow-hidden bg-gradient-to-br ${previewTile.color}`}>
-                                        {previewTile.imageUrl && (
-                                            <img src={previewTile.imageUrl} alt="Preview" className="absolute inset-0 w-full h-full object-cover opacity-60 mix-blend-overlay group-hover:scale-110 transition-transform duration-700" />
-                                        )}
-                                        <div className="absolute inset-0 bg-black/20"></div>
-                                        
-                                        {/* Icon Overlay */}
-                                        <div className="absolute bottom-3 right-3 text-4xl drop-shadow-lg filter shadow-black">{previewTile.icon}</div>
-                                        
-                                        {/* Lock Overlay */}
-                                        {!theme.unlocked && (
-                                            <div className="absolute inset-0 bg-black/60 flex items-center justify-center backdrop-blur-sm">
-                                                <Lock size={32} className="text-slate-500" />
-                                            </div>
-                                        )}
-                                    </div>
-
-                                    {/* Body */}
-                                    <div className="p-5 flex-1 flex flex-col">
-                                        <div className="flex justify-between items-start mb-2">
-                                            <div className="text-lg font-bold text-white font-serif">{theme.name}</div>
-                                            {isActive && <CheckCircle size={20} className="text-indigo-400" />}
-                                        </div>
-                                        <p className="text-xs text-slate-400 leading-relaxed mb-4">{theme.desc}</p>
-                                        
-                                        <div className="mt-auto pt-4 border-t border-white/5 w-full">
-                                            {!theme.unlocked ? (
-                                                <div className="text-xs font-bold text-red-400 uppercase tracking-wider flex items-center gap-2">
-                                                    <Lock size={12}/> Unlocks at Level {theme.reqLevel}
-                                                </div>
-                                            ) : (
-                                                <div className={`text-xs font-bold uppercase tracking-wider ${isActive ? 'text-indigo-400' : 'text-slate-500'}`}>
-                                                    {isActive ? 'Active Theme' : 'Select to Equip'}
+                                <TiltContainer key={theme.id} disabled={!theme.unlocked}>
+                                    <button 
+                                        disabled={!theme.unlocked}
+                                        onClick={() => handleSelect(theme.id)}
+                                        className={`relative w-full h-full group flex flex-col text-left rounded-2xl border-2 transition-all duration-300 overflow-hidden
+                                            ${isActive ? 'border-indigo-500 bg-indigo-900/20 shadow-[0_0_20px_rgba(99,102,241,0.2)]' : 
+                                            theme.unlocked ? 'border-slate-700 bg-slate-900/40 hover:border-slate-500 hover:bg-slate-800' : 'border-slate-800 bg-black/40 opacity-70 cursor-not-allowed'}
+                                        `}
+                                    >
+                                        {/* Preview Banner */}
+                                        <div className={`h-32 w-full relative overflow-hidden bg-gradient-to-br ${previewTile.color}`}>
+                                            {previewTile.imageUrl && (
+                                                <img src={previewTile.imageUrl} alt="Preview" className="absolute inset-0 w-full h-full object-cover opacity-60 mix-blend-overlay group-hover:scale-110 transition-transform duration-700" />
+                                            )}
+                                            <div className="absolute inset-0 bg-black/20"></div>
+                                            
+                                            {/* Icon Overlay */}
+                                            <div className="absolute bottom-3 right-3 text-4xl drop-shadow-lg filter shadow-black">{previewTile.icon}</div>
+                                            
+                                            {/* Lock Overlay */}
+                                            {!theme.unlocked && (
+                                                <div className="absolute inset-0 bg-black/60 flex items-center justify-center backdrop-blur-sm">
+                                                    <Lock size={32} className="text-slate-500" />
                                                 </div>
                                             )}
                                         </div>
-                                    </div>
-                                </button>
+
+                                        {/* Body */}
+                                        <div className="p-5 flex-1 flex flex-col">
+                                            <div className="flex justify-between items-start mb-2">
+                                                <div className="text-lg font-bold text-white font-serif">{theme.name}</div>
+                                                {isActive && <CheckCircle size={20} className="text-indigo-400" />}
+                                            </div>
+                                            <p className="text-xs text-slate-400 leading-relaxed mb-4">{theme.desc}</p>
+                                            
+                                            <div className="mt-auto pt-4 border-t border-white/5 w-full">
+                                                {!theme.unlocked ? (
+                                                    <div className="text-xs font-bold text-red-400 uppercase tracking-wider flex items-center gap-2">
+                                                        <Lock size={12}/> Unlocks at Level {theme.reqLevel}
+                                                    </div>
+                                                ) : (
+                                                    <div className={`text-xs font-bold uppercase tracking-wider ${isActive ? 'text-indigo-400' : 'text-slate-500'}`}>
+                                                        {isActive ? 'Active Theme' : 'Select to Equip'}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </button>
+                                </TiltContainer>
                             );
                         })}
                     </div>
@@ -152,13 +154,13 @@ export const Grimoire: React.FC<GrimoireProps> = ({ profile, onBack, onSelectTil
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                        {medalsList.map(medal => {
-                            const count = profile.earnedMedals?.[medal.id] || 0;
+                        {medalsList.map(medals => {
+                            const count = profile.earnedMedals?.[medals.id] || 0;
                             const isUnlocked = count > 0;
                             
                             let rarityColor = 'border-slate-700 bg-slate-800/50';
                             if (isUnlocked) {
-                                switch(medal.rarity) {
+                                switch(medals.rarity) {
                                     case 'COMMON': rarityColor = 'border-slate-500 bg-slate-900'; break;
                                     case 'UNCOMMON': rarityColor = 'border-green-600 bg-green-950/30'; break;
                                     case 'RARE': rarityColor = 'border-blue-600 bg-blue-950/30'; break;
@@ -168,16 +170,16 @@ export const Grimoire: React.FC<GrimoireProps> = ({ profile, onBack, onSelectTil
                             }
 
                             return (
-                                <div key={medal.id} className={`p-3 rounded-xl border flex items-center gap-3 relative overflow-hidden transition-all ${rarityColor} ${!isUnlocked ? 'opacity-50 grayscale' : 'hover:scale-[1.02]'}`}>
+                                <div key={medals.id} className={`p-3 rounded-xl border flex items-center gap-3 relative overflow-hidden transition-all ${rarityColor} ${!isUnlocked ? 'opacity-50 grayscale' : 'hover:scale-[1.02]'}`}>
                                     <div className={`text-2xl w-10 h-10 flex items-center justify-center rounded-lg bg-black/40 ${isUnlocked ? '' : 'text-slate-600'}`}>
-                                        {medal.icon}
+                                        {medals.icon}
                                     </div>
                                     <div className="flex-1 min-w-0">
                                         <div className={`text-xs font-black uppercase tracking-wider mb-0.5 ${isUnlocked ? 'text-white' : 'text-slate-500'}`}>
-                                            {medal.name}
+                                            {medals.name}
                                         </div>
                                         <div className="text-[10px] text-slate-400 truncate leading-tight">
-                                            {medal.description}
+                                            {medals.description}
                                         </div>
                                     </div>
                                     {count > 0 && (

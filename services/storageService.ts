@@ -43,6 +43,7 @@ const getDefaultProfile = (): PlayerProfile => ({
     lastBountyDate: new Date().toISOString().split('T')[0],
     lastPlayed: new Date().toISOString(),
     tutorialCompleted: false,
+    cascadeTutorialSeen: false, // Default to false
     bossTutorialCompleted: false,
     seenHints: [],
     activeTilesetId: 'DEFAULT',
@@ -88,6 +89,7 @@ export const syncPlayerProfile = async (): Promise<PlayerProfile> => {
     if (!finalProfile.unlockedSkills) finalProfile.unlockedSkills = ['ROOT'];
     if (finalProfile.loginStreak === undefined) finalProfile.loginStreak = 0;
     if (!finalProfile.lastLoginRewardDate) finalProfile.lastLoginRewardDate = '';
+    if (finalProfile.cascadeTutorialSeen === undefined) finalProfile.cascadeTutorialSeen = false;
     
     const today = new Date().toISOString().split('T')[0];
     if (finalProfile.lastBountyDate !== today) {
@@ -206,6 +208,12 @@ export const claimDailyReward = (state: GameState): GameState => {
 export const completeTutorial = () => {
     const profile = getPlayerProfile();
     profile.tutorialCompleted = true;
+    saveProfile(profile);
+};
+
+export const completeCascadeTutorial = () => {
+    const profile = getPlayerProfile();
+    profile.cascadeTutorialSeen = true;
     saveProfile(profile);
 };
 
@@ -337,6 +345,12 @@ export const finalizeRun = (finalState: GameState): { profile: PlayerProfile, le
             profile.unlockedClasses.push(HeroClass.WARRIOR);
             newUnlocks.push({ type: 'CLASS', id: HeroClass.WARRIOR, label: 'Warrior', desc: 'Starts with Bomb Scroll', level });
         }
+        
+        // NEW: Unlock Cascade Mechanic at Level 4
+        if (level >= 4 && !profile.unlockedFeatures.includes('CASCADE_MECHANIC')) {
+            profile.unlockedFeatures.push('CASCADE_MECHANIC');
+            newUnlocks.push({ type: 'FEATURE', id: 'CASCADE_MECHANIC', label: 'Cascade', desc: 'Tiles now fall and merge automatically.', level });
+        }
 
         if (level >= 5) {
             if (!profile.unlockedClasses.includes(HeroClass.ROGUE)) {
@@ -398,7 +412,7 @@ export const finalizeRun = (finalState: GameState): { profile: PlayerProfile, le
         }
         if (level >= 50 && !profile.unlockedFeatures.includes('TILESET_CELESTIAL')) {
             profile.unlockedFeatures.push('TILESET_CELESTIAL');
-            newUnlocks.push({ type: 'TILESET', id: 'TILESET_CELESTIAL', label: 'Divine Light', desc: 'Angelic visual theme.', level });
+            newUnlocks.push({ type: 'TILESET', id: 'TILESET_CELESTIAL', label: 'Divine Light', desc: 'Angels and holy entities.', level });
         }
         if (level >= 55 && !profile.unlockedFeatures.includes('TILESET_FEUDAL')) {
             profile.unlockedFeatures.push('TILESET_FEUDAL');

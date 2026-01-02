@@ -65,6 +65,19 @@
         100% { opacity: 0; transform: scale(1.1); }
       }
       .animate-summon-flash { animation: summonFlash 0.5s ease-out forwards; }
+
+      /* Boss Spawn Effects */
+      @keyframes lightning {
+        0% { opacity: 0; transform: translateX(-50%) scaleY(0); }
+        10% { opacity: 1; transform: translateX(-50%) scaleY(1); }
+        40% { opacity: 1; }
+        100% { opacity: 0; transform: translateX(-50%) scaleY(2); }
+      }
+
+      @keyframes flash {
+        0% { opacity: 1; }
+        100% { opacity: 0; }
+      }
       
       /* ... (Keep all other styles from original file) ... */
     </style>

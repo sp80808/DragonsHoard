@@ -5,6 +5,7 @@ import { ItemType, CraftingRecipe, InventoryItem, ShopState } from '../types';
 import { Coins, X, Hammer, ShoppingBag, AlertCircle, Sparkles, Sword, Package, Check, Lock, RefreshCcw, Info, ArrowLeft } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { facebookService } from '../services/facebookService';
+import { TiltContainer } from './TiltContainer';
 
 interface StoreProps {
   gold: number;
@@ -132,7 +133,7 @@ export const Store: React.FC<StoreProps> = ({ gold, inventory, onClose, onBuy, o
         </div>
 
         {/* MAIN CONTENT AREA */}
-        <div className="flex-1 flex flex-col h-full relative z-10 overflow-hidden">
+        <div className="flex-1 flex flex-col h-full relative z-10 overflow-hidden" style={{ perspective: "1000px" }}>
              
              {/* Top Bar (Desktop) */}
              <div className="hidden md:flex justify-between items-center p-6 pb-2">
@@ -187,14 +188,16 @@ export const Store: React.FC<StoreProps> = ({ gold, inventory, onClose, onBuy, o
                                     transition={{ duration: 0.2, delay: idx * 0.05 }}
                                     layout
                                  >
-                                    <StoreCard 
-                                        item={item}
-                                        price={currentPrice}
-                                        stock={stock}
-                                        canAfford={gold >= currentPrice && stock > 0}
-                                        onAttemptBuy={(onSuccess, onError) => handleBuyAttempt(item, currentPrice, stock, onSuccess, onError)}
-                                        dropChance={dropChancePercent}
-                                    />
+                                    <TiltContainer className="h-full">
+                                        <StoreCard 
+                                            item={item}
+                                            price={currentPrice}
+                                            stock={stock}
+                                            canAfford={gold >= currentPrice && stock > 0}
+                                            onAttemptBuy={(onSuccess, onError) => handleBuyAttempt(item, currentPrice, stock, onSuccess, onError)}
+                                            dropChance={dropChancePercent}
+                                        />
+                                    </TiltContainer>
                                  </motion.div>
                              );
                         })}
@@ -214,15 +217,17 @@ export const Store: React.FC<StoreProps> = ({ gold, inventory, onClose, onBuy, o
                                     transition={{ duration: 0.2, delay: idx * 0.05 }}
                                     layout
                                  >
-                                    <StoreCard 
-                                        recipe={recipe}
-                                        canAfford={canAfford}
-                                        inventoryCounts={counts}
-                                        onAttemptBuy={(onSuccess, onError) => handleCraftAttempt(recipe, onSuccess, onError)}
-                                        isCrafting
-                                        stock={999}
-                                        price={recipe.goldCost}
-                                    />
+                                    <TiltContainer className="h-full">
+                                        <StoreCard 
+                                            recipe={recipe}
+                                            canAfford={canAfford}
+                                            inventoryCounts={counts}
+                                            onAttemptBuy={(onSuccess, onError) => handleCraftAttempt(recipe, onSuccess, onError)}
+                                            isCrafting
+                                            stock={999}
+                                            price={recipe.goldCost}
+                                        />
+                                    </TiltContainer>
                                  </motion.div>
                              );
                         })}
@@ -329,9 +334,9 @@ const StoreCard: React.FC<StoreCardProps> = ({ item, recipe, inventoryCounts, ca
     return (
         <button
             onClick={handleClick}
-            className={`relative w-full group flex flex-col items-start p-1 rounded-2xl transition-all duration-300 transform h-full min-h-[220px]
+            className={`relative w-full group flex flex-col items-start p-1 rounded-2xl transition-all duration-300 transform h-full min-h-[220px] bg-slate-900/40
                 ${state === 'SHAKE' ? 'animate-shake' : ''}
-                ${state === 'SUCCESS' ? 'scale-95 ring-4 ring-green-500/50' : 'hover:-translate-y-1 hover:shadow-2xl'}
+                ${state === 'SUCCESS' ? 'scale-95 ring-4 ring-green-500/50' : ''}
                 ${canAfford ? 'cursor-pointer' : 'cursor-not-allowed opacity-60 grayscale-[0.8]'}
             `}
         >

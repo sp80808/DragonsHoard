@@ -49,6 +49,21 @@ export const TILE_STYLES: Record<number, any> = {
   4096: { label: 'GOD', color: 'from-white to-cyan-200', ringColor: 'ring-cyan-400', icon: '🌟', glow: 'shadow-white/100', imageUrl: genUrl('celestial god entity light rpg', 4096), particleColor: '#ffffff' }
 };
 
+export const FALLBACK_BESTIARY_LORE: Record<string, string> = {
+    "SLIME": "A gelatinous nuisance found in damp corridors. Acidic to the touch.",
+    "RAT": "Verminous scavenger. Its bite carries disease and desperation.",
+    "GOBLIN": "Small, malicious, and greedy. They stab shins and steal gold.",
+    "SKELETON": "Animated bones of fallen adventurers. They remember how to fight.",
+    "ORC": "Brutish warrior bred for war. Its axe is heavy with rust and blood.",
+    "WOLF": "A hunter of the dark woods. Its howl chills the blood.",
+    "GOLEM": "Animated stone powered by ancient runes. Impervious to pain.",
+    "WYVERN": "A lesser dragon with a venomous tail. Rules the skies.",
+    "LICH": "A master of necromancy who cheated death. Feared by all.",
+    "DEMON": "Spawn of the abyss. Fire and hatred given form.",
+    "DRAGON": "The apex predator. Its scales are harder than steel.",
+    "GOD": "A being beyond comprehension. To behold it is to go mad."
+};
+
 // Alternative Tileset: Undead
 export const UNDEAD_TILE_STYLES: Record<number, any> = { ...TILE_STYLES }; 
 export const INFERNAL_TILE_STYLES: Record<number, any> = { ...TILE_STYLES };

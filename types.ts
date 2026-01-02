@@ -179,12 +179,13 @@ export interface PlayerProfile {
   accountLevel: number;
   gamesPlayed: number;
   highScore: number;
-  unlockedFeatures: string[]; // ['NG+', 'HARD_MODE', 'TILESET_UNDEAD', 'MODE_BOSS_RUSH', 'TILESET_INFERNAL']
+  unlockedFeatures: string[]; // ['NG+', 'HARD_MODE', 'TILESET_UNDEAD', 'MODE_BOSS_RUSH', 'TILESET_INFERNAL', 'CASCADE_MECHANIC']
   unlockedClasses: HeroClass[];
   activeBounties: DailyBounty[];
   lastBountyDate: string; // YYYY-MM-DD
   lastPlayed: string;
   tutorialCompleted: boolean;
+  cascadeTutorialSeen: boolean; // New: Tracks if player has done the cascade tutorial
   bossTutorialCompleted: boolean;
   seenHints: string[]; // IDs of hints player has already seen
   activeTilesetId: string;
@@ -344,6 +345,7 @@ export interface MoveResult {
   lootEvents: LootEvent[];
   medalsEarned: Medal[];
   abilitiesTriggered: string[]; 
+  hitstopDuration: number;
 }
 
 export interface LootResult {

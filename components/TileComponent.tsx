@@ -12,9 +12,10 @@ interface TileProps {
   tilesetId?: string;
   lowPerformanceMode?: boolean; // Legacy prop
   onInteract?: () => void;
+  isFrozen?: boolean; // New prop for hitstop
 }
 
-export const TileComponent = React.memo(({ tile, gridSize, slideSpeed, themeId, graphicsQuality = 'HIGH', tilesetId = 'DEFAULT', lowPerformanceMode, onInteract }: TileProps) => {
+export const TileComponent = React.memo(({ tile, gridSize, slideSpeed, themeId, graphicsQuality = 'HIGH', tilesetId = 'DEFAULT', lowPerformanceMode, onInteract, isFrozen = false }: TileProps) => {
   // Backward compatibility
   const isLowQuality = graphicsQuality === 'LOW' || lowPerformanceMode === true;
   const isHighQuality = graphicsQuality === 'HIGH' && !lowPerformanceMode;
@@ -45,8 +46,9 @@ export const TileComponent = React.memo(({ tile, gridSize, slideSpeed, themeId, 
   const yPos = tile.y * 100;
 
   // UPDATED: Using 'animate-spawn-tint' for dynamic color spawn
-  const isNewClass = !isLowQuality && tile.isNew && !tile.mergedFrom ? 'animate-spawn-tint' : '';
-  const isDyingClass = tile.isDying ? 'tile-exit-animation' : ''; 
+  // If frozen, we suppress animations to keep it static
+  const isNewClass = !isLowQuality && tile.isNew && !tile.mergedFrom && !isFrozen ? 'animate-spawn-tint' : '';
+  const isDyingClass = tile.isDying && !isFrozen ? 'tile-exit-animation' : ''; 
   
   const animDelay = (tile.isNew || tile.mergedFrom) ? `${Math.max(100, slideSpeed * 0.9)}ms` : '0ms';
 
@@ -59,8 +61,8 @@ export const TileComponent = React.memo(({ tile, gridSize, slideSpeed, themeId, 
   if (tile.mergedFrom) {
       if (tile.mergedFrom[0] === 'damage') {
           mergeClass = 'hit-flash'; 
-          shakeClass = !isLowQuality ? 'animate-shake-md' : '';
-      } else {
+          shakeClass = !isLowQuality && !isFrozen ? 'animate-shake-md' : '';
+      } else if (!isFrozen) { // Only apply merge animations if not frozen
           // Tiered Merge Animations
           if (!isLowQuality) {
               mergeClass = 'tile-animation-merge';
@@ -93,7 +95,7 @@ export const TileComponent = React.memo(({ tile, gridSize, slideSpeed, themeId, 
 
   const ringColorClass = style.ringColor || 'ring-cyan-400';
   const isCascadeClass = tile.isCascade 
-    ? `ring-2 ${ringColorClass} ring-offset-1 ring-offset-black ${isLowQuality ? '' : 'animate-pulse'}` 
+    ? `ring-2 ${ringColorClass} ring-offset-1 ring-offset-black ${isLowQuality || isFrozen ? '' : 'animate-pulse'}` 
     : '';
 
   const isSlash = tile.mergedFrom && tile.value >= 32 && tile.mergedFrom[0] !== 'damage' ? 'slash-effect' : '';
@@ -110,8 +112,10 @@ export const TileComponent = React.memo(({ tile, gridSize, slideSpeed, themeId, 
       width: `${size}%`,
       height: `${size}%`,
       transform: `translate(${xPos}%, ${yPos}%)`,
-      transitionDuration: `${slideSpeed}ms`,
-      zIndex: tile.isDying ? 5 : 10
+      // Instant transition if frozen to snap to place, otherwise smooth slide
+      transitionDuration: isFrozen ? '0ms' : `${slideSpeed}ms`, 
+      zIndex: tile.isDying ? 5 : 10,
+      // If frozen, pause all child animations or remove them? Removing via class is safer.
   } as React.CSSProperties;
 
   const boxDepthStyle = isLowQuality ? {} : {
@@ -129,7 +133,7 @@ export const TileComponent = React.memo(({ tile, gridSize, slideSpeed, themeId, 
       paintOrder: 'stroke fill'
   };
 
-  const livingClass = isHighQuality ? (isGodTier ? 'animate-living-fast' : isHighTier ? 'animate-living-slow' : '') : '';
+  const livingClass = isHighQuality && !isFrozen ? (isGodTier ? 'animate-living-fast' : isHighTier ? 'animate-living-slow' : '') : '';
 
   return (
     <div
@@ -148,7 +152,7 @@ export const TileComponent = React.memo(({ tile, gridSize, slideSpeed, themeId, 
       >
         
         {/* NEW SPAWN FLASH: Dynamic Color Tint */}
-        {tile.isNew && !tile.mergedFrom && !isLowQuality && (
+        {tile.isNew && !tile.mergedFrom && !isLowQuality && !isFrozen && (
             <div 
                 className="absolute inset-[-20%] animate-summon-flash z-50 pointer-events-none rounded-full mix-blend-screen blur-md"
                 style={{ animationDelay: animDelay }}
@@ -156,23 +160,31 @@ export const TileComponent = React.memo(({ tile, gridSize, slideSpeed, themeId, 
         )}
 
         {/* Boss Spawn Effect: Lightning & Flash */}
-        {tile.type === TileType.BOSS && tile.isNew && !isLowQuality && (
+        {tile.type === TileType.BOSS && tile.isNew && !isLowQuality && !isFrozen && (
              <div className="absolute inset-0 z-50 pointer-events-none overflow-visible">
                  <div className="absolute top-[-20%] left-1/2 -translate-x-1/2 w-1 h-[140%] bg-cyan-200 blur-[2px] animate-[lightning_0.4s_ease-out_forwards]"></div>
                  <div className="absolute inset-0 bg-white/80 animate-[flash_0.6s_ease-out_forwards] rounded-lg mix-blend-overlay"></div>
              </div>
         )}
 
+        {/* Boss Damage Red Flash Overlay */}
+        {tile.type === TileType.BOSS && tile.mergedFrom && tile.mergedFrom[0] === 'damage' && !isFrozen && (
+             <div 
+                className="absolute inset-0 z-[60] rounded-lg animate-[summonFlash_0.15s_ease-out_forwards] pointer-events-none mix-blend-hard-light"
+                style={{ '--tile-color': '#ef4444' } as React.CSSProperties}
+             ></div>
+        )}
+
         {/* Satisfying merge ripple */}
-        {showRipple && !isLowQuality && (
+        {showRipple && !isLowQuality && !isFrozen && (
              <div className={`absolute inset-0 z-0 rounded-xl border-2 ${style.ringColor.replace('ring-', 'border-')} animate-ripple pointer-events-none mix-blend-screen`}></div>
         )}
 
-        {showShockwave && (
+        {showShockwave && !isFrozen && (
              <div className="absolute inset-0 z-50 rounded-lg border-4 border-white/40 animate-[ping_0.4s_ease-out_1] pointer-events-none mix-blend-overlay"></div>
         )}
         
-        {showGodwave && (
+        {showGodwave && !isFrozen && (
              <div className="absolute inset-0 z-[60] rounded-xl animate-godwave pointer-events-none mix-blend-screen"></div>
         )}
 
@@ -181,6 +193,11 @@ export const TileComponent = React.memo(({ tile, gridSize, slideSpeed, themeId, 
                 className={`w-full h-full rounded-lg overflow-hidden relative bg-[#0b0f19] ${isCascadeClass} ${isSlash}`}
                 style={boxDepthStyle}
             >
+                {/* Hitstop Glare: Visual tension during freeze */}
+                {isFrozen && (
+                    <div className="absolute inset-0 bg-white/20 z-50 mix-blend-overlay"></div>
+                )}
+
                 {/* Dynamic Shine/Facets for High Tiers */}
                 {isHighQuality && isHighTier && (
                     <>
@@ -190,7 +207,7 @@ export const TileComponent = React.memo(({ tile, gridSize, slideSpeed, themeId, 
                 )}
 
                 {/* God Tier Pulse */}
-                {isHighQuality && isGodTier && (
+                {isHighQuality && isGodTier && !isFrozen && (
                     <div className="absolute inset-0 z-10 bg-gradient-to-t from-yellow-500/30 to-transparent animate-pulse mix-blend-overlay"></div>
                 )}
 

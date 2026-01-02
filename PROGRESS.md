@@ -1,39 +1,53 @@
-
 # Dragon's Hoard - Development Progress
 
 ## 🟢 Completed Features
-- **Core Gameplay**: 2048 Logic, Merging, Moving.
-- **RPG Elements**: XP, Leveling, HP (Bosses), Inventory System.
-- **Visuals**: CRT Effects, Screen Shake, Particle Systems, Animated Tiles.
-- **Audio**: Sound Effects engine, procedural music/ambience.
-- **Game Modes**: Adventure (RPG), Classic, and Local Versus (Beta).
-- **Meta-Progression**: Persistent Profile, Account Levels, Unlockable Classes.
-- **Economy**: Store, Crafting, Gold currency.
-- **Tutorial**: Interactive overlay tutorial.
+- **Core Gameplay**: 2048 Logic, Merging, Moving, Cascade Logic.
+- **RPG Elements**: XP, Account Levels, Boss HP, Loot Drops.
+- **Inventory & Shop**: Consumables, Crafting Recipes, Dynamic Stock.
+- **Visuals**: 
+    - Particle Systems (Loot, Merges, Boss Spawns).
+    - Dynamic Backgrounds based on Score.
+    - Multiple Tilesets (Undead, Infernal, etc.).
+- **Audio**: Sound Effects engine, procedural music/ambience hooks.
+- **Game Modes**: 
+    - **Adventure (RPG)**: Standard progression.
+    - **Classic**: Pure 2048.
+    - **Local Versus**: Split-screen multiplayer.
+- **Meta-Progression**: 
+    - **Skill Tree**: Astral Mastery with unlockable nodes.
+    - **Codex**: Bestiary and Item Log.
+    - **Grimoire**: Theme selection and Medals tracker.
+- **Social**: Leaderboards (Global/Friends), Daily Login Rewards.
+- **AI**: Obituary generation via Gemini API.
 
 ## 🟡 In Progress / Polishing
-- **Leaderboard**: Adding Hero Class tracking and better formatting. [Done v0.9.3]
-- **Codex**: Expanding into a full Bestiary and Item Guide. [Done v0.9.3]
-- **Splash Screen**: Improving visual depth and adding Daily Challenges. [Done v0.9.3]
-- **Versus Mode**: Needs balance testing and more power-ups.
+- **Multiplayer Architecture**: 
+    - Supabase integration is set up (`src/utils/supabase.ts`).
+    - Database schema for `players`, `leaderboards`, and `gifts` defined.
+    - *Next*: Implementing Realtime channels for Live PvP.
+- **Daily Dungeons**: 
+    - Modifiers logic exists (`DAILY_MODIFIERS`).
+    - *Next*: Server-side seeding to ensure all players get the same board daily.
 
-## 🔴 Todo / Roadmap
-1.  **Daily Dungeons**: A seeded run mode with unique modifiers every 24h.
-2.  **Advanced Visuals**:
-    - Dynamic lighting shaders.
-    - Fog Elements
-    - Combo Meter
-    - More merge Effects
-    
-3.  **Versus Mode Expansion**:
-    - "Garbage" sending mechanics (sending stone walls to opponent).
-    - Character selection for Versus (unique abilities).
-4.  **Accessibility**: High contrast mode, reduced motion toggle.
-5.  **Localization**: Support for Spanish, French, Japanese.
-6.  **Tilesets**: 
-    - Add more unlockable tilesets, themes and Theme
-7. **Story**: Plan a way to tie the title / gameplay into a simple but layered and subtly deep story line that's 
-unobtrusive but satisfying to appreciate and understand in its embedded allegorical knowledge
+## 🔴 Roadmap (Next Steps)
+
+### Phase 1: Live Services (Supabase)
+1.  **Ghost Mode PvP**: Implement `room:race_<id>` channel to broadcast grid state to opponent.
+2.  **Co-op Raids**: Allow two players to contribute damage to a shared Boss HP bar.
+3.  **Tribute System**: "Steal" gold from inactive friends on the leaderboard.
+
+### Phase 2: Content Expansion
+1.  **More Classes**: Necromancer (summons minions), Alchemist (transmutes tiles).
+2.  **Advanced Biomes**: 
+    - **Void Realm**: Tiles periodically disappear.
+    - **Time Warp**: Moves are delayed or reversed.
+3.  **Localization**: JSON-based translation system.
+
+### Phase 3: Accessibility & Polish
+1.  **Settings**: Add High Contrast mode and Reduced Motion toggle.
+2.  **Input**: Gamepad support for Desktop/TV play.
+3.  **Performance**: WebGL renderer for particles (currently Canvas 2D).
+
 ## 🐛 Known Issues
-- Mobile swipe can sometimes trigger browser navigation on older Android versions.
-- Audio context requires user interaction to start (browser policy).
+-   **Audio**: Web Audio API requires user interaction to initialize (handled, but sometimes delays SFX on first load).
+-   **Mobile Safari**: Address bar can obscure bottom HUD in some landscape orientations.
