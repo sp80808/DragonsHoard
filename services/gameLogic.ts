@@ -1,3 +1,4 @@
+
 import { Direction, GameState, Tile, TileType, MoveResult, ItemType, InventoryItem, Stage, LeaderboardEntry, GameStats, Achievement, HeroClass, CraftingRecipe, DailyModifier, StoryEntry, PlayerProfile, Medal, AbilityType, AbilityState, Difficulty, LootEvent, ShopState, GameMode, RunStats, MergeEvent } from '../types';
 import { GRID_SIZE_INITIAL, SHOP_ITEMS, getXpThreshold, getStage, getStageBackground, ACHIEVEMENTS, TILE_STYLES, FALLBACK_STYLE, getItemDefinition, BOSS_DEFINITIONS, SHOP_CONFIG, DAILY_MODIFIERS, STORY_ENTRIES, MEDALS, CLASS_SKILL_TREES, CLASS_ABILITIES } from '../constants';
 import { RNG, rng, generateId } from '../utils/rng';
@@ -477,6 +478,9 @@ export const moveGrid = (
         }
 
         const nextCell = (next.x >= 0 && next.x < size && next.y >= 0 && next.y < size) ? cellContent[next.x][next.y] : null;
+        
+        // Detect if the target cell is a Rune/Power-up
+        const isRune = nextCell && (nextCell.type === TileType.RUNE_MIDAS || nextCell.type === TileType.RUNE_CHRONOS || nextCell.type === TileType.RUNE_VOID);
 
         if (nextCell && !nextCell.mergedFrom && nextCell.type === TileType.NORMAL && tile.type === TileType.NORMAL && nextCell.value === tile.value) {
             // MERGE
@@ -539,6 +543,30 @@ export const moveGrid = (
             } else {
                 logs.push(`Boss Hit: ${damage} Dmg`);
             }
+
+        } else if (isRune && tile.type === TileType.NORMAL) {
+            // COLLECT RUNE
+            // The moving tile collects the rune and moves into its spot.
+            if (nextCell!.type === TileType.RUNE_MIDAS) {
+                goldGained += 250;
+                lootEvents.push({ id: createId(), x: next.x, y: next.y, type: 'GOLD', value: 250 });
+            } else if (nextCell!.type === TileType.RUNE_CHRONOS) {
+                xpGained += 500;
+                lootEvents.push({ id: createId(), x: next.x, y: next.y, type: 'XP', value: 500 });
+            } else if (nextCell!.type === TileType.RUNE_VOID) {
+                score += 1000;
+                // Void consumed
+            }
+            
+            powerUpTriggered = nextCell!.type;
+            nextCell!.isDying = true; // Remove the rune
+            
+            // Move tile to rune's spot
+            cellContent[x][y] = null;
+            cellContent[next.x][next.y] = tile;
+            tile.x = next.x;
+            tile.y = next.y;
+            moved = true;
 
         } else {
             // MOVE
@@ -613,6 +641,8 @@ export const isGameOver = (grid: Tile[], size: number): boolean => {
             if (n && n.type === TileType.NORMAL && n.value === tile.value) return false;
             // Boss attack is a valid move
             if (n && n.type === TileType.BOSS && tile.value >= 16) return false;
+            // Runes are now collectable by moving into them, so if a rune is adjacent, it's a valid move
+            if (n && (n.type === TileType.RUNE_MIDAS || n.type === TileType.RUNE_CHRONOS || n.type === TileType.RUNE_VOID)) return false;
         }
     }
     return true;
