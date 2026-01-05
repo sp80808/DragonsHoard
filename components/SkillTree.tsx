@@ -211,7 +211,7 @@ export const SkillTree: React.FC<SkillTreeProps> = ({ onBack }) => {
                             <>
                                 <div className="flex items-center gap-4">
                                     <div className={`p-4 rounded-xl border-2 ${status === 'UNLOCKED' ? 'bg-yellow-900/20 border-yellow-500 text-yellow-400' : 'bg-slate-800 border-slate-600 text-slate-400'}`}>
-                                        {React.cloneElement(node.icon as React.ReactElement, { size: 32 })}
+                                        {React.cloneElement(node.icon as React.ReactElement<any>, { size: 32 })}
                                     </div>
                                     <div>
                                         <h3 className="font-bold text-white text-xl mb-1">{node.title}</h3>
@@ -312,7 +312,7 @@ const SkillNode = ({ node, status, onClick, isSelected }: { node: SkillNodeDefin
             `}
         >
             {isUnlocked && <div className="absolute inset-0 bg-yellow-400/20 rounded-full animate-pulse"></div>}
-            <div className="relative z-10">{React.cloneElement(node.icon as React.ReactElement, { size: 24 })}</div>
+            <div className="relative z-10">{React.cloneElement(node.icon as React.ReactElement<any>, { size: 24 })}</div>
             
             {/* Cost Badge */}
             {!isUnlocked && isAvailable && (

@@ -254,10 +254,10 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({ onStart, onContinue,
           <div className="absolute inset-0 bg-black/40"></div> 
       </div>
 
-      <div className="relative z-20 flex-1 flex flex-col md:flex-row max-w-7xl mx-auto w-full h-full overflow-hidden">
+      <div className="relative z-20 flex-1 flex flex-col md:flex-row landscape:flex-row max-w-7xl mx-auto w-full h-full overflow-hidden">
           
           {/* Left Panel: Brand */}
-          <div className="flex-1 flex flex-col justify-center items-center p-6 md:p-12 text-center md:text-left md:items-start shrink-0">
+          <div className="flex-1 flex flex-col justify-center items-center p-6 md:p-12 text-center md:text-left md:items-start landscape:text-left landscape:items-start shrink-0">
               <div className="mb-4 inline-flex items-center gap-2 px-3 py-1 rounded-full bg-yellow-900/30 border border-yellow-600/30 text-yellow-500 text-[10px] font-bold uppercase tracking-widest animate-in fade-in slide-in-from-top-4 duration-1000">
                   <Star size={12} fill="currentColor" /> Season 1: Awakening
               </div>
@@ -268,7 +268,7 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({ onStart, onContinue,
                   Merge tiles, slay beasts, and amass a fortune in this rogue-lite puzzle RPG.
               </p>
               
-              <div className="flex gap-4 animate-in fade-in delay-500 duration-700">
+              <div className="flex gap-4 animate-in fade-in delay-500 duration-700 justify-center md:justify-start landscape:justify-start">
                   <div className="text-center">
                       <div className="text-2xl font-black text-white">{profile?.accountLevel || 1}</div>
                       <div className="text-[10px] text-slate-400 uppercase tracking-widest font-bold">Level</div>
@@ -287,16 +287,16 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({ onStart, onContinue,
           </div>
 
           {/* Right Panel: Menu */}
-          <div className="flex-1 w-full max-w-md md:max-w-lg bg-black/60 backdrop-blur-lg border-l border-white/10 flex flex-col relative transition-all h-full">
+          <div className="flex-1 w-full max-w-md md:max-w-lg bg-black/60 backdrop-blur-lg border-t md:border-t-0 landscape:border-t-0 md:border-l landscape:border-l border-white/10 flex flex-col relative transition-all h-full">
               
               {/* Scrollable Content */}
-              <div className="flex-1 overflow-y-auto custom-scrollbar p-4 md:p-8 flex flex-col">
+              <div className="flex-1 overflow-y-auto custom-scrollbar p-4 md:p-8 flex flex-col items-center">
                   <AnimatePresence mode='wait'>
                       {!showClassSelect ? (
                           <motion.div 
                               key="main-menu"
                               initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}
-                              className="space-y-3 md:space-y-4 w-full my-auto"
+                              className="space-y-3 md:space-y-4 w-full my-auto max-w-sm"
                           >
                               {mainMenuItems.map((item, idx) => (
                                   <MenuButton 

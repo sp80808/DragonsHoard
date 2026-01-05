@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useReducer, useRef, useCallback } from 'react';
 import { GameState, Direction, HeroClass, GameMode, Difficulty, FeedbackEvent, InventoryItem, LootEvent, Medal, View, AbilityType, InputSettings, TileType } from './types';
-import { initializeGame, moveGrid, isGameOver, useInventoryItem, executeAutoCascade, checkAchievements, checkLoreUnlocks, spawnTile, executePowerupAction, updateCooldowns, saveHighscore, processPassiveAbilities, createId } from './services/gameLogic';
+import { initializeGame, moveGrid, isGameOver, useInventoryItem, executeAutoCascade, checkAchievements, checkLoreUnlocks, spawnTile, executePowerupAction, updateCooldowns, saveHighscore, processPassiveAbilities, createId, processClassAbilities } from './services/gameLogic';
 import { audioService } from './services/audioService';
 import { Grid } from './components/Grid';
 import { HUD, HUDHeader, HUDControls, BuffDisplay } from './components/HUD';
@@ -25,6 +25,8 @@ import { LootProvider, useLootSystem } from './components/LootSystem';
 import { VictoryScreen } from './components/VictoryScreen';
 import { DailyLoginModal } from './components/DailyLoginModal';
 import { CascadeTutorial } from './components/CascadeTutorial'; 
+import { GauntletMap } from './components/GauntletMap'; 
+import { unlockNextLayer, getRandomArtifact } from './services/gauntletService'; 
 import { loadCriticalAssets, loadBackgroundAssets } from './services/assetLoader';
 import { getNextLevelXp, awardMedal, markHintSeen, unlockLore, getPlayerProfile, syncPlayerProfile, checkDailyLoginStatus, claimDailyReward, completeTutorial } from './services/storageService';
 import { useFullscreen } from './hooks/useFullscreen';
@@ -50,6 +52,8 @@ type Action =
   | { type: 'UPDATE_SETTINGS', settings: InputSettings }
   | { type: 'RESTORE_STATE', state: GameState }
   | { type: 'PROCESS_PASSIVES' }
+  | { type: 'SELECT_GAUNTLET_NODE', nodeId: string } 
+  | { type: 'COMPLETE_GAUNTLET_LEVEL' } 
   | { type: 'CLAIM_BOUNTY', reward: number }
   | { type: 'INVALID_MOVE' }
   | { type: 'CLEAR_INVALID_MOVE' }
@@ -77,8 +81,50 @@ const gameReducer = (state: GameState, action: Action): GameState => {
             return restoredState;
         case 'RESTART':
             return initializeGame(true, state.selectedClass, state.gameMode, undefined, state.difficulty, state.tilesetId);
+        
+        case 'SELECT_GAUNTLET_NODE': {
+            if (!state.gauntlet) return state;
+            const node = state.gauntlet.map.find(n => n.id === action.nodeId);
+            if (!node || node.status !== 'AVAILABLE') return state;
+
+            let newGrid = spawnTile([], state.gridSize, 1, { isClassic: true });
+            newGrid = spawnTile(newGrid, state.gridSize, 1, { isClassic: true });
+            
+            if (node.type === 'TREASURE') {
+                const artifact = getRandomArtifact();
+                return {
+                    ...state,
+                    gauntlet: {
+                        ...state.gauntlet,
+                        artifacts: [...state.gauntlet.artifacts, artifact]
+                    }
+                };
+            }
+
+            return {
+                ...state,
+                grid: newGrid
+            };
+        }
+
+        case 'COMPLETE_GAUNTLET_LEVEL': {
+            if (!state.gauntlet) return state;
+            const currentTierNodes = state.gauntlet.map.filter(n => n.tier === state.gauntlet!.currentTier && n.status === 'AVAILABLE');
+            const activeNode = currentTierNodes[0]; 
+
+            if (activeNode) {
+                const nextGauntlet = unlockNextLayer(state.gauntlet, activeNode.id);
+                return {
+                    ...state,
+                    gauntlet: nextGauntlet,
+                    grid: [], 
+                    gameWon: false 
+                };
+            }
+            return state;
+        }
+
         case 'MOVE': {
-            // Prioritize input: Remove `state.isCascading` check to allow interruption
             if (state.gameOver || state.gameWon) return state;
             
             const res = moveGrid(
@@ -109,6 +155,15 @@ const gameReducer = (state: GameState, action: Action): GameState => {
                     nextEffectCounters[key]--;
                 }
             });
+            
+            // Reduce Class Ability Cooldown
+            const nextAbilities = { ...state.abilities };
+            Object.keys(nextAbilities).forEach(key => {
+                const k = key as AbilityType;
+                if (nextAbilities[k].currentCooldown > 0) {
+                    nextAbilities[k].currentCooldown--;
+                }
+            });
 
             let newGrid = spawnTile(res.grid, state.gridSize, state.level, { 
                 modifiers: state.activeModifiers,
@@ -125,8 +180,6 @@ const gameReducer = (state: GameState, action: Action): GameState => {
                 }
             }
 
-            let updatedAbilities = updateCooldowns(state.abilities);
-
             const newStats = { ...state.stats };
             newStats.totalMoves++;
             newStats.totalMerges += res.mergedIds.length;
@@ -138,6 +191,11 @@ const gameReducer = (state: GameState, action: Action): GameState => {
             
             const gameOver = isGameOver(newGrid, state.gridSize);
             const gameWon = newStats.highestTile >= 2048 && !state.gameWon;
+
+            let gauntletWin = false;
+            if (state.gameMode === 'GAUNTLET') {
+                if (newStats.highestTile >= 512) gauntletWin = true;
+            }
 
             const nextXp = state.xp + res.xpGained;
             const currentTotalXp = (state.baselineAccountXp || 0) + nextXp;
@@ -154,12 +212,10 @@ const gameReducer = (state: GameState, action: Action): GameState => {
             }
 
             let shouldCascade = false;
-            // CASCADE UNLOCK LEVEL CHECK: 3
             if (state.accountLevel >= 3 || (state.effectCounters['CHAIN_CATALYST'] || 0) > 0) {
                  shouldCascade = true;
             }
 
-            // Map manual move merges to mergeEvents
             const newMergeEvents = res.mergedIds.length > 0 
                 ? res.grid.filter(t => res.mergedIds.includes(t.id)).map(t => ({
                     id: t.id,
@@ -171,7 +227,7 @@ const gameReducer = (state: GameState, action: Action): GameState => {
                 })) 
                 : [];
 
-            return {
+            let finalState: GameState & { currentHitstop: number } = {
                 ...state,
                 grid: newGrid,
                 score: state.score + res.score,
@@ -180,21 +236,39 @@ const gameReducer = (state: GameState, action: Action): GameState => {
                 accountLevel: nextAccountLevel,
                 inventory: [...state.inventory, ...res.itemsFound],
                 gameOver,
-                gameWon,
+                gameWon: state.gameMode === 'GAUNTLET' ? gauntletWin : gameWon,
                 combo: res.combo,
                 stats: newStats,
                 lootEvents: res.lootEvents,
                 mergeEvents: newMergeEvents,
                 lastTurnMedals: res.medalsEarned,
-                abilities: updatedAbilities,
+                abilities: nextAbilities,
                 achievements: [...state.achievements, ...newAchievements],
                 logs: [...state.logs, ...res.logs].slice(-5),
                 isInvalidMove: false,
                 effectCounters: nextEffectCounters,
-                isCascading: shouldCascade, // Re-evaluate cascade trigger on every move
+                isCascading: shouldCascade, 
                 cascadeStep: shouldCascade ? 0 : 0,
                 currentHitstop: res.hitstopDuration 
-            } as GameState & { currentHitstop: number };
+            };
+
+            // AUTO-TRIGGER CLASS ABILITY CHECK
+            const abilityUpdates = processClassAbilities(finalState);
+            if (abilityUpdates.grid) {
+                finalState.grid = abilityUpdates.grid;
+                audioService.playZap(2); // Feedback for auto-trigger
+            }
+            if (abilityUpdates.logs) {
+                finalState.logs = [...finalState.logs, ...abilityUpdates.logs].slice(-5);
+            }
+            if (abilityUpdates.lootEvents) {
+                finalState.lootEvents = [...finalState.lootEvents, ...abilityUpdates.lootEvents];
+            }
+            if (abilityUpdates.abilities) {
+                finalState.abilities = abilityUpdates.abilities;
+            }
+
+            return finalState;
         }
         case 'INVALID_MOVE':
             return { ...state, isInvalidMove: true };
@@ -268,7 +342,6 @@ const gameReducer = (state: GameState, action: Action): GameState => {
         }
         case 'CASCADE_STEP': {
             const step = state.cascadeStep || 0;
-            // Safety break for infinite cascades
             if (step > 20) {
                 return { ...state, isCascading: false, cascadeStep: 0, cascadeDelay: 0 };
             }
@@ -593,6 +666,7 @@ const GameContent: React.FC = () => {
             if (showStore) setShowStore(false);
             else if (showStats) setShowStats(false);
             else if (view === 'GAME') setView('SPLASH');
+            else if (view === 'MAP') setView('SPLASH');
             return;
         }
 
@@ -609,7 +683,15 @@ const GameContent: React.FC = () => {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [state.gameOver, view, showStore, showStats, state.settings, showTutorial, state.inventory, showCascadeTutorial, handleMove, showDailyLogin]);
+  }, [state.gameOver, view, showStore, showStats, state.settings, showTutorial, state.inventory, showCascadeTutorial, handleMove, showDailyLogin, state.gameMode]);
+
+  // Handle Gauntlet Mode View Switch
+  useEffect(() => {
+      if (state.gameMode === 'GAUNTLET' && view === 'GAME' && state.grid.length === 0 && !state.gameOver) {
+          // If in Gauntlet mode but grid is empty (not started level), show Map
+          setView('MAP');
+      }
+  }, [state.gameMode, state.grid.length, state.gameOver, view]);
 
   if (!isReady) return <LoadingScreen progress={loadingProgress} />;
 
@@ -652,14 +734,18 @@ const GameContent: React.FC = () => {
                     <SplashScreen 
                         onStart={(cls, mode, seed, diff, tileset) => {
                             dispatch({ type: 'START_GAME', heroClass: cls, mode, seed, difficulty: diff, tileset });
-                            setView('GAME');
+                            if (mode === 'GAUNTLET') {
+                                setView('MAP');
+                            } else {
+                                setView('GAME');
+                            }
                             const p = getPlayerProfile();
-                            if (!p.tutorialCompleted) {
+                            if (!p.tutorialCompleted && mode === 'RPG') {
                                 setShowTutorial(true);
                             }
                             setBountyClaimed(false);
                         }}
-                        onContinue={() => setView('GAME')}
+                        onContinue={() => setView('GAME')} // Logic might need adjustment for Gauntlet continue
                         onOpenLeaderboard={() => setView('LEADERBOARD')}
                         onOpenSettings={() => setView('SETTINGS')}
                         onOpenHelp={() => setView('HELP')}
@@ -699,6 +785,16 @@ const GameContent: React.FC = () => {
           case 'GRIMOIRE': return <Grimoire profile={getPlayerProfile()} onBack={() => setView('SPLASH')} onSelectTileset={(id) => dispatch({ type: 'START_GAME', heroClass: state.selectedClass, mode: state.gameMode, tileset: id })} />;
           case 'VERSUS': return <VersusGame onBack={() => setView('SPLASH')} />;
           case 'SKILLS': return <SkillTree onBack={() => setView('GAME')} />;
+          case 'MAP': return state.gauntlet ? (
+              <GauntletMap 
+                  state={state.gauntlet} 
+                  onSelectNode={(id) => {
+                      dispatch({ type: 'SELECT_GAUNTLET_NODE', nodeId: id });
+                      setView('GAME');
+                  }} 
+              />
+          ) : <div onClick={() => setView('SPLASH')}>Error: No Gauntlet State</div>;
+          
           case 'GAME':
               return (
                 <>
@@ -720,9 +816,9 @@ const GameContent: React.FC = () => {
                              <HUDHeader {...commonHUDProps} />
                         </div>
 
-                        <div className="relative z-10 flex flex-col landscape:flex-row h-full gap-4 landscape:items-center landscape:justify-center flex-1 min-h-0">
+                        <div className="relative z-10 flex flex-col landscape:flex-row h-full gap-4 landscape:gap-2 landscape:items-center landscape:justify-center flex-1 min-h-0">
                             
-                            <div className="hidden landscape:flex landscape:w-[280px] lg:landscape:w-[320px] landscape:h-full landscape:shrink-0 landscape:flex-col landscape:justify-center landscape:pr-4 landscape:pl-6 landscape:py-6">
+                            <div className="hidden landscape:flex landscape:w-[320px] lg:landscape:w-[400px] xl:landscape:w-[480px] landscape:h-full landscape:shrink-0 landscape:flex-col landscape:justify-center landscape:pr-2 landscape:pl-6 landscape:py-6">
                                 <HUD {...commonHUDProps} />
                             </div>
                             
@@ -812,7 +908,14 @@ const GameContent: React.FC = () => {
                         
                         {(state.gameOver || state.gameWon) && (
                             state.gameWon ? 
-                            <VictoryScreen gameState={state} onContinue={() => dispatch({ type: 'RESTORE_STATE', state: { ...state, gameWon: false } })} onHome={() => setView('SPLASH')} /> :
+                            <VictoryScreen gameState={state} onContinue={() => {
+                                if (state.gameMode === 'GAUNTLET') {
+                                    dispatch({ type: 'COMPLETE_GAUNTLET_LEVEL' });
+                                    setView('MAP');
+                                } else {
+                                    dispatch({ type: 'RESTORE_STATE', state: { ...state, gameWon: false } });
+                                }
+                            }} onHome={() => setView('SPLASH')} /> :
                             <RunSummary gameState={state} onRestart={() => dispatch({ type: 'RESTART' })} onShowLeaderboard={() => setView('LEADERBOARD')} onHome={() => setView('SPLASH')} />
                         )}
                     </div>

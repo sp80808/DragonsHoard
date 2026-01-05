@@ -62,21 +62,21 @@ export enum HeroClass {
   DRAGON_SLAYER = 'DRAGON_SLAYER' // Ultimate
 }
 
-export type AbilityType = 'SCORCH' | 'DRAGON_BREATH' | 'GOLDEN_EGG';
+export type AbilityType = 'SCORCH' | 'DRAGON_BREATH' | 'GOLDEN_EGG' | 'CLASS_ABILITY';
 
 export interface AbilityState {
     id: AbilityType;
     isUnlocked: boolean;
-    charges: number; // For passives, this tracks unused charges if needed
+    charges: number; 
     maxCharges: number;
-    cooldown: number; // Turns until auto-trigger
+    cooldown: number; 
     currentCooldown: number;
 }
 
-export type GameMode = 'RPG' | 'CLASSIC' | 'VERSUS' | 'DAILY' | 'BOSS_RUSH';
+export type GameMode = 'RPG' | 'CLASSIC' | 'VERSUS' | 'DAILY' | 'BOSS_RUSH' | 'GAUNTLET';
 export type Difficulty = 'NORMAL' | 'HARD';
 
-export type View = 'SPLASH' | 'GAME' | 'LEADERBOARD' | 'SETTINGS' | 'HELP' | 'VERSUS' | 'GRIMOIRE' | 'SKILLS';
+export type View = 'SPLASH' | 'GAME' | 'LEADERBOARD' | 'SETTINGS' | 'HELP' | 'VERSUS' | 'GRIMOIRE' | 'SKILLS' | 'MAP';
 
 export interface InventoryItem {
   id: string;
@@ -85,6 +85,35 @@ export interface InventoryItem {
   description: string;
   icon: string;
   category?: 'CONSUMABLE' | 'MAGIC' | 'BATTLE';
+}
+
+export interface Artifact {
+    id: string;
+    name: string;
+    description: string;
+    icon: string;
+    rarity: 'COMMON' | 'RARE' | 'LEGENDARY';
+    effectId: string;
+}
+
+export interface GauntletNode {
+    id: string;
+    type: 'COMBAT' | 'ELITE' | 'REST' | 'SHOP' | 'TREASURE' | 'BOSS' | 'START';
+    tier: number; // 1-15
+    x: number; // For visualization
+    y: number;
+    parents: string[]; // IDs of nodes that lead to this one
+    status: 'LOCKED' | 'AVAILABLE' | 'COMPLETED' | 'SKIPPED';
+    data?: any; // e.g. specific boss type
+}
+
+export interface GauntletState {
+    map: GauntletNode[];
+    currentTier: number;
+    health: number; // Persistent HP across runs if we implemented player HP, for now used for Boss HP scaling or similar
+    maxHealth: number;
+    artifacts: Artifact[];
+    deck?: any; // Future card mechanics
 }
 
 export interface CraftingRecipe {
@@ -105,11 +134,11 @@ export interface Tile {
   type: TileType;
   mergedFrom?: string[] | null;
   isNew?: boolean;
-  isCascade?: boolean; // Visual cue for cascade merges
+  isCascade?: boolean; 
   health?: number;
   maxHealth?: number;
-  bossThemeId?: string; // To render unique boss images
-  isDying?: boolean; // For exit animations (Dragon Breath)
+  bossThemeId?: string; 
+  isDying?: boolean; 
 }
 
 export interface Stage {
@@ -117,9 +146,9 @@ export interface Stage {
   minLevel: number;
   backgroundUrl: string;
   colorTheme: string;
-  barColor: string; // CSS gradient class for XP bar
+  barColor: string; 
   prompt?: string;
-  themeId?: string; // For tile sets
+  themeId?: string; 
 }
 
 export interface LootEvent {
@@ -143,7 +172,7 @@ export interface MergeEvent {
 export interface GameStats {
   totalMerges: number;
   highestCombo: number;
-  slimesMerged: number; // Value 2
+  slimesMerged: number; 
   bossesDefeated: number;
   goldCollected: number;
   highestTile: number;
@@ -161,13 +190,11 @@ export interface RunStats {
   startTime: number;
   endTime?: number;
   
-  // Extended stats for Bounties
   bossesDefeated: number;
   mergesCount: number;
   itemsCrafted: number;
-  medalsEarned: string[]; // List of Medal IDs earned this run
+  medalsEarned: string[]; 
   
-  // XP Breakdown
   xpGainedClass: number;
   xpGainedAccount: number;
 }
@@ -177,7 +204,7 @@ export interface DailyBounty {
   description: string;
   targetStat: keyof RunStats;
   targetValue: number;
-  currentValue: number; // For tracking across multiple runs if we wanted (currently per-run for simplicity)
+  currentValue: number; 
   rewardXp: number;
   isCompleted: boolean;
 }
@@ -198,7 +225,7 @@ export interface PlayerProfile {
   unlockedFeatures: string[]; 
   unlockedClasses: HeroClass[];
   activeBounties: DailyBounty[];
-  lastBountyDate: string; // YYYY-MM-DD
+  lastBountyDate: string; 
   lastPlayed: string;
   tutorialCompleted: boolean;
   cascadeTutorialSeen: boolean; 
@@ -207,16 +234,14 @@ export interface PlayerProfile {
   activeTilesetId: string;
   unlockedLore: string[]; 
   earnedMedals: Record<string, number>; 
-  unlockedPowerups: AbilityType[]; // Persistent unlocks
+  unlockedPowerups: AbilityType[]; 
   
-  // New Class System
-  classProgress: Record<string, ClassProgress>; // HeroClass -> Progress
-  skillPoints: number; // Legacy global points (convert to Adventurer points on migration)
-  unlockedSkills: string[]; // Legacy global skills
+  classProgress: Record<string, ClassProgress>; 
+  skillPoints: number; 
+  unlockedSkills: string[]; 
   
-  // Login Streak
   loginStreak: number;
-  lastLoginRewardDate: string; // YYYY-MM-DD
+  lastLoginRewardDate: string; 
 }
 
 export interface SkillNodeDefinition {
@@ -224,12 +249,12 @@ export interface SkillNodeDefinition {
     title: string;
     description: string;
     icon: React.ReactNode;
-    x: number; // 0-100 percentage (Left to Right layout in this new design)
-    y: number; // 0-100 percentage
+    x: number; 
+    y: number; 
     parentId?: string;
     cost: number;
-    effect?: (state: GameState) => Partial<GameState>; // Runtime effect hook
-    reqLevel: number; // Class Level required
+    effect?: (state: GameState) => Partial<GameState>; 
+    reqLevel: number; 
 }
 
 export interface Achievement {
@@ -261,9 +286,9 @@ export interface InputSettings {
   enableHaptics: boolean; 
   invertSwipe: boolean;
   invertScroll: boolean;
-  sensitivity: number; // 1-10
+  sensitivity: number; 
   enableTooltips: boolean;
-  slideSpeed: number; // ms duration
+  slideSpeed: number; 
   graphicsQuality: GraphicsQuality;
   
   enableScreenShake: boolean;
@@ -290,7 +315,6 @@ export interface DailyModifier {
     color: string;
 }
 
-// --- MEDALS SYSTEM ---
 export type MedalRarity = 'COMMON' | 'UNCOMMON' | 'RARE' | 'EPIC' | 'LEGENDARY';
 
 export interface Medal {
@@ -343,12 +367,13 @@ export interface GameState {
   lastTurnMedals: Medal[]; 
   isInvalidMove?: boolean; 
   
-  // Powerup System
   abilities: Record<AbilityType, AbilityState>;
   targetingMode: AbilityType | null; 
   
-  // Active Class Skills (New)
   activeClassSkills: string[];
+  
+  // Gauntlet State
+  gauntlet?: GauntletState;
 }
 
 export interface MoveResult {

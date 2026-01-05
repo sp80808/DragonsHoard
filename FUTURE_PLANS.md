@@ -33,6 +33,45 @@ Similar to *Puyo Puyo* or *Tetris Attack*.
 
 ---
 
+# Future Feature: Roguelite Expeditions (The Gauntlet)
+
+## Overview
+A high-stakes, linear progression mode distinct from the endless "Adventure" mode. Players venture into a procedurally generated dungeon map with branching paths, aiming to defeat a final boss.
+
+## Core Loop
+1.  **Preparation:** Select Class, equip 1 Artifact (new item type), and pay Gold entry fee.
+2.  **The Map:** Navigate a Slay the Spire-style node map.
+    *   **Combat Nodes:** Standard 2048 gameplay with a kill quota or turn limit.
+    *   **Event Nodes:** Text-based choices (e.g., "A mysterious fountain. Drink?").
+    *   **Merchant Nodes:** Buy temporary run-exclusive items.
+    *   **Rest Sites:** Heal Boss HP or upgrade a tile.
+3.  **Progression:** Earning "Renown" (Class XP) and "Artifact Shards".
+
+## Mechanics
+*   **Permadeath:** If you lose a combat node, the run ends. You keep collected XP but lose unbanked Gold.
+*   **Artifacts:** Rare, tradeable items that provide passive bonuses (e.g., "Vampiric Fang: Heals 1HP on Boss Hit").
+*   **Milestones:** Reaching Depth 10, 20, 50 rewards "Ancient Chests" containing random Artifacts.
+
+---
+
+# Future Feature: Artifact Economy & Wagers
+
+## Collectible Artifacts
+*   **Rarity:** Common, Rare, Epic, Legendary, Mythic.
+*   **Acquisition:** Random drops from Expedition Milestones or Weekly Boss Raids.
+*   **Trade:** Players can list Artifacts on a global "Grand Exchange" for Gold.
+
+## The Arena (Wager Matches)
+*   **Concept:** Async PvP where Gold is on the line.
+*   **Mechanism:**
+    1.  Player A posts a challenge: "Score 10,000 in fewer turns. Wager: 500 Gold."
+    2.  Player B accepts. Gold is escrowed.
+    3.  Both players play the same seed.
+    4.  Winner takes the pot (minus 5% House Tax).
+*   **High Roller Tables:** Wager Artifacts instead of Gold. Winner takes the loser's item.
+
+---
+
 # Future Feature: Dynamic Store & Economy
 
 ## Overview
