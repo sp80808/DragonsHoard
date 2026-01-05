@@ -5,6 +5,7 @@ import { Trophy, Settings, Swords, Play, Skull, Palette, Grid, HelpCircle, Star,
 import { getPlayerProfile, getNextLevelXp } from '../services/storageService';
 import { generateDailyModifiers } from '../services/gameLogic';
 import { facebookService } from '../services/facebookService';
+import { audioService } from '../services/audioService';
 import { AnimatePresence, motion } from 'framer-motion';
 import { genUrl } from '../constants';
 import { useFullscreen } from '../hooks/useFullscreen';
@@ -96,8 +97,18 @@ const MenuButton = ({ onClick, label, icon, primary = false, subtitle, color = '
     
     return (
         <button 
-            onClick={!disabled ? onClick : undefined}
-            onMouseEnter={onMouseEnter}
+            onClick={() => {
+                if (!disabled) {
+                    audioService.playUIClick();
+                    onClick();
+                }
+            }}
+            onMouseEnter={() => {
+                if (!disabled) {
+                    audioService.playUIHover();
+                    onMouseEnter?.();
+                }
+            }}
             disabled={disabled}
             className={`w-full group relative flex items-center p-3 md:p-4 rounded-xl border-2 transition-all duration-100 transform ${!disabled ? 'active:scale-95 shadow-lg' : ''}
                 ${baseColor} ${hoverColor} ${focusRing} ${landscapeCompact}
@@ -214,8 +225,14 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({ onStart, onContinue,
           <button
               key={cls}
               disabled={!isUnlocked}
-              onClick={() => onStart(cls, 'RPG', undefined, 'NORMAL', profile?.activeTilesetId)}
-              onMouseEnter={() => setClassIndex(idx)}
+              onClick={() => {
+                  audioService.playUIClick();
+                  onStart(cls, 'RPG', undefined, 'NORMAL', profile?.activeTilesetId);
+              }}
+              onMouseEnter={() => {
+                  audioService.playUIHover();
+                  setClassIndex(idx);
+              }}
               className={`relative flex flex-col items-center p-4 rounded-xl border-2 transition-all duration-200 
                   ${isUnlocked 
                       ? (isFocused ? 'bg-slate-800 border-yellow-400 scale-105 shadow-xl ring-2 ring-yellow-500/30' : 'bg-slate-900 border-slate-700 hover:border-slate-500 hover:bg-slate-800')
@@ -319,7 +336,7 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({ onStart, onContinue,
                               className="space-y-6 w-full my-auto"
                           >
                               <div className="flex items-center gap-4 mb-4">
-                                  <button onClick={() => setShowClassSelect(false)} className="p-2 hover:bg-slate-800 rounded-full text-slate-400 hover:text-white">
+                                  <button onClick={() => { audioService.playUIBack(); setShowClassSelect(false); }} className="p-2 hover:bg-slate-800 rounded-full text-slate-400 hover:text-white">
                                       <ChevronDown className="rotate-90" />
                                   </button>
                                   <div>
@@ -339,7 +356,7 @@ export const SplashScreen: React.FC<SplashScreenProps> = ({ onStart, onContinue,
               {/* Pinned Footer */}
               <div className="p-4 md:p-8 pt-0 mt-auto shrink-0 opacity-60 hover:opacity-100 transition-opacity border-t border-white/5">
                   <div className="flex justify-between items-center mb-3 pt-3">
-                      <button onClick={toggleFullscreen} className="text-[10px] uppercase font-bold text-slate-500 flex items-center gap-2 hover:text-white transition-colors">
+                      <button onClick={() => { audioService.playUIClick(); toggleFullscreen(); }} className="text-[10px] uppercase font-bold text-slate-500 flex items-center gap-2 hover:text-white transition-colors">
                           <Maximize size={12}/> {isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}
                       </button>
                       <div className="text-[10px] text-slate-600 font-mono">v1.3.0</div>

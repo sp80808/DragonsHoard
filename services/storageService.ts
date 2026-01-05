@@ -1,5 +1,5 @@
 
-import { PlayerProfile, GameState, RunStats, HeroClass, DailyBounty, AbilityType, ItemType, ClassProgress, UnlockReward } from '../types';
+import { PlayerProfile, GameState, RunStats, HeroClass, DailyBounty, AbilityType, ItemType, ClassProgress, UnlockReward, LeaderboardEntry } from '../types';
 import { v4 as uuidv4 } from 'uuid';
 import { facebookService } from './facebookService';
 import { SHOP_ITEMS, getItemDefinition, MEDALS } from '../constants';
@@ -152,7 +152,8 @@ const getDefaultProfile = (): PlayerProfile => ({
         [HeroClass.ADVENTURER]: getDefaultClassProgress()
     },
     loginStreak: 0,
-    lastLoginRewardDate: ''
+    lastLoginRewardDate: '',
+    runHistory: []
 });
 
 export const syncPlayerProfile = async (): Promise<PlayerProfile> => {
@@ -184,6 +185,7 @@ export const syncPlayerProfile = async (): Promise<PlayerProfile> => {
     // 4. Validate & Fill missing fields (Migration Logic)
     if (!finalProfile.unlockedClasses) finalProfile.unlockedClasses = [HeroClass.ADVENTURER];
     if (!finalProfile.activeBounties) finalProfile.activeBounties = [];
+    if (!finalProfile.runHistory) finalProfile.runHistory = [];
     
     // Migration: Initialize Class Progress if missing
     if (!finalProfile.classProgress) {
@@ -230,6 +232,19 @@ export const getPlayerProfile = (): PlayerProfile => {
 const saveProfile = (p: PlayerProfile) => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(p));
     facebookService.saveData(STORAGE_KEY, p);
+};
+
+export const getLocalHistory = (): LeaderboardEntry[] => {
+    const profile = getPlayerProfile();
+    return (profile.runHistory || []).sort((a,b) => b.score - a.score).slice(0, 50).map(run => ({
+        score: run.score,
+        name: 'You',
+        date: run.date,
+        heroClass: run.heroClass,
+        gold: run.gold,
+        level: run.level,
+        mode: run.mode
+    }));
 };
 
 export const completeTutorial = () => {
@@ -331,6 +346,21 @@ export const finalizeRun = (finalState: GameState): { profile: PlayerProfile, le
   profile.gamesPlayed += 1;
   profile.highScore = Math.max(profile.highScore, finalState.score);
   profile.lastPlayed = new Date().toISOString();
+
+  // Add to History
+  if (!profile.runHistory) profile.runHistory = [];
+  profile.runHistory.unshift({
+      id: generateId(),
+      date: Date.now(),
+      score: finalState.score,
+      heroClass: finalState.selectedClass,
+      mode: finalState.gameMode,
+      gold: finalState.runStats.goldEarned,
+      level: finalState.level,
+      turns: finalState.runStats.turnCount
+  });
+  // Keep last 50
+  if (profile.runHistory.length > 50) profile.runHistory.pop();
 
   // Update Class Specific Progress
   const heroClass = finalState.selectedClass;

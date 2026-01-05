@@ -1,12 +1,13 @@
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { getXpThreshold, getLevelRank, SHOP_ITEMS } from '../constants';
-import { Trophy, Star, Store as StoreIcon, Coins, RefreshCw, Menu, Clover, Skull, Zap, Info, Flame, Hammer, Moon, Sun, Waves, Gem, Target, Shield, Swords, Clock, Crown, Sparkles, Wand } from 'lucide-react';
+import { Trophy, Star, Store as StoreIcon, Coins, RefreshCw, Menu, Clover, Skull, Zap, Info, Flame, Hammer, Moon, Sun, Waves, Gem, Target, Shield, Swords, Clock, Crown, Sparkles, Wand, User } from 'lucide-react';
 import { InventoryItem, Stage, GameMode, InputSettings, DailyModifier, AbilityState, AbilityType, ShopState, HeroClass } from '../types';
 import { CountUp } from './CountUp';
-import { motion, AnimatePresence, useAnimation } from 'framer-motion';
+import { motion, AnimatePresence, useAnimation, useSpring, useTransform } from 'framer-motion';
 import { useLootSystem } from './LootSystem';
 import { getNextLevelXp, getPlayerProfile } from '../services/storageService';
+import { audioService } from '../services/audioService';
 
 interface HUDProps {
   score: number;
@@ -80,6 +81,40 @@ const AnimatedScoreDisplay = ({ value, combo }: { value: number, combo: number }
     );
 };
 
+const DynamicXPBar = ({ current, max, height = 4 }: { current: number, max: number, height?: number }) => {
+    const percent = Math.min(100, Math.max(0, (current / max) * 100));
+    
+    // Smooth spring animation for the bar width
+    const widthSpring = useSpring(percent, { stiffness: 60, damping: 15, mass: 0.5 });
+    const widthPercent = useTransform(widthSpring, (v) => `${v}%`);
+
+    return (
+        <div className={`relative w-full bg-slate-900 rounded-full border border-slate-700 overflow-hidden shadow-inner`} style={{ height: `${height}px` }}>
+            {/* Background Track Pattern */}
+            <div className="absolute inset-0 opacity-20" style={{ backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 5px, rgba(255,255,255,0.05) 5px, rgba(255,255,255,0.05) 10px)' }}></div>
+            
+            {/* Main Fill Bar */}
+            <motion.div 
+                className="absolute top-0 left-0 bottom-0 bg-gradient-to-r from-blue-600 via-indigo-500 to-cyan-400"
+                style={{ width: widthPercent }}
+            >
+                {/* Internal Shimmer */}
+                <div className="absolute inset-0 w-full h-full bg-[linear-gradient(90deg,transparent,rgba(255,255,255,0.4),transparent)] -skew-x-12 animate-[shimmer_2s_infinite]" style={{ backgroundSize: '200% 100%' }}></div>
+            </motion.div>
+
+            {/* Leading Edge Glow */}
+            <motion.div 
+                className="absolute top-0 bottom-0 w-[2px] bg-white blur-[2px] z-10"
+                style={{ left: widthPercent }}
+            />
+            <motion.div 
+                className="absolute top-1/2 -translate-y-1/2 w-4 h-4 bg-cyan-400 rounded-full blur-md opacity-60 z-20"
+                style={{ left: widthPercent, x: '-50%' }}
+            />
+        </div>
+    );
+};
+
 const StatDisplay = ({ value, className, prefix = '', suffix = '' }: { value: number, className?: string, prefix?: string, suffix?: string }) => {
     const [highlight, setHighlight] = useState(false);
     const prevValue = useRef(value);
@@ -121,6 +156,7 @@ const InventorySlot: React.FC<any> = ({ index, item, onUseItem, itemFeedback, is
               ${feedback === 'ERROR' ? 'bg-red-900/20 shadow-[0_0_15px_rgba(239,68,68,0.3)]' : ''}
               ${feedback === 'SUCCESS' ? 'bg-green-900/20 shadow-[0_0_15px_rgba(74,222,128,0.3)]' : 'border-slate-800 hover:border-slate-600'}
           `}
+          onMouseEnter={() => item && audioService.playUIHover()}
       >
           <div className="absolute top-0 left-0 bg-slate-800/90 px-1.5 py-0.5 rounded-br-md text-[8px] md:text-[10px] font-mono text-slate-500 border-r border-b border-slate-700/50 z-10 font-bold">
               {index + 1}
@@ -174,41 +210,78 @@ export const BuffDisplay: React.FC<{ effectCounters: Record<string, number>, cla
 };
 
 export const HUDHeader = React.memo(({ score, bestScore, xp, gold, currentStage, gameMode, accountLevel, settings, combo, activeModifiers, challengeTarget, effectCounters, onMenu, onOpenStats, isLandscape, showBuffs = true, selectedClass = HeroClass.ADVENTURER }: HUDProps) => {
-    // ... (This component remains largely the same, logic not affected by Class Ability button removal)
-    // For brevity, assuming the rest of HUDHeader logic is preserved. 
-    // Re-implementing simplified header for clarity in this diff:
     
     const xpRef = useRef<HTMLDivElement>(null);
     const goldRef = useRef<HTMLSpanElement>(null);
-    // ... (standard setup)
+    
+    // XP Bar Calculation
+    const nextLevelXp = getNextLevelXp(accountLevel);
+    const prevLevelXp = getNextLevelXp(accountLevel - 1);
+    const xpForThisLevel = nextLevelXp - (accountLevel === 1 ? 0 : prevLevelXp);
+    
+    const [profileXp, setProfileXp] = useState(0);
+    
+    useEffect(() => {
+        const p = getPlayerProfile();
+        setProfileXp(p.totalAccountXp + xp); // Base + Current Run Gain
+    }, [xp]);
+
+    const xpProgress = Math.max(0, profileXp - (accountLevel === 1 ? 0 : prevLevelXp));
 
     return (
-        <div className="flex flex-col gap-2 w-full">
+        <div className={`flex flex-col gap-2 w-full ${isLandscape ? 'h-full justify-between pb-6' : ''}`}>
             {/* Top Header Row */}
-            <div className={`relative flex flex-wrap justify-between items-center bg-slate-900/90 p-3 rounded-xl border border-slate-700 shadow-xl gap-2 ${settings.graphicsQuality === 'LOW' ? '' : 'backdrop-blur-md'}`}>
-                <div className="flex items-center gap-3 flex-1 min-w-[120px]">
-                    <button onClick={onMenu} className="p-2 hover:bg-white/10 rounded-lg transition-colors text-slate-400 hover:text-white group relative">
+            <div className={`relative flex ${isLandscape ? 'flex-col items-start gap-4' : 'flex-wrap justify-between items-center gap-2'} bg-slate-900/90 p-3 rounded-xl border border-slate-700 shadow-xl ${settings.graphicsQuality === 'LOW' ? '' : 'backdrop-blur-md'} ${isLandscape ? 'w-full' : ''}`}>
+                
+                {/* Title Section */}
+                <div className={`flex items-center gap-3 ${isLandscape ? 'w-full' : 'flex-1 min-w-[120px]'}`}>
+                    <button 
+                        onClick={() => { audioService.playUIClick(); onMenu(); }} 
+                        onMouseEnter={() => audioService.playUIHover()}
+                        className="p-2 hover:bg-white/10 rounded-lg transition-colors text-slate-400 hover:text-white group relative shrink-0"
+                    >
                         <Menu size={20} />
                     </button>
-                    <div>
-                        <div className="flex items-center">
-                            <h1 className="text-base sm:text-xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-yellow-200 via-orange-400 to-red-500 fantasy-font drop-shadow-sm whitespace-nowrap">
+                    <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                            <h1 className="text-base sm:text-xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-yellow-200 via-orange-400 to-red-500 fantasy-font drop-shadow-sm whitespace-nowrap overflow-hidden text-ellipsis">
                                 {gameMode === 'DAILY' ? 'Daily Run' : gameMode === 'GAUNTLET' ? 'The Gauntlet' : "Dragon's Hoard"}
                             </h1>
+                            <div className="px-1.5 py-0.5 bg-slate-800 rounded border border-slate-700 text-[9px] font-bold text-slate-400 uppercase whitespace-nowrap shrink-0">
+                                Lvl {accountLevel}
+                            </div>
                         </div>
                         <div className="flex items-center gap-3 text-xs text-slate-400 mt-1">
-                            <span className="flex items-center gap-1"><Trophy size={12} /> <CountUp value={bestScore} /></span>
-                            <span className="flex items-center gap-1 text-yellow-400 font-bold inline-block">
+                            <span className="flex items-center gap-1 shrink-0"><Trophy size={12} /> <CountUp value={bestScore} /></span>
+                            <span className="flex items-center gap-1 text-yellow-400 font-bold inline-block shrink-0">
                                 <Coins size={12} /> <StatDisplay value={gold} suffix=" G" />
                             </span>
                         </div>
                     </div>
                 </div>
-                <div className="text-right pl-3 flex flex-col items-end justify-center min-w-[100px] z-10">
-                    <div className="text-[9px] text-slate-500 uppercase tracking-wider font-bold mb-0.5 drop-shadow-md">Score</div>
-                    <AnimatedScoreDisplay value={score} combo={combo} />
+
+                {/* Score & XP Section */}
+                <div className={`${isLandscape ? 'w-full pl-3 pr-2 border-t border-slate-800 pt-3' : 'text-right pl-3 flex flex-col items-end justify-center min-w-[100px] z-10'}`}>
+                    <div className={`${isLandscape ? 'flex justify-between items-end mb-2' : ''}`}>
+                        <div className="text-[9px] text-slate-500 uppercase tracking-wider font-bold mb-0.5 drop-shadow-md">Score</div>
+                        <AnimatedScoreDisplay value={score} combo={combo} />
+                    </div>
+                    
+                    {/* Dynamic XP Bar */}
+                    <div className={`mt-1 ${isLandscape ? 'w-full' : 'absolute bottom-0 left-0 right-0'}`}>
+                        <div className={`${isLandscape ? 'flex justify-between text-[8px] text-blue-300 font-mono mb-1' : 'hidden'}`}>
+                            <span>XP</span>
+                            <span>{Math.floor(xpProgress)} / {xpForThisLevel}</span>
+                        </div>
+                        <DynamicXPBar 
+                            current={xpProgress} 
+                            max={xpForThisLevel} 
+                            height={isLandscape ? 6 : 4} // Slightly thicker in landscape sidebar
+                        />
+                    </div>
                 </div>
             </div>
+            
             {showBuffs && <BuffDisplay effectCounters={effectCounters} />}
         </div>
     );
@@ -245,7 +318,8 @@ export const HUDControls = React.memo(({
 
                 <motion.button 
                     whileTap={{ scale: 0.95 }}
-                    onClick={onOpenStore}
+                    onClick={() => { audioService.playUIClick(); onOpenStore(); }}
+                    onMouseEnter={() => audioService.playUIHover()}
                     className="relative group flex flex-col items-center justify-center rounded-xl border-2 transition-all duration-200 overflow-hidden w-full h-24 bg-slate-900 border-slate-700 hover:border-yellow-500 hover:bg-slate-800 shadow-lg shadow-yellow-900/5"
                 >
                     <div className="relative z-10 flex flex-col items-center">
@@ -277,7 +351,8 @@ export const HUDControls = React.memo(({
                 {/* Wider Shop Button */}
                 <motion.button 
                     whileTap={{ scale: 0.95 }}
-                    onClick={onOpenStore}
+                    onClick={() => { audioService.playUIClick(); onOpenStore(); }}
+                    onMouseEnter={() => audioService.playUIHover()}
                     className="w-1/3 relative group flex flex-col items-center justify-center rounded-xl border-2 transition-all duration-200 overflow-hidden bg-slate-900 border-slate-700 hover:border-yellow-500 hover:bg-slate-800 shadow-lg shadow-yellow-900/5"
                 >
                     <div className="relative z-10 flex flex-col items-center">
@@ -292,7 +367,7 @@ export const HUDControls = React.memo(({
 
 export const HUD = (props: HUDProps) => {
     return (
-        <div className={`w-full mb-1 flex flex-col gap-2 relative z-20 ${props.isLandscape ? 'gap-6' : ''}`}>
+        <div className={`w-full mb-1 flex flex-col gap-2 relative z-20 ${props.isLandscape ? 'gap-6 h-full justify-between' : ''}`}>
             <HUDHeader {...props} />
             <HUDControls {...props} />
         </div>

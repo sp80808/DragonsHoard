@@ -138,6 +138,7 @@ const gameReducer = (state: GameState, action: Action): GameState => {
                 state.stats
             );
             if (!res.moved) {
+                audioService.playInvalidMove();
                 return { ...state, isInvalidMove: true };
             }
 

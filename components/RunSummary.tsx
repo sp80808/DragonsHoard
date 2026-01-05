@@ -23,6 +23,7 @@ import {
   Feather, MessageCircle
 } from 'lucide-react';
 import { useMenuNavigation } from '../hooks/useMenuNavigation';
+import { motion, useSpring, useTransform } from 'framer-motion';
 
 interface Props {
   gameState: GameState;
@@ -31,10 +32,66 @@ interface Props {
   onHome: () => void;
 }
 
+const SummaryXPBar = ({ prevXp, currentXp, max, label }: { prevXp: number, currentXp: number, max: number, label: string }) => {
+    const prevPercent = Math.min(100, Math.max(0, (prevXp / max) * 100));
+    const targetPercent = Math.min(100, Math.max(0, (currentXp / max) * 100));
+    
+    // We animate from prev to target
+    const [activePercent, setActivePercent] = useState(prevPercent);
+
+    useEffect(() => {
+        // Delay start for dramatic effect
+        const t = setTimeout(() => {
+            setActivePercent(targetPercent);
+        }, 800);
+        return () => clearTimeout(t);
+    }, [targetPercent]);
+
+    const springPercent = useSpring(prevPercent, { stiffness: 40, damping: 12 });
+    const widthString = useTransform(springPercent, v => `${v}%`);
+
+    useEffect(() => {
+        springPercent.set(activePercent);
+    }, [activePercent, springPercent]);
+
+    return (
+        <div className="w-full space-y-2 mb-6">
+            <div className="flex justify-between text-xs font-bold text-slate-400 uppercase tracking-wide">
+                <span>{label}</span>
+                <span className="text-green-400 drop-shadow-[0_0_5px_rgba(74,222,128,0.5)]">
+                    {Math.floor(currentXp).toLocaleString()} / {max.toLocaleString()}
+                </span>
+            </div>
+
+            <div className="h-6 bg-black rounded-full border border-slate-800 relative overflow-hidden shadow-inner">
+                {/* Background Pattern */}
+                <div className="absolute inset-0 opacity-20" style={{ backgroundImage: 'repeating-linear-gradient(-45deg, transparent, transparent 5px, rgba(255,255,255,0.05) 5px, rgba(255,255,255,0.05) 10px)' }}></div>
+
+                {/* Fill Animation */}
+                <motion.div 
+                    className="absolute top-0 left-0 bottom-0 bg-gradient-to-r from-blue-900 via-indigo-600 to-indigo-400"
+                    style={{ width: widthString }}
+                >
+                    <div className="absolute inset-0 bg-[linear-gradient(45deg,transparent_25%,rgba(255,255,255,0.1)_50%,transparent_75%)] bg-[length:20px_20px] animate-[shimmer_1s_infinite_linear]"></div>
+                    <div className="absolute inset-0 bg-white/20 animate-pulse mix-blend-overlay"></div>
+                    
+                    {/* Leading Edge */}
+                    <div className="absolute top-0 right-0 bottom-0 w-[2px] bg-white blur-[2px]"></div>
+                    <div className="absolute top-1/2 right-0 -translate-y-1/2 w-6 h-6 bg-indigo-300 rounded-full blur-lg opacity-60 translate-x-1/2"></div>
+                </motion.div>
+                
+                {/* Text Overlay */}
+                <div className="absolute inset-0 flex items-center justify-center text-[10px] font-mono font-bold text-white drop-shadow-md z-10 mix-blend-plus-lighter">
+                    {Math.floor((activePercent/100) * max).toLocaleString()} XP
+                </div>
+            </div>
+        </div>
+    );
+};
+
 export const RunSummary: React.FC<Props> = ({ gameState, onRestart, onShowLeaderboard, onHome }) => {
   const [profile, setProfile] = useState<PlayerProfile | null>(null);
   const [leveledUp, setLeveledUp] = useState(false);
-  const [displayedXp, setDisplayedXp] = useState(0);
   const [runXp, setRunXp] = useState(0);
   const [newUnlocks, setNewUnlocks] = useState<UnlockReward[]>([]);
   
@@ -50,15 +107,6 @@ export const RunSummary: React.FC<Props> = ({ gameState, onRestart, onShowLeader
     setRunXp(xpGained);
     setNewUnlocks(unlocks);
     
-    // Animate XP bar starting from previous amount
-    const prevTotal = newProfile.totalAccountXp - xpGained;
-    setDisplayedXp(prevTotal);
-    
-    // Trigger animation after a brief delay for visual impact
-    setTimeout(() => {
-        setDisplayedXp(newProfile.totalAccountXp);
-    }, 500);
-
     generateStory();
 
   }, []);
@@ -121,11 +169,7 @@ export const RunSummary: React.FC<Props> = ({ gameState, onRestart, onShowLeader
   // XP Calculations
   const xpForThisLevel = nextLevelXp - (profile.accountLevel === 1 ? 0 : prevLevelXp);
   const xpIntoLevel = profile.totalAccountXp - (profile.accountLevel === 1 ? 0 : prevLevelXp);
-  const prevXpIntoLevel = displayedXp - (profile.accountLevel === 1 ? 0 : prevLevelXp);
-
-  // Percentages for animation
-  const displayPercent = Math.min(100, Math.max(0, (prevXpIntoLevel / xpForThisLevel) * 100));
-  const finalPercent = Math.min(100, Math.max(0, (xpIntoLevel / xpForThisLevel) * 100)); // unused variable but kept for reference logic
+  const prevXpIntoLevel = Math.max(0, xpIntoLevel - runXp);
 
   // Determine Class Icon
   const icons: Record<HeroClass, React.ElementType> = {
@@ -266,28 +310,12 @@ export const RunSummary: React.FC<Props> = ({ gameState, onRestart, onShowLeader
                     </div>
 
                     {/* XP Bar */}
-                    <div className="w-full space-y-2 mb-6">
-                        <div className="flex justify-between text-xs font-bold text-slate-400 uppercase tracking-wide">
-                            <span>XP Gained</span>
-                            <span className="text-green-400 drop-shadow-[0_0_5px_rgba(74,222,128,0.5)]">+{runXp.toLocaleString()}</span>
-                        </div>
-
-                        <div className="h-6 bg-black rounded-full border border-slate-800 relative overflow-hidden shadow-inner">
-                            {/* Fill Animation */}
-                            <div 
-                                className="h-full bg-gradient-to-r from-blue-900 via-indigo-700 to-indigo-500 transition-all duration-[1500ms] ease-out relative"
-                                style={{ width: `${displayPercent}%` }}
-                            >
-                                <div className="absolute inset-0 bg-[linear-gradient(45deg,transparent_25%,rgba(255,255,255,0.1)_50%,transparent_75%)] bg-[length:20px_20px] animate-[shimmer_1s_infinite_linear]"></div>
-                                <div className="absolute inset-0 bg-white/20 animate-pulse mix-blend-overlay"></div>
-                            </div>
-                            
-                            {/* Text Overlay */}
-                            <div className="absolute inset-0 flex items-center justify-center text-[10px] font-mono font-bold text-white drop-shadow-md z-10 mix-blend-plus-lighter">
-                                {Math.floor(xpIntoLevel).toLocaleString()} / {xpForThisLevel.toLocaleString()} XP
-                            </div>
-                        </div>
-                    </div>
+                    <SummaryXPBar 
+                        prevXp={prevXpIntoLevel} 
+                        currentXp={xpIntoLevel} 
+                        max={xpForThisLevel} 
+                        label="Account Progress"
+                    />
 
                     {/* Rewards List */}
                     <div className="w-full mb-6">
@@ -415,7 +443,7 @@ export const RunSummary: React.FC<Props> = ({ gameState, onRestart, onShowLeader
   );
 };
 
-// Helper for Stats - UPDATED: Removed font-mono, added fantasy-font for numbers
+// Helper for Stats
 const DeathStat = ({ label, value, icon }: any) => (
     <div 
         className={`border border-white/5 bg-slate-900/40 p-2 rounded-xl flex flex-col items-center justify-center gap-0.5 transition-all hover:scale-105 hover:bg-white/5`}

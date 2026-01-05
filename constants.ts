@@ -1,6 +1,6 @@
 
 import { TileType, ItemType, GameStats, GameState, Stage, Achievement, HeroClass, CraftingRecipe, DailyModifier, StoryEntry, PlayerProfile, Medal, SkillNodeDefinition, Artifact } from './types';
-import { Trophy, Star, Shield, Zap, Swords, LayoutGrid, Map, Flame, Target, Hexagon, Crosshair, Medal as MedalIcon, Crown, Skull, Coins, Hourglass, Eye, Feather, Rocket, Briefcase, Anchor, HeartOff, Sparkles, Sword, Hand, BookOpen, Clock, Scale, Sun, Heart, Ghost, Droplets, Settings } from 'lucide-react';
+import { Trophy, Star, Shield, Zap, Swords, LayoutGrid, Map, Flame, Target, Hexagon, Crosshair, Medal as MedalIcon, Crown, Skull, Coins, Hourglass, Eye, Feather, Rocket, Briefcase, Anchor, HeartOff, Sparkles, Sword, Hand, BookOpen, Clock, Scale, Sun, Heart, Ghost, Droplets, Settings, Hammer } from 'lucide-react';
 import React from 'react';
 import { createId } from './services/gameLogic';
 
@@ -266,17 +266,49 @@ export const getLevelRank = (level: number) => {
     return { title: 'Demigod', icon: LayoutGrid, bg: 'from-yellow-400 to-yellow-600', color: 'text-yellow-100' };
 };
 
-// ... (Keep CLASS_SKILL_TREES)
 export const CLASS_SKILL_TREES: Record<HeroClass, SkillNodeDefinition[]> = {
     [HeroClass.ADVENTURER]: [
-        { id: 'ADV_1', title: 'Survivor', description: 'Gain 10% more Score.', icon: React.createElement(Star, {size: 20}), x: 50, y: 80, reqLevel: 1, cost: 1, effect: (s) => ({}) },
-        { id: 'ADV_2', title: 'Lucky Find', description: 'Slightly increased item drop rate.', icon: React.createElement(Coins, {size: 20}), x: 30, y: 60, reqLevel: 3, parentId: 'ADV_1', cost: 1, effect: (s) => ({}) },
-        { id: 'ADV_3', title: 'Veteran', description: 'Gain 10% more Gold.', icon: React.createElement(Trophy, {size: 20}), x: 70, y: 60, reqLevel: 5, parentId: 'ADV_1', cost: 1, effect: (s) => ({}) },
-        { id: 'ADV_4', title: 'Haggler', description: 'Shop prices are 10% cheaper.', icon: React.createElement(Hand, {size: 20}), x: 50, y: 40, reqLevel: 10, parentId: 'ADV_2', cost: 2, effect: (s) => ({}) },
-        { id: 'ADV_5', title: 'Archaeologist', description: 'Rune spawn rate +20%.', icon: React.createElement(Map, {size: 20}), x: 50, y: 20, reqLevel: 20, parentId: 'ADV_4', cost: 3, effect: (s) => ({}) }
+        { id: 'ADV_1', title: 'Survivor', description: 'Gain 10% more Score.', icon: React.createElement(Star, {size: 20}), x: 50, y: 80, reqLevel: 1, cost: 1 },
+        { id: 'ADV_2', title: 'Lucky Find', description: 'Slightly increased item drop rate.', icon: React.createElement(Coins, {size: 20}), x: 30, y: 60, reqLevel: 3, parentId: 'ADV_1', cost: 1 },
+        { id: 'ADV_3', title: 'Veteran', description: 'Gain 10% more Gold.', icon: React.createElement(Trophy, {size: 20}), x: 70, y: 60, reqLevel: 5, parentId: 'ADV_1', cost: 1 },
+        { id: 'ADV_4', title: 'Haggler', description: 'Shop prices are 10% cheaper.', icon: React.createElement(Hand, {size: 20}), x: 50, y: 40, reqLevel: 10, parentId: 'ADV_2', cost: 2 },
+        { id: 'ADV_5', title: 'Archaeologist', description: 'Rune spawn rate +20%.', icon: React.createElement(Map, {size: 20}), x: 50, y: 20, reqLevel: 20, parentId: 'ADV_4', cost: 3 }
     ],
-    // ... (Keep other classes if needed or truncated for brevity)
-    [HeroClass.WARRIOR]: [], [HeroClass.ROGUE]: [], [HeroClass.MAGE]: [], [HeroClass.PALADIN]: [], [HeroClass.DRAGON_SLAYER]: [] 
+    [HeroClass.WARRIOR]: [
+        { id: 'WAR_1', title: 'Vanguard', description: 'Start run with a Bomb Scroll.', icon: React.createElement(Swords, {size: 20}), x: 50, y: 80, reqLevel: 4, cost: 1, effect: (s) => ({ inventory: [...s.inventory, { id: createId(), type: ItemType.BOMB_SCROLL, name: 'Bomb Scroll', description: 'Destroy 3 tiles', icon: '💣' }] }) },
+        { id: 'WAR_2', title: 'Heavy Handed', description: '10% chance for tiles to spawn as Tier 2 (Rat).', icon: React.createElement(Hammer, {size: 20}), x: 30, y: 60, reqLevel: 6, parentId: 'WAR_1', cost: 1 },
+        { id: 'WAR_3', title: 'Combat Veteran', description: 'Battle Items are 20% cheaper.', icon: React.createElement(Shield, {size: 20}), x: 70, y: 60, reqLevel: 8, parentId: 'WAR_1', cost: 1 },
+        { id: 'WAR_4', title: 'Battle Hardened', description: 'Deal 20% more damage to Bosses.', icon: React.createElement(Skull, {size: 20}), x: 50, y: 40, reqLevel: 12, parentId: 'WAR_3', cost: 2 },
+        { id: 'WAR_5', title: 'Whirlwind Mastery', description: 'Reduce Whirlwind cooldown by 10 turns.', icon: React.createElement(Zap, {size: 20}), x: 50, y: 20, reqLevel: 15, parentId: 'WAR_4', cost: 3 }
+    ],
+    [HeroClass.ROGUE]: [
+        { id: 'ROG_1', title: 'Sticky Fingers', description: 'Start run with a Reroll Token.', icon: React.createElement(Hand, {size: 20}), x: 50, y: 80, reqLevel: 6, cost: 1, effect: (s) => ({ inventory: [...s.inventory, { id: createId(), type: ItemType.REROLL_TOKEN, name: 'Reroll Token', description: 'Shuffle board', icon: '🎲' }] }) },
+        { id: 'ROG_2', title: 'Penny Pincher', description: 'Shop prices are 10% cheaper.', icon: React.createElement(Coins, {size: 20}), x: 30, y: 60, reqLevel: 8, parentId: 'ROG_1', cost: 1 },
+        { id: 'ROG_3', title: 'Gold Digger', description: 'Gain 20% more Gold from pickups.', icon: React.createElement(Trophy, {size: 20}), x: 70, y: 60, reqLevel: 10, parentId: 'ROG_1', cost: 1 },
+        { id: 'ROG_4', title: 'Lucky Charm', description: 'Runes spawn 10% more often.', icon: React.createElement(Star, {size: 20}), x: 50, y: 40, reqLevel: 14, parentId: 'ROG_3', cost: 2 },
+        { id: 'ROG_5', title: 'Master Thief', description: 'Start runs with 2 random items.', icon: React.createElement(Briefcase, {size: 20}), x: 50, y: 20, reqLevel: 18, parentId: 'ROG_4', cost: 3 }
+    ],
+    [HeroClass.MAGE]: [
+        { id: 'MAG_1', title: 'Apprentice', description: 'Start run with an XP Potion.', icon: React.createElement(BookOpen, {size: 20}), x: 50, y: 80, reqLevel: 15, cost: 1, effect: (s) => ({ inventory: [...s.inventory, { id: createId(), type: ItemType.XP_POTION, name: 'XP Potion', description: 'Gain 1000 XP', icon: '🧪' }] }) },
+        { id: 'MAG_2', title: 'Arcane Focus', description: 'Class Ability Cooldown reduced by 10%.', icon: React.createElement(Zap, {size: 20}), x: 30, y: 60, reqLevel: 17, parentId: 'MAG_1', cost: 1 },
+        { id: 'MAG_3', title: 'Scholar', description: 'Gain 15% more XP.', icon: React.createElement(Star, {size: 20}), x: 70, y: 60, reqLevel: 20, parentId: 'MAG_1', cost: 1 },
+        { id: 'MAG_4', title: 'Alchemy', description: 'Potions are 20% cheaper.', icon: React.createElement(Droplets, {size: 20}), x: 50, y: 40, reqLevel: 25, parentId: 'MAG_3', cost: 2 },
+        { id: 'MAG_5', title: 'Time Warp', description: 'Start run with a Chronos Rune on board.', icon: React.createElement(Hourglass, {size: 20}), x: 50, y: 20, reqLevel: 30, parentId: 'MAG_4', cost: 3 }
+    ],
+    [HeroClass.PALADIN]: [
+        { id: 'PAL_1', title: 'Squire', description: 'Start run with a Golden Rune.', icon: React.createElement(Shield, {size: 20}), x: 50, y: 80, reqLevel: 10, cost: 1, effect: (s) => ({ inventory: [...s.inventory, { id: createId(), type: ItemType.GOLDEN_RUNE, name: 'Golden Rune', description: 'Next spawn golden', icon: '✨' }] }) },
+        { id: 'PAL_2', title: 'Smite Evil', description: 'Bosses spawn with 10% less HP.', icon: React.createElement(Sun, {size: 20}), x: 30, y: 60, reqLevel: 15, parentId: 'PAL_1', cost: 1 },
+        { id: 'PAL_3', title: 'Justicar', description: 'Debuffs expire 20% faster.', icon: React.createElement(Scale, {size: 20}), x: 70, y: 60, reqLevel: 20, parentId: 'PAL_1', cost: 1 },
+        { id: 'PAL_4', title: 'Sanctuary', description: 'Gain 10% more Gold.', icon: React.createElement(Coins, {size: 20}), x: 50, y: 40, reqLevel: 25, parentId: 'PAL_2', cost: 2 },
+        { id: 'PAL_5', title: 'Divine Intervention', description: 'Start run with a Midas Potion.', icon: React.createElement(Sparkles, {size: 20}), x: 50, y: 20, reqLevel: 35, parentId: 'PAL_4', cost: 3, effect: (s) => ({ inventory: [...s.inventory, { id: createId(), type: ItemType.MIDAS_POTION, name: 'Midas Potion', description: '2x Gold', icon: '⚱️' }] }) }
+    ],
+    [HeroClass.DRAGON_SLAYER]: [
+        { id: 'DS_1', title: 'Hunter', description: 'Start run with Siege Breaker.', icon: React.createElement(Crosshair, {size: 20}), x: 50, y: 80, reqLevel: 20, cost: 1, effect: (s) => ({ inventory: [...s.inventory, { id: createId(), type: ItemType.SIEGE_BREAKER, name: 'Siege Breaker', description: '3x Boss Dmg', icon: '🔨' }] }) },
+        { id: 'DS_2', title: 'Big Game', description: 'Deal 25% more damage to Bosses.', icon: React.createElement(Skull, {size: 20}), x: 30, y: 60, reqLevel: 25, parentId: 'DS_1', cost: 1 },
+        { id: 'DS_3', title: 'Loot Hoarder', description: 'Gain 20% more Score.', icon: React.createElement(Trophy, {size: 20}), x: 70, y: 60, reqLevel: 30, parentId: 'DS_1', cost: 1 },
+        { id: 'DS_4', title: 'Dragon Scale', description: 'Shop prices are 15% cheaper.', icon: React.createElement(Shield, {size: 20}), x: 50, y: 40, reqLevel: 40, parentId: 'DS_3', cost: 2 },
+        { id: 'DS_5', title: 'Apex Predator', description: 'Start run with 1000 Gold.', icon: React.createElement(Crown, {size: 20}), x: 50, y: 20, reqLevel: 50, parentId: 'DS_4', cost: 3, effect: (s) => ({ gold: s.gold + 1000 }) }
+    ]
 };
 
 // --- NEW CONSTANTS FOR GAUNTLET & CLASSES ---

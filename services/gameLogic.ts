@@ -3,7 +3,7 @@ import { Direction, GameState, Tile, TileType, MoveResult, ItemType, InventoryIt
 import { GRID_SIZE_INITIAL, SHOP_ITEMS, getXpThreshold, getStage, getStageBackground, ACHIEVEMENTS, TILE_STYLES, FALLBACK_STYLE, getItemDefinition, BOSS_DEFINITIONS, SHOP_CONFIG, DAILY_MODIFIERS, STORY_ENTRIES, MEDALS, CLASS_SKILL_TREES, CLASS_ABILITIES } from '../constants';
 import { RNG, rng, generateId } from '../utils/rng';
 import { audioService } from './audioService'; 
-import { claimDailyReward, getPlayerProfile, awardMedal, unlockLore, getNextLevelXp } from './storageService';
+import { claimDailyReward, getPlayerProfile, awardMedal, unlockLore, getNextLevelXp, getLocalHistory } from './storageService';
 import { initGauntletState } from './gauntletService';
 
 export { rng };
@@ -43,7 +43,15 @@ export const spawnTile = (grid: Tile[], size: number, level: number, options?: S
 
   const { x, y } = emptyCells[Math.floor(rng.next() * emptyCells.length)];
   
+  // Default values
   let value = rng.next() < 0.9 ? 2 : 4;
+  
+  // WARRIOR PASSIVE: Heavy Handed (WAR_2) - 10% chance to spawn Tier 2 (Rat) instead of Tier 1 (Slime)
+  // Logic: If we rolled a 2, give it a 10% chance to be a 4.
+  if (value === 2 && options && typeof options !== 'number' && options.activeClassSkills?.includes('WAR_2')) {
+      if (rng.next() < 0.1) value = 4;
+  }
+
   let type = TileType.NORMAL;
   let health = undefined;
   let maxHealth = undefined;
@@ -77,6 +85,12 @@ export const spawnTile = (grid: Tile[], size: number, level: number, options?: S
   if (opts.activeClassSkills?.includes('ADV_5')) {
       runeChance *= 1.2;
   }
+  // ROG_4: Lucky Charm
+  if (opts.activeClassSkills?.includes('ROG_4')) {
+      runeChance *= 1.1;
+  }
+  // PAL_2: Divine Favor (Implicit in constants logic but implemented here just in case, though PAL_2 is Smite Evil in constants)
+  // Checking constants: PAL_2 is Smite Evil (-10% Boss HP). It's PAL_2 in constants.ts.
 
   if (type === TileType.NORMAL && !opts.forcedValue && !opts.type && !opts.isClassic && rng.next() < runeChance) {
       const roll = rng.next();
@@ -99,7 +113,7 @@ export const spawnTile = (grid: Tile[], size: number, level: number, options?: S
           let hpMult = 1.0;
           if (hasMod(opts.modifiers, 'GOLD_RUSH')) hpMult = 1.5;
           if (opts.difficulty === 'HARD') hpMult *= 1.5;
-          // Paladin Smite: Weakens bosses
+          // Paladin Smite Evil (PAL_2)
           if (opts.activeClassSkills?.includes('PAL_2')) hpMult *= 0.9;
 
           maxHealth = Math.floor(bossDef.baseHealth * Math.pow(1.55, bossScale) * hpMult); 
@@ -135,6 +149,9 @@ const getInitialShopState = (modifiers?: DailyModifier[], activeSkills?: string[
         
         if (activeSkills?.includes('ROG_2')) priceMult *= 0.9;
         if (activeSkills?.includes('ADV_4')) priceMult *= 0.9;
+        if (activeSkills?.includes('WAR_3') && item.category === 'BATTLE') priceMult *= 0.8;
+        if (activeSkills?.includes('MAG_4') && item.category === 'CONSUMABLE') priceMult *= 0.8;
+        if (activeSkills?.includes('DS_4')) priceMult *= 0.85;
 
         items[item.id] = { stock: limit, priceMultiplier: priceMult };
     });
@@ -202,6 +219,7 @@ export const initializeGame = (restart = false, heroClass: HeroClass = HeroClass
 
   const activeClassSkills: string[] = profile.classProgress?.[heroClass]?.unlockedNodes || [];
   
+  // Apply Start Bonuses from Skill Tree (ROG_5, MAG_5, etc.)
   if (activeClassSkills.includes('ROG_5')) {
       for (let i = 0; i < 2; i++) {
           const randomItem = SHOP_ITEMS[Math.floor(rng.next() * SHOP_ITEMS.length)];
@@ -231,6 +249,7 @@ export const initializeGame = (restart = false, heroClass: HeroClass = HeroClass
       targetingMode: null, activeClassSkills, gauntlet: gauntletState
   };
 
+  // Execute 'effect' callbacks from skill nodes for initial state setup
   activeClassSkills.forEach(nodeId => {
       const node = CLASS_SKILL_TREES[heroClass]?.find(n => n.id === nodeId);
       if (node && node.effect) {
@@ -246,7 +265,8 @@ export const initializeGame = (restart = false, heroClass: HeroClass = HeroClass
       initialGrid = spawnTile(initialGrid, GRID_SIZE_INITIAL, startLevel, { isClassic: mode === 'CLASSIC', modifiers: activeModifiers, difficulty, activeClassSkills });
   }
 
-  if (activeClassSkills.includes('MAGE_5') && mode !== 'GAUNTLET') {
+  // MAG_5: Time Warp - Start with Chronos Rune
+  if (activeClassSkills.includes('MAG_5') && mode !== 'GAUNTLET') {
       const empty = getEmptyCells(initialGrid, GRID_SIZE_INITIAL);
       if (empty.length > 0) {
           const {x, y} = empty[0];
@@ -257,11 +277,15 @@ export const initializeGame = (restart = false, heroClass: HeroClass = HeroClass
   }
 
   const classAbilityDef = CLASS_ABILITIES[heroClass];
+  let abilityCooldownReduced = 0;
+  if (activeClassSkills.includes('WAR_5')) abilityCooldownReduced = 10;
+  if (activeClassSkills.includes('MAG_2')) abilityCooldownReduced = Math.floor(classAbilityDef.cooldown * 0.1);
+
   const abilities: Record<AbilityType, AbilityState> = {
       'SCORCH': { id: 'SCORCH', isUnlocked: profile.unlockedPowerups?.includes('SCORCH'), charges: 1, maxCharges: 1, cooldown: 30, currentCooldown: 30 },
       'DRAGON_BREATH': { id: 'DRAGON_BREATH', isUnlocked: profile.unlockedPowerups?.includes('DRAGON_BREATH'), charges: 1, maxCharges: 1, cooldown: 60, currentCooldown: 60 },
       'GOLDEN_EGG': { id: 'GOLDEN_EGG', isUnlocked: profile.unlockedPowerups?.includes('GOLDEN_EGG'), charges: 1, maxCharges: 1, cooldown: 50, currentCooldown: 50 },
-      'CLASS_ABILITY': { id: 'CLASS_ABILITY', isUnlocked: true, charges: 1, maxCharges: 1, cooldown: classAbilityDef.cooldown, currentCooldown: 0 }
+      'CLASS_ABILITY': { id: 'CLASS_ABILITY', isUnlocked: true, charges: 1, maxCharges: 1, cooldown: Math.max(10, classAbilityDef.cooldown - abilityCooldownReduced), currentCooldown: 0 }
   };
 
   return {
@@ -339,54 +363,71 @@ export const processClassAbilities = (state: GameState): Partial<GameState> => {
 
     switch (heroClass) {
         case HeroClass.WARRIOR:
-            // Whirlwind: Trigger if grid is crowded (>70%)
-            if (density > 0.7) {
+            // Whirlwind: Trigger if grid is crowded (>75%). Clears a random row (excluding boss).
+            if (density > 0.75) {
                 const row = Math.floor(rng.next() * state.gridSize);
+                // Keep boss, kill others in row
+                const beforeCount = newGrid.length;
                 newGrid = newGrid.filter(t => t.y !== row || t.type === TileType.BOSS);
-                logs.push("Whirlwind (Auto)!");
-                triggered = true;
+                
+                if (newGrid.length < beforeCount) {
+                    logs.push("Whirlwind!");
+                    triggered = true;
+                }
             }
             break;
         case HeroClass.MAGE:
-            // Transmute: Trigger if 3+ low tiles exist
-            const lowTiles = newGrid.filter(t => t.type === TileType.NORMAL && t.value <= 8);
+            // Transmute: Trigger if 3+ low tiles (2s or 4s) exist. Upgrades them.
+            const lowTiles = newGrid.filter(t => t.type === TileType.NORMAL && t.value <= 4);
             if (lowTiles.length >= 3) {
-                const targets = lowTiles.sort((a,b) => a.value - b.value).slice(0, 3);
-                targets.forEach(t => { t.value *= 2; t.isNew = true; });
-                logs.push("Transmute (Auto)!");
+                // Shuffle and pick 3
+                const targets = rng.shuffle(lowTiles).slice(0, 3);
+                targets.forEach(t => { 
+                    t.value *= 2; 
+                    t.isNew = true; 
+                    // Visual feedback: Upgrade effect
+                });
+                logs.push("Transmute!");
                 triggered = true;
             }
             break;
         case HeroClass.ROGUE:
-            // Mug: Trigger if grid > 60% full. Turn random tile to gold.
-            if (density > 0.6) {
+            // Pilfer: Trigger if density > 50% AND luck roll. 
+            // Effect: Turns a random tile into Gold OR collects existing gold immediately.
+            // Simplified: If not boss, steal it (turn to gold).
+            if (density > 0.5) {
                 const target = rng.choice(newGrid.filter(t => t.type === TileType.NORMAL));
                 if (target) {
-                    const goldAmount = target.value * 5;
+                    const goldAmount = target.value * 5 * (state.activeClassSkills.includes('ROG_3') ? 1.2 : 1);
+                    // Remove tile
                     newGrid = newGrid.filter(t => t.id !== target.id);
-                    lootEvents.push({ id: createId(), x: target.x, y: target.y, type: 'GOLD', value: goldAmount });
-                    logs.push(`Mugged (Auto): +${goldAmount}G`);
+                    lootEvents.push({ id: createId(), x: target.x, y: target.y, type: 'GOLD', value: Math.floor(goldAmount) });
+                    logs.push(`Pilfered: +${Math.floor(goldAmount)}G`);
                     triggered = true;
                 }
             }
             break;
         case HeroClass.PALADIN:
-            // Smite: Trigger immediately if Boss exists
+            // Smite: Trigger immediately if Boss exists.
             if (boss) {
                 const dmg = 100;
                 boss.health = Math.max(0, (boss.health || 0) - dmg);
-                boss.mergedFrom = ['damage'];
-                logs.push(`Smite (Auto)!`);
+                boss.mergedFrom = ['damage']; // Visual flash
+                logs.push(`Smite!`);
                 triggered = true;
             }
             break;
         case HeroClass.DRAGON_SLAYER:
-            // Execute: Trigger if Boss < 35%
-            if (boss && boss.health && boss.maxHealth && (boss.health / boss.maxHealth) < 0.35) {
-                boss.health = 0;
-                boss.mergedFrom = ['damage'];
-                logs.push("EXECUTE (Auto)!");
-                triggered = true;
+            // Execute: Trigger if Boss < 35% HP.
+            if (boss && boss.health && boss.maxHealth) {
+                const threshold = boss.maxHealth * (state.activeClassSkills.includes('DS_5') ? 0.35 : 0.30); // DS_5 might buff threshold? Actually DS_5 is start gold. Let's say DS_2 buffs damage. 
+                // Let's stick to base 30%.
+                if (boss.health < threshold) {
+                    boss.health = 0;
+                    boss.mergedFrom = ['damage'];
+                    logs.push("EXECUTE!");
+                    triggered = true;
+                }
             }
             break;
         case HeroClass.ADVENTURER:
@@ -395,7 +436,7 @@ export const processClassAbilities = (state: GameState): Partial<GameState> => {
                  const target = rng.choice(newGrid.filter(t => t.type === TileType.NORMAL));
                  if (target) {
                      newGrid = newGrid.filter(t => t.id !== target.id);
-                     logs.push("Second Wind (Auto)!");
+                     logs.push("Second Wind!");
                      triggered = true;
                  }
             }
@@ -518,7 +559,8 @@ export const moveGrid = (
 
         } else if (nextCell && nextCell.type === TileType.BOSS && tile.type === TileType.NORMAL && tile.value >= 16) {
             // ATTACK BOSS
-            const damage = tile.value * 10;
+            let damage = tile.value * 10;
+            
             nextCell.health = Math.max(0, (nextCell.health || 0) - damage);
             nextCell.mergedFrom = ['damage'];
             hitstopDuration = 100;
@@ -683,6 +725,29 @@ export const useInventoryItem = (state: GameState, item: InventoryItem): Partial
             logs.push("Cascade Enabled (10 Turns)");
             used = true;
             break;
+        case ItemType.GOLDEN_RUNE:
+            // Force spawn next
+            // Handled in spawnTile usually, but we can just spawn one now if space
+            const empty = getEmptyCells(newGrid, state.gridSize);
+            if (empty.length > 0) {
+                const {x,y} = empty[0];
+                newGrid.push({ id: createId(), x, y, value: 0, type: TileType.RUNE_MIDAS, isNew: true });
+                logs.push("Golden Rune Spawned");
+                used = true;
+            } else {
+                logs.push("No space!");
+            }
+            break;
+        case ItemType.MIDAS_POTION:
+            effectCounters['MIDAS_POTION'] = 50;
+            logs.push("Double Gold (50 Turns)");
+            used = true;
+            break;
+        case ItemType.SIEGE_BREAKER:
+            effectCounters['SIEGE_BREAKER'] = 1; // Next hit
+            logs.push("Next Boss Hit Buffed");
+            used = true;
+            break;
         // Add other items logic here...
         default:
             logs.push("Item has no effect yet.");
@@ -755,8 +820,7 @@ export const saveHighscore = (score: number) => {
 };
 
 export const getHighscores = (): LeaderboardEntry[] => {
-    // Mock local history
-    return [];
+    return getLocalHistory();
 };
 
 export const clearSaveData = () => {

@@ -6,6 +6,7 @@ import { Coins, X, Hammer, ShoppingBag, AlertCircle, Sparkles, Sword, Package, C
 import { motion, AnimatePresence } from 'framer-motion';
 import { facebookService } from '../services/facebookService';
 import { TiltContainer } from './TiltContainer';
+import { audioService } from '../services/audioService';
 
 interface StoreProps {
   gold: number;
@@ -21,7 +22,8 @@ type TabType = 'ESSENTIALS' | 'MAGIC' | 'BATTLE' | 'FORGE';
 
 const NavButton = ({ active, onClick, icon, label, color, isFocused }: { active: boolean, onClick: () => void, icon: React.ReactNode, label: string, color?: string, isFocused?: boolean }) => (
     <button 
-        onClick={onClick}
+        onClick={() => { audioService.playUIClick(); onClick(); }}
+        onMouseEnter={() => audioService.playUIHover()}
         className={`flex items-center gap-2 md:gap-3 px-4 py-2 md:p-3 rounded-xl transition-all font-bold text-xs md:text-sm whitespace-nowrap w-full text-left
             ${active ? 'bg-slate-800 text-white shadow-lg border border-slate-700' : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800/50'}
             ${isFocused ? 'ring-2 ring-yellow-400 z-10 scale-[1.02]' : ''}
@@ -76,11 +78,14 @@ export const Store: React.FC<StoreProps> = ({ gold, inventory, onClose, onBuy, o
           if (activeSection === 'SIDEBAR') {
               if (e.key === 'ArrowUp' || e.key === 'w') {
                   setSidebarIndex(prev => (prev - 1 + tabs.length) % tabs.length);
+                  audioService.playUIHover();
               } else if (e.key === 'ArrowDown' || e.key === 's') {
                   setSidebarIndex(prev => (prev + 1) % tabs.length);
+                  audioService.playUIHover();
               } else if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'Enter') {
                   setActiveSection('GRID');
                   setGridIndex(0);
+                  audioService.playUIHover();
               } else if (e.key === 'Escape') {
                   onClose();
               }
@@ -91,16 +96,20 @@ export const Store: React.FC<StoreProps> = ({ gold, inventory, onClose, onBuy, o
 
               if (e.key === 'ArrowUp' || e.key === 'w') {
                   if (gridIndex - cols >= 0) setGridIndex(prev => prev - cols);
+                  audioService.playUIHover();
               } else if (e.key === 'ArrowDown' || e.key === 's') {
                   if (gridIndex + cols <= maxIndex) setGridIndex(prev => prev + cols);
+                  audioService.playUIHover();
               } else if (e.key === 'ArrowLeft' || e.key === 'a') {
                   if (gridIndex % cols === 0) {
                       setActiveSection('SIDEBAR');
                   } else {
                       setGridIndex(prev => prev - 1);
                   }
+                  audioService.playUIHover();
               } else if (e.key === 'ArrowRight' || e.key === 'd') {
                   if (gridIndex < maxIndex) setGridIndex(prev => prev + 1);
+                  audioService.playUIHover();
               } else if (e.key === 'Enter') {
                   const item = currentItems[gridIndex];
                   if (tab === 'FORGE') {
@@ -111,6 +120,7 @@ export const Store: React.FC<StoreProps> = ({ gold, inventory, onClose, onBuy, o
                   }
               } else if (e.key === 'Escape') {
                   setActiveSection('SIDEBAR');
+                  audioService.playUIBack();
               }
           }
       };
@@ -120,8 +130,12 @@ export const Store: React.FC<StoreProps> = ({ gold, inventory, onClose, onBuy, o
   }, [activeSection, sidebarIndex, gridIndex, currentItems, tab, showFullModal]);
 
   const handleBuyAttempt = (item: typeof SHOP_ITEMS[0], currentPrice: number, stock: number) => {
-      if (gold < currentPrice || stock <= 0) return;
+      if (gold < currentPrice || stock <= 0) {
+          audioService.playInvalidMove();
+          return;
+      }
       if (inventory.length >= 3) {
+          audioService.playInvalidMove();
           setShowFullModal(true);
           return;
       }
@@ -133,6 +147,7 @@ export const Store: React.FC<StoreProps> = ({ gold, inventory, onClose, onBuy, o
           content_id: item.id 
       });
 
+      audioService.playUIConfirm();
       onBuy(item);
   };
 
@@ -141,12 +156,17 @@ export const Store: React.FC<StoreProps> = ({ gold, inventory, onClose, onBuy, o
       inventory.forEach(i => counts[i.type] = (counts[i.type] || 0) + 1);
       const hasIngredients = recipe.ingredients.every(ing => (counts[ing.type] || 0) >= ing.count);
 
-      if (gold < recipe.goldCost || !hasIngredients) return;
+      if (gold < recipe.goldCost || !hasIngredients) {
+          audioService.playInvalidMove();
+          return;
+      }
       if (inventory.length >= 3) {
+          audioService.playInvalidMove();
           setShowFullModal(true);
           return;
       }
 
+      audioService.playUIConfirm();
       onCraft(recipe);
   };
 
@@ -181,7 +201,7 @@ export const Store: React.FC<StoreProps> = ({ gold, inventory, onClose, onBuy, o
                         <RefreshCcw size={10} /> Restock: {shopState.turnsUntilRestock}
                     </div>
                 </div>
-                <button onClick={onClose} className="md:hidden p-2 rounded-full bg-slate-800 text-slate-400 hover:text-white border border-slate-700">
+                <button onClick={() => { audioService.playUIBack(); onClose(); }} className="md:hidden p-2 rounded-full bg-slate-800 text-slate-400 hover:text-white border border-slate-700">
                     <X size={20} />
                 </button>
             </div>
@@ -231,7 +251,7 @@ export const Store: React.FC<StoreProps> = ({ gold, inventory, onClose, onBuy, o
                         return (
                             <TiltContainer key={recipe.id} disabled={!canCraft}>
                                 <div 
-                                    onMouseEnter={() => { setActiveSection('GRID'); setGridIndex(idx); }}
+                                    onMouseEnter={() => { setActiveSection('GRID'); setGridIndex(idx); audioService.playUIHover(); }}
                                     className={`relative bg-slate-900 border rounded-xl p-4 flex flex-col h-full transition-all group
                                         ${canCraft ? 'border-orange-500/50' : 'border-slate-800'}
                                         ${isFocused ? 'ring-2 ring-yellow-400 scale-[1.02] shadow-xl z-10' : ''}
@@ -287,7 +307,7 @@ export const Store: React.FC<StoreProps> = ({ gold, inventory, onClose, onBuy, o
                         return (
                             <TiltContainer key={item.id} disabled={!hasStock || !canAfford}>
                                 <div 
-                                    onMouseEnter={() => { setActiveSection('GRID'); setGridIndex(idx); }}
+                                    onMouseEnter={() => { setActiveSection('GRID'); setGridIndex(idx); audioService.playUIHover(); }}
                                     className={`relative bg-slate-900 border rounded-xl p-4 flex flex-col h-full transition-all group
                                         ${hasStock ? (canAfford ? 'border-slate-700 hover:border-slate-500' : 'border-red-900/50') : 'border-slate-800 opacity-50'}
                                         ${isFocused ? 'ring-2 ring-yellow-400 scale-[1.02] shadow-xl z-10' : ''}
@@ -334,7 +354,7 @@ export const Store: React.FC<StoreProps> = ({ gold, inventory, onClose, onBuy, o
 
         {/* Desktop Close Button (Floating) - Z-Index Boosted */}
         <button 
-            onClick={onClose}
+            onClick={() => { audioService.playUIBack(); onClose(); }}
             className="absolute top-6 right-6 hidden md:flex items-center gap-2 text-slate-400 hover:text-white transition-colors bg-black/40 px-3 py-1.5 rounded-full border border-slate-700 hover:border-slate-500 z-[60]"
         >
             <ArrowLeft size={16} /> <span className="text-xs font-bold uppercase">Return to Game</span>

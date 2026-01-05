@@ -1,10 +1,11 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ArrowLeft, Lock, CheckCircle, Palette, Flame, Ghost, Grid, Droplets, Zap, Star, Settings, Sword, Heart, Medal as MedalIcon } from 'lucide-react';
 import { PlayerProfile, Medal } from '../types';
 import { THEME_STYLES, MEDALS } from '../constants';
 import { setActiveTileset } from '../services/storageService';
 import { TiltContainer } from './TiltContainer';
+import { useMenuNavigation } from '../hooks/useMenuNavigation';
 
 interface GrimoireProps {
   profile: PlayerProfile;
@@ -33,6 +34,29 @@ export const Grimoire: React.FC<GrimoireProps> = ({ profile, onBack, onSelectTil
       setActiveTileset(id);
       onSelectTileset(id);
   };
+
+  // Nav for Themes
+  const { selectedIndex, setSelectedIndex } = useMenuNavigation(
+      tab === 'THEMES' ? themes.length : 0,
+      (idx) => {
+          if (tab === 'THEMES' && themes[idx].unlocked) {
+              handleSelect(themes[idx].id);
+          }
+      },
+      tab === 'THEMES'
+  );
+
+  useEffect(() => {
+      const handleKeyDown = (e: KeyboardEvent) => {
+          if (e.key === 'Escape') onBack();
+          if (e.key === 'Tab') {
+              e.preventDefault();
+              setTab(prev => prev === 'THEMES' ? 'MEDALS' : 'THEMES');
+          }
+      };
+      window.addEventListener('keydown', handleKeyDown);
+      return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onBack]);
 
   const medalsList = Object.keys(MEDALS).map(key => MEDALS[key]);
 
@@ -80,8 +104,9 @@ export const Grimoire: React.FC<GrimoireProps> = ({ profile, onBack, onSelectTil
                     </h3>
 
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                        {themes.map(theme => {
+                        {themes.map((theme, idx) => {
                             const isActive = profile.activeTilesetId === theme.id;
+                            const isFocused = idx === selectedIndex;
                             const styleSet = THEME_STYLES[theme.id];
                             // Get preview image (Rank 4/8/16 usually good)
                             const previewTile = styleSet[16] || styleSet[8]; 
@@ -91,9 +116,11 @@ export const Grimoire: React.FC<GrimoireProps> = ({ profile, onBack, onSelectTil
                                     <button 
                                         disabled={!theme.unlocked}
                                         onClick={() => handleSelect(theme.id)}
+                                        onMouseEnter={() => setSelectedIndex(idx)}
                                         className={`relative w-full h-full group flex flex-col text-left rounded-2xl border-2 transition-all duration-300 overflow-hidden
                                             ${isActive ? 'border-indigo-500 bg-indigo-900/20 shadow-[0_0_20px_rgba(99,102,241,0.2)]' : 
                                             theme.unlocked ? 'border-slate-700 bg-slate-900/40 hover:border-slate-500 hover:bg-slate-800' : 'border-slate-800 bg-black/40 opacity-70 cursor-not-allowed'}
+                                            ${isFocused ? 'ring-2 ring-yellow-400 scale-[1.02] z-10' : ''}
                                         `}
                                     >
                                         {/* Preview Banner */}

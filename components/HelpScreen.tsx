@@ -6,6 +6,8 @@ import { TileType } from '../types';
 import { getPlayerProfile } from '../services/storageService';
 import { motion, AnimatePresence } from 'framer-motion';
 import { GoogleGenAI } from "@google/genai";
+import { TiltContainer } from './TiltContainer';
+import { useMenuNavigation } from '../hooks/useMenuNavigation';
 
 interface HelpScreenProps {
   onBack: () => void;
@@ -19,6 +21,27 @@ export const HelpScreen: React.FC<HelpScreenProps> = ({ onBack }) => {
   // Initialize with fallback lore to ensure it's never empty
   const [aiLore, setAiLore] = useState<Record<string, string>>(FALLBACK_BESTIARY_LORE);
   const [loadingLore, setLoadingLore] = useState(false);
+
+  const tabs: TabType[] = ['GUIDE', 'BESTIARY', 'ITEMS', 'LORE'];
+  const { selectedIndex, setSelectedIndex } = useMenuNavigation(
+      tabs.length,
+      (idx) => setActiveTab(tabs[idx]),
+      true,
+      'HORIZONTAL'
+  );
+
+  useEffect(() => {
+      const idx = tabs.indexOf(activeTab);
+      if (idx !== -1 && idx !== selectedIndex) setSelectedIndex(idx);
+  }, [activeTab]);
+
+  useEffect(() => {
+      const handleKeyDown = (e: KeyboardEvent) => {
+          if (e.key === 'Escape') onBack();
+      };
+      window.addEventListener('keydown', handleKeyDown);
+      return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onBack]);
 
   // Generate Monster List from Tile Styles (Powers of 2)
   const monsters = useMemo(() => Object.keys(TILE_STYLES).map(key => {
@@ -90,11 +113,12 @@ export const HelpScreen: React.FC<HelpScreenProps> = ({ onBack }) => {
   const magicItems = SHOP_ITEMS.filter(i => i.category === 'MAGIC');
   const consumables = SHOP_ITEMS.filter(i => i.category === 'CONSUMABLE');
 
-  const TabButton = ({ id, label, icon }: { id: TabType, label: string, icon: React.ReactNode }) => (
+  const TabButton = ({ id, label, icon, idx }: { id: TabType, label: string, icon: React.ReactNode, idx: number }) => (
       <button 
-        onClick={() => setActiveTab(id)}
+        onClick={() => { setActiveTab(id); setSelectedIndex(idx); }}
         className={`flex-1 py-3 text-sm font-bold border-b-2 transition-colors flex items-center justify-center gap-2
             ${activeTab === id ? 'border-yellow-500 text-yellow-400 bg-slate-800/50' : 'border-transparent text-slate-500 hover:text-slate-300'}
+            ${selectedIndex === idx ? 'ring-2 ring-inset ring-yellow-400/50' : ''}
         `}
       >
           {icon} <span className="hidden sm:inline">{label}</span>
@@ -103,7 +127,7 @@ export const HelpScreen: React.FC<HelpScreenProps> = ({ onBack }) => {
 
   return (
     <div className="absolute inset-0 z-50 flex flex-col items-center bg-slate-950 text-slate-200 p-4 overflow-hidden bg-[url('https://www.transparenttextures.com/patterns/dark-matter.png')]">
-      <div className="w-full max-w-3xl flex flex-col h-full bg-slate-900/80 rounded-xl border border-slate-800 shadow-2xl overflow-hidden backdrop-blur-md">
+      <div className="w-full max-w-4xl flex flex-col h-full bg-slate-900/90 rounded-xl border border-slate-800 shadow-2xl overflow-hidden backdrop-blur-md">
         
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-slate-700/50 bg-slate-900/95">
@@ -121,10 +145,10 @@ export const HelpScreen: React.FC<HelpScreenProps> = ({ onBack }) => {
 
         {/* Tabs */}
         <div className="flex border-b border-slate-800 bg-slate-900">
-            <TabButton id="GUIDE" label="Gameplay Guide" icon={<Scroll size={16}/>} />
-            <TabButton id="BESTIARY" label="Bestiary" icon={<Eye size={16}/>} />
-            <TabButton id="ITEMS" label="Item Log" icon={<Package size={16}/>} />
-            <TabButton id="LORE" label="Journal" icon={<Feather size={16}/>} />
+            <TabButton id="GUIDE" idx={0} label="Gameplay Guide" icon={<Scroll size={16}/>} />
+            <TabButton id="BESTIARY" idx={1} label="Bestiary" icon={<Eye size={16}/>} />
+            <TabButton id="ITEMS" idx={2} label="Item Log" icon={<Package size={16}/>} />
+            <TabButton id="LORE" idx={3} label="Journal" icon={<Feather size={16}/>} />
         </div>
 
         {/* Content - Scrollable */}
@@ -198,7 +222,7 @@ export const HelpScreen: React.FC<HelpScreenProps> = ({ onBack }) => {
             </div>
           )}
 
-          {/* TAB: BESTIARY */}
+          {/* TAB: BESTIARY - REFACTORED FOR SCROLL ANIMATIONS */}
           {activeTab === 'BESTIARY' && (
               <div className="space-y-6">
                   <div className="text-center mb-6">
@@ -214,40 +238,45 @@ export const HelpScreen: React.FC<HelpScreenProps> = ({ onBack }) => {
                       </p>
                   </div>
                   
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 pb-20">
                       {monsters.map((m, idx) => (
                           <motion.div 
                             key={m.value} 
-                            initial={{ opacity: 0, y: 20 }}
-                            whileInView={{ opacity: 1, y: 0 }}
-                            viewport={{ once: true, margin: "-50px" }}
-                            transition={{ delay: idx * 0.05, type: "spring", stiffness: 100 }}
-                            className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden group hover:border-slate-600 transition-colors shadow-lg hover:shadow-xl hover:shadow-purple-900/20"
+                            initial={{ opacity: 0, y: 50, rotateX: -45 }}
+                            whileInView={{ opacity: 1, y: 0, rotateX: 0 }}
+                            viewport={{ once: true, margin: "-10%" }}
+                            transition={{ delay: idx * 0.05, type: "spring", stiffness: 50, damping: 15 }}
+                            className="perspective-1000"
                           >
-                              {/* Monster Visual */}
-                              <div className={`h-32 bg-gradient-to-br ${m.color} relative overflow-hidden flex items-center justify-center`}>
-                                   {m.imageUrl ? (
-                                       <img src={m.imageUrl} alt={m.label} className="absolute inset-0 w-full h-full object-cover group-hover:scale-110 transition-transform duration-700 ease-out" />
-                                   ) : (
-                                       <Ghost size={48} className="text-white/20" />
-                                   )}
-                                   <div className="absolute inset-0 bg-gradient-to-t from-slate-900 via-transparent to-transparent"></div>
-                              </div>
-                              
-                              {/* Info */}
-                              <div className="p-3 bg-slate-900 relative">
-                                  <div className="flex justify-between items-center mb-1">
-                                      <span className="font-bold text-white text-xs uppercase tracking-widest">{m.label}</span>
-                                      <div className="px-2 py-0.5 rounded bg-slate-800 text-[10px] font-mono text-yellow-500 font-bold border border-slate-700">
-                                          LVL {Math.log2(m.value)}
-                                      </div>
-                                  </div>
-                                  <div className="text-[10px] text-slate-400 leading-tight border-t border-slate-800 pt-2 mt-2 h-10 overflow-hidden font-serif italic opacity-80">
-                                      <span className="animate-in fade-in duration-500">
-                                          {aiLore[m.label] || FALLBACK_BESTIARY_LORE[m.label] || "Unknown entity."}
-                                      </span>
-                                  </div>
-                              </div>
+                              <TiltContainer className="h-full">
+                                <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden group hover:border-slate-600 transition-colors shadow-lg hover:shadow-xl hover:shadow-purple-900/20 h-full flex flex-col">
+                                    {/* Monster Visual */}
+                                    <div className={`h-32 bg-gradient-to-br ${m.color} relative overflow-hidden flex items-center justify-center shrink-0`}>
+                                        {m.imageUrl ? (
+                                            <img src={m.imageUrl} alt={m.label} loading="lazy" className="absolute inset-0 w-full h-full object-cover group-hover:scale-110 transition-transform duration-700 ease-out" />
+                                        ) : (
+                                            <Ghost size={48} className="text-white/20" />
+                                        )}
+                                        <div className="absolute inset-0 bg-gradient-to-t from-slate-900 via-transparent to-transparent"></div>
+                                        {/* Value Badge */}
+                                        <div className="absolute top-2 right-2 bg-black/60 backdrop-blur-sm px-2 py-1 rounded text-xs font-mono font-bold text-white border border-white/10">
+                                            {m.value}
+                                        </div>
+                                    </div>
+                                    
+                                    {/* Info */}
+                                    <div className="p-3 bg-slate-900 relative flex-1 flex flex-col">
+                                        <div className="flex justify-between items-center mb-1">
+                                            <span className="font-bold text-white text-xs uppercase tracking-widest">{m.label}</span>
+                                        </div>
+                                        <div className="text-[10px] text-slate-400 leading-tight border-t border-slate-800 pt-2 mt-auto font-serif italic opacity-80">
+                                            <span className="animate-in fade-in duration-500 line-clamp-3">
+                                                {aiLore[m.label] || FALLBACK_BESTIARY_LORE[m.label] || "Unknown entity."}
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+                              </TiltContainer>
                           </motion.div>
                       ))}
                   </div>
@@ -258,7 +287,12 @@ export const HelpScreen: React.FC<HelpScreenProps> = ({ onBack }) => {
           {activeTab === 'ITEMS' && (
               <div className="space-y-6">
                  {/* Battle Items */}
-                 <div className="space-y-2">
+                 <motion.div 
+                    initial={{ opacity: 0, x: -20 }} 
+                    whileInView={{ opacity: 1, x: 0 }} 
+                    transition={{ duration: 0.5 }}
+                    className="space-y-2"
+                 >
                      <h4 className="text-xs font-bold text-red-400 uppercase tracking-widest flex items-center gap-2 border-b border-red-900/30 pb-2 mb-3">
                         <Sword size={14}/> Battle Gear
                      </h4>
@@ -266,8 +300,8 @@ export const HelpScreen: React.FC<HelpScreenProps> = ({ onBack }) => {
                          {battleItems.map((item, idx) => (
                              <motion.div 
                                 key={item.id} 
-                                initial={{ opacity: 0, x: -10 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }} transition={{ delay: idx * 0.05 }}
-                                className="bg-slate-900/60 p-2 rounded-lg border border-slate-800 flex items-start gap-3 hover:border-red-900/50 transition-colors"
+                                initial={{ opacity: 0, y: 10 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: idx * 0.05 }}
+                                className="bg-slate-900/60 p-3 rounded-lg border border-slate-800 flex items-start gap-3 hover:border-red-900/50 transition-colors"
                              >
                                  <div className="text-2xl mt-0.5">{item.icon}</div>
                                  <div>
@@ -277,10 +311,15 @@ export const HelpScreen: React.FC<HelpScreenProps> = ({ onBack }) => {
                              </motion.div>
                          ))}
                      </div>
-                 </div>
+                 </motion.div>
 
                  {/* Magic Items */}
-                 <div className="space-y-2">
+                 <motion.div 
+                    initial={{ opacity: 0, x: -20 }} 
+                    whileInView={{ opacity: 1, x: 0 }} 
+                    transition={{ duration: 0.5, delay: 0.1 }}
+                    className="space-y-2"
+                 >
                      <h4 className="text-xs font-bold text-purple-400 uppercase tracking-widest flex items-center gap-2 border-b border-purple-900/30 pb-2 mb-3">
                         <MagicIcon size={14}/> Arcane Magic
                      </h4>
@@ -288,8 +327,8 @@ export const HelpScreen: React.FC<HelpScreenProps> = ({ onBack }) => {
                          {magicItems.map((item, idx) => (
                              <motion.div 
                                 key={item.id} 
-                                initial={{ opacity: 0, x: -10 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }} transition={{ delay: idx * 0.05 }}
-                                className="bg-slate-900/60 p-2 rounded-lg border border-slate-800 flex items-start gap-3 hover:border-purple-900/50 transition-colors"
+                                initial={{ opacity: 0, y: 10 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: idx * 0.05 }}
+                                className="bg-slate-900/60 p-3 rounded-lg border border-slate-800 flex items-start gap-3 hover:border-purple-900/50 transition-colors"
                              >
                                  <div className="text-2xl mt-0.5">{item.icon}</div>
                                  <div>
@@ -299,10 +338,15 @@ export const HelpScreen: React.FC<HelpScreenProps> = ({ onBack }) => {
                              </motion.div>
                          ))}
                      </div>
-                 </div>
+                 </motion.div>
 
                  {/* Consumables */}
-                 <div className="space-y-2">
+                 <motion.div 
+                    initial={{ opacity: 0, x: -20 }} 
+                    whileInView={{ opacity: 1, x: 0 }} 
+                    transition={{ duration: 0.5, delay: 0.2 }}
+                    className="space-y-2"
+                 >
                      <h4 className="text-xs font-bold text-blue-400 uppercase tracking-widest flex items-center gap-2 border-b border-blue-900/30 pb-2 mb-3">
                         <Package size={14}/> Consumables
                      </h4>
@@ -310,8 +354,8 @@ export const HelpScreen: React.FC<HelpScreenProps> = ({ onBack }) => {
                          {consumables.map((item, idx) => (
                              <motion.div 
                                 key={item.id} 
-                                initial={{ opacity: 0, x: -10 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }} transition={{ delay: idx * 0.05 }}
-                                className="bg-slate-900/60 p-2 rounded-lg border border-slate-800 flex items-start gap-3 hover:border-blue-900/50 transition-colors"
+                                initial={{ opacity: 0, y: 10 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }} transition={{ delay: idx * 0.05 }}
+                                className="bg-slate-900/60 p-3 rounded-lg border border-slate-800 flex items-start gap-3 hover:border-blue-900/50 transition-colors"
                              >
                                  <div className="text-2xl mt-0.5">{item.icon}</div>
                                  <div>
@@ -321,7 +365,7 @@ export const HelpScreen: React.FC<HelpScreenProps> = ({ onBack }) => {
                              </motion.div>
                          ))}
                      </div>
-                 </div>
+                 </motion.div>
               </div>
           )}
 
@@ -339,10 +383,10 @@ export const HelpScreen: React.FC<HelpScreenProps> = ({ onBack }) => {
                           return (
                               <motion.div 
                                 key={entry.id} 
-                                initial={{ opacity: 0, rotateX: -15 }}
-                                whileInView={{ opacity: 1, rotateX: 0 }}
+                                initial={{ opacity: 0, x: -30, rotateY: 10 }}
+                                whileInView={{ opacity: 1, x: 0, rotateY: 0 }}
                                 viewport={{ once: true }}
-                                transition={{ duration: 0.4, delay: idx * 0.1 }}
+                                transition={{ duration: 0.6, delay: idx * 0.1, type: "spring" }}
                                 className={`rounded-xl border overflow-hidden ${isUnlocked ? 'bg-slate-900/60 border-slate-700' : 'bg-slate-950/40 border-slate-800 border-dashed opacity-60'}`}
                               >
                                   {isUnlocked && entry.imageUrl && (

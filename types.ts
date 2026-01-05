@@ -216,6 +216,17 @@ export interface ClassProgress {
     unlockedNodes: string[];
 }
 
+export interface RunHistoryEntry {
+    id: string;
+    date: number;
+    score: number;
+    heroClass: HeroClass;
+    mode: GameMode;
+    gold: number;
+    level: number;
+    turns: number;
+}
+
 export interface PlayerProfile {
   id: string;
   totalAccountXp: number;
@@ -241,7 +252,8 @@ export interface PlayerProfile {
   unlockedSkills: string[]; 
   
   loginStreak: number;
-  lastLoginRewardDate: string; 
+  lastLoginRewardDate: string;
+  runHistory: RunHistoryEntry[];
 }
 
 export interface SkillNodeDefinition {
@@ -411,6 +423,7 @@ export interface LeaderboardEntry {
     heroClass: HeroClass;
     gold?: number;
     level?: number;
+    mode?: GameMode;
 }
 
 export interface UnlockReward {

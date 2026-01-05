@@ -4,7 +4,8 @@ import { getHighscores } from '../services/gameLogic';
 import { facebookService } from '../services/facebookService';
 import { Trophy, ArrowLeft, Coins, Crown, Shield, Users, Globe, History, User, Swords, Zap, Clock, Sparkles } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { HeroClass } from '../types';
+import { HeroClass, GameMode } from '../types';
+import { useMenuNavigation } from '../hooks/useMenuNavigation';
 
 interface LeaderboardProps {
   onBack: () => void;
@@ -19,6 +20,15 @@ const getClassIcon = (heroClass?: string) => {
         case HeroClass.PALADIN: return <Shield size={14} />;
         case HeroClass.DRAGON_SLAYER: return <Crown size={14} />;
         default: return <User size={14} />;
+    }
+};
+
+const getModeBadge = (mode?: GameMode) => {
+    switch (mode) {
+        case 'GAUNTLET': return <span className="text-[9px] bg-red-900/50 px-1.5 rounded text-red-300 border border-red-500/30 uppercase font-bold">GAUNTLET</span>;
+        case 'DAILY': return <span className="text-[9px] bg-purple-900/50 px-1.5 rounded text-purple-300 border border-purple-500/30 uppercase font-bold">DAILY</span>;
+        case 'BOSS_RUSH': return <span className="text-[9px] bg-orange-900/50 px-1.5 rounded text-orange-300 border border-orange-500/30 uppercase font-bold">RUSH</span>;
+        default: return null;
     }
 };
 
@@ -56,6 +66,32 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({ onBack }) => {
   const [activeTab, setActiveTab] = useState<'GLOBAL' | 'FRIENDS' | 'HISTORY'>('GLOBAL');
   const [scores, setScores] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+
+  // Nav Hook
+  const tabs: ('GLOBAL' | 'FRIENDS' | 'HISTORY')[] = ['GLOBAL', 'FRIENDS', 'HISTORY'];
+  const { selectedIndex, setSelectedIndex } = useMenuNavigation(
+      tabs.length,
+      (idx) => setActiveTab(tabs[idx]),
+      true,
+      'HORIZONTAL'
+  );
+
+  useEffect(() => {
+      // Sync selected index to active tab
+      const idx = tabs.indexOf(activeTab);
+      if (idx !== -1 && idx !== selectedIndex) {
+          setSelectedIndex(idx);
+      }
+  }, [activeTab]);
+
+  useEffect(() => {
+      // Handle ESC to back
+      const handleKeyDown = (e: KeyboardEvent) => {
+          if (e.key === 'Escape') onBack();
+      };
+      window.addEventListener('keydown', handleKeyDown);
+      return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onBack]);
 
   useEffect(() => {
     loadScores();
@@ -104,13 +140,14 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({ onBack }) => {
       setIsLoading(false);
   };
 
-  const TabButton = ({ id, label, icon }: { id: typeof activeTab, label: string, icon: React.ReactNode }) => (
+  const TabButton = ({ id, idx, label, icon }: { id: typeof activeTab, idx: number, label: string, icon: React.ReactNode }) => (
       <button 
-          onClick={() => setActiveTab(id)}
+          onClick={() => { setActiveTab(id); setSelectedIndex(idx); }}
           className={`flex-1 py-3 px-2 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all duration-300 relative overflow-hidden
               ${activeTab === id 
                   ? 'bg-slate-800 text-yellow-400 shadow-lg border border-yellow-500/30' 
                   : 'bg-transparent text-slate-500 hover:bg-slate-800/50 hover:text-slate-300'}
+              ${selectedIndex === idx ? 'ring-2 ring-yellow-400/50' : ''}
           `}
       >
           <span className="relative z-10 flex items-center gap-2">{icon} {label}</span>
@@ -147,9 +184,9 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({ onBack }) => {
 
         {/* Tabs */}
         <div className="flex p-2 bg-black/20 gap-2 border-b border-slate-800">
-            <TabButton id="GLOBAL" label="GLOBAL" icon={<Globe size={16} />} />
-            <TabButton id="FRIENDS" label="FRIENDS" icon={<Users size={16} />} />
-            <TabButton id="HISTORY" label="HISTORY" icon={<History size={16} />} />
+            <TabButton id="GLOBAL" idx={0} label="GLOBAL" icon={<Globe size={16} />} />
+            <TabButton id="FRIENDS" idx={1} label="FRIENDS" icon={<Users size={16} />} />
+            <TabButton id="HISTORY" idx={2} label="HISTORY" icon={<History size={16} />} />
         </div>
 
         {/* Content */}
@@ -214,6 +251,7 @@ export const Leaderboard: React.FC<LeaderboardProps> = ({ onBack }) => {
                                     {entry.isSelf && <span className="text-[9px] bg-emerald-900/80 px-1.5 rounded text-emerald-200 border border-emerald-500/30">YOU</span>}
                                 </span>
                                 <div className="flex items-center gap-2 text-[10px] text-slate-500 font-mono">
+                                    {getModeBadge(entry.mode)}
                                     <span className="flex items-center gap-0.5" title="Level"><Sparkles size={10} /> {entry.level}</span>
                                     <span className="w-px h-2 bg-slate-700"></span>
                                     <span className="flex items-center gap-0.5 uppercase">{entry.heroClass?.replace('_', ' ') || 'Hero'}</span>
