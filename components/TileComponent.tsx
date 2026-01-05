@@ -93,9 +93,10 @@ export const TileComponent = React.memo(({ tile, gridSize, slideSpeed, themeId, 
       }
   }
 
-  const ringColorClass = style.ringColor || 'ring-cyan-400';
+  // Enhanced Cascade Style
+  const borderColorClass = style.ringColor ? style.ringColor.replace('ring-', 'border-') : 'border-cyan-400';
   const isCascadeClass = tile.isCascade 
-    ? `ring-2 ${ringColorClass} ring-offset-1 ring-offset-black ${isLowQuality || isFrozen ? '' : 'animate-pulse'}` 
+    ? `ring-4 ${style.ringColor} ring-offset-2 ring-offset-black ${isLowQuality || isFrozen ? '' : 'animate-pulse'}` 
     : '';
 
   const isSlash = tile.mergedFrom && tile.value >= 32 && tile.mergedFrom[0] !== 'damage' ? 'slash-effect' : '';
@@ -133,7 +134,10 @@ export const TileComponent = React.memo(({ tile, gridSize, slideSpeed, themeId, 
       paintOrder: 'stroke fill'
   };
 
-  const livingClass = isHighQuality && !isFrozen ? (isGodTier ? 'animate-living-fast' : isHighTier ? 'animate-living-slow' : '') : '';
+  // Living Animation for high tiers
+  // Randomize duration slightly to desync
+  const randomDuration = useMemo(() => 3 + Math.random() * 2, []);
+  const breathingStyle = isHighTier && !isFrozen ? { animation: `breathe ${randomDuration}s ease-in-out infinite` } : {};
 
   return (
     <div
@@ -177,7 +181,7 @@ export const TileComponent = React.memo(({ tile, gridSize, slideSpeed, themeId, 
 
         {/* Satisfying merge ripple */}
         {showRipple && !isLowQuality && !isFrozen && (
-             <div className={`absolute inset-0 z-0 rounded-xl border-2 ${style.ringColor.replace('ring-', 'border-')} animate-ripple pointer-events-none mix-blend-screen`}></div>
+             <div className={`absolute inset-0 z-0 rounded-xl border-2 ${borderColorClass} animate-ripple pointer-events-none mix-blend-screen`}></div>
         )}
 
         {showShockwave && !isFrozen && (
@@ -217,7 +221,10 @@ export const TileComponent = React.memo(({ tile, gridSize, slideSpeed, themeId, 
                 )}
 
                 {/* Gradient Background with Living Animation */}
-                <div className={`absolute inset-0 bg-gradient-to-br ${style.color} opacity-90 ${livingClass}`}></div>
+                <div 
+                    className={`absolute inset-0 bg-gradient-to-br ${style.color} opacity-90`}
+                    style={breathingStyle}
+                ></div>
 
                 {/* Texture/Image */}
                 {!imgError && style.imageUrl && (
@@ -227,12 +234,13 @@ export const TileComponent = React.memo(({ tile, gridSize, slideSpeed, themeId, 
                         loading="lazy" 
                         className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-300 opacity-60 mix-blend-overlay`}
                         onError={() => setImgError(true)}
+                        style={breathingStyle}
                     />
                 )}
 
                 {/* Inner Border Highlight */}
                 <div className={`absolute inset-0 border border-white/10 rounded-lg pointer-events-none`}></div>
-                <div className={`absolute inset-0 border-2 ${style.ringColor.replace('ring-', 'border-')} opacity-20 rounded-lg mix-blend-screen`}></div>
+                <div className={`absolute inset-0 border-2 ${borderColorClass} opacity-20 rounded-lg mix-blend-screen`}></div>
 
                 <div className="absolute inset-0 flex flex-col justify-between p-1 z-10">
                     {tile.value > 0 ? (

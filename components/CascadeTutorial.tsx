@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Tile, TileType } from '../types';
 import { TileComponent } from './TileComponent';
-import { Hand, Zap, ArrowDown, Sparkles } from 'lucide-react';
+import { Hand, Zap, Sparkles, RefreshCw, ArrowDown } from 'lucide-react';
 import { createId } from '../services/gameLogic';
 import { completeCascadeTutorial } from '../services/storageService';
 import { audioService } from '../services/audioService';
@@ -16,12 +16,11 @@ export const CascadeTutorial: React.FC<CascadeTutorialProps> = ({ onComplete }) 
     const [step, setStep] = useState<'INTRO' | 'INTERACTIVE' | 'ANIMATING' | 'SUCCESS'>('INTRO');
     const [grid, setGrid] = useState<Tile[]>([]);
     
-    // Initial Setup: A stack that is ready to fall and merge twice
-    // [2] 
-    // [ ]
-    // [2]
-    // [4]
-    // Result: 2 falls -> 4. 4 falls -> 8.
+    // Initial Setup: 
+    // [2] (t1) at 0,0
+    // [ ] at 0,1
+    // [2] (t2) at 0,2
+    // [4] (t3) at 0,3
     
     useEffect(() => {
         const initialGrid: Tile[] = [
@@ -36,46 +35,51 @@ export const CascadeTutorial: React.FC<CascadeTutorialProps> = ({ onComplete }) 
         setStep('ANIMATING');
         audioService.playMove();
 
-        // Step 1: Gravity & First Merge (2+2)
+        // Step 1: Move & First Manual Merge (2+2)
+        // t1 falls to t2. They merge into 4 at 0,2.
         setTimeout(() => {
             setGrid(prev => {
                 const t1 = prev.find(t => t.id === 't1')!;
                 const t2 = prev.find(t => t.id === 't2')!;
                 const t3 = prev.find(t => t.id === 't3')!;
                 
-                // Visual only: Move t1 down to t2
                 return [
-                    { ...t1, y: 2, isDying: true }, // Old 2 (dying)
-                    { ...t2, isDying: true }, // Old 2 (dying)
-                    { ...t3 }, // 4 stays
-                    { id: 'm1', x: 0, y: 2, value: 4, type: TileType.NORMAL, isNew: true, mergedFrom: ['t1', 't2'] } // New 4
+                    { ...t1, y: 2, isDying: true }, // Top 2 Moves down and dies
+                    { ...t2, isDying: true }, // Bottom 2 dies
+                    { ...t3 }, // 4 stays at bottom
+                    { id: 'm1', x: 0, y: 2, value: 4, type: TileType.NORMAL, isNew: true, mergedFrom: ['t1', 't2'] } // New 4 created at 0,2
                 ];
             });
             audioService.playMerge(4, 1);
-        }, 500);
+        }, 300);
 
-        // Step 2: Second Merge (4+4)
+        // Step 2: Visual Pause for "Cascade" realization
+        // Grid now has [4] at 0,2 and [4] at 0,3.
+        
+        // Step 3: Trigger Auto-Merge (4+4)
         setTimeout(() => {
             setGrid(prev => {
                 const t3 = prev.find(t => t.id === 't3')!;
                 const m1 = prev.find(t => t.id === 'm1')!;
                 
+                // Cascade detects 4 above 4. Merges into 8 at 0,3.
+                
                 return [
-                    { ...m1, y: 3, isDying: true }, // Top 4 falls (dying)
-                    { ...t3, isDying: true }, // Bottom 4 (dying)
+                    { ...m1, y: 3, isDying: true }, // Top 4 falls
+                    { ...t3, isDying: true }, // Bottom 4 consumed
                     { id: 'm2', x: 0, y: 3, value: 8, type: TileType.NORMAL, isNew: true, mergedFrom: ['m1', 't3'], isCascade: true } // Result 8
                 ];
             });
             audioService.playCascade(1);
             audioService.playMerge(8, 2);
-        }, 1500);
+        }, 1200); // Longer delay to emphasize the "Auto" nature
 
-        // Step 3: Finish
+        // Step 4: Finish
         setTimeout(() => {
             setStep('SUCCESS');
             audioService.playLevelUp();
             completeCascadeTutorial();
-        }, 3000);
+        }, 3500);
     };
 
     // Input Listeners
@@ -118,12 +122,12 @@ export const CascadeTutorial: React.FC<CascadeTutorialProps> = ({ onComplete }) 
                                     SYSTEM UPGRADE
                                 </h2>
                                 <p className="text-purple-200/80 font-bold text-sm tracking-widest uppercase">
-                                    Natural Cascades Unlocked
+                                    Chain Reactions Unlocked
                                 </p>
                             </div>
                             <p className="text-slate-300 text-sm leading-relaxed max-w-xs mx-auto">
                                 The dungeon's magic has shifted. <br/>
-                                <strong className="text-white">Vertical matches</strong> now trigger automatically after you move.
+                                <strong className="text-white">Adjacent matching tiles</strong> will now merge automatically after your turn to create powerful combos.
                             </p>
                             <button 
                                 onClick={() => setStep('INTERACTIVE')}
@@ -141,7 +145,8 @@ export const CascadeTutorial: React.FC<CascadeTutorialProps> = ({ onComplete }) 
                             className="flex flex-col items-center z-10 w-full"
                         >
                             <div className="text-2xl font-black text-purple-400 fantasy-font mb-8 flex items-center gap-2">
-                                <ArrowDown size={24} className="animate-bounce" /> GRAVITY ACTIVE
+                                {step === 'ANIMATING' ? <RefreshCw size={24} className="animate-spin-slow" /> : <Zap size={24} />} 
+                                {step === 'ANIMATING' ? 'CHAIN REACTION...' : 'READY'}
                             </div>
 
                             {/* Simulation Container */}
@@ -149,6 +154,8 @@ export const CascadeTutorial: React.FC<CascadeTutorialProps> = ({ onComplete }) 
                                 <div className="absolute inset-0 grid grid-rows-4 gap-1 p-1">
                                     {[0,1,2,3].map(i => <div key={i} className="bg-slate-800/30 rounded-lg"></div>)}
                                 </div>
+                                
+                                {/* Tiles */}
                                 <div className="absolute inset-0 p-1">
                                     {grid.map(t => (
                                         <div 
@@ -163,6 +170,30 @@ export const CascadeTutorial: React.FC<CascadeTutorialProps> = ({ onComplete }) 
                                         </div>
                                     ))}
                                 </div>
+
+                                {/* Visual Guide Arrow */}
+                                {step === 'INTERACTIVE' && (
+                                    <motion.div 
+                                        initial={{ opacity: 0, y: -20 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        transition={{ repeat: Infinity, duration: 1.5 }}
+                                        className="absolute inset-0 flex items-center justify-center pointer-events-none z-20"
+                                    >
+                                        <ArrowDown size={48} className="text-white/30" />
+                                    </motion.div>
+                                )}
+                                
+                                {/* Auto-Merge Indicator */}
+                                {step === 'ANIMATING' && grid.length === 2 && grid[0].value === 4 && grid[1].value === 4 && (
+                                    <motion.div
+                                        initial={{ scale: 0, opacity: 0 }}
+                                        animate={{ scale: 1.2, opacity: 1 }}
+                                        exit={{ opacity: 0 }}
+                                        className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-yellow-500 text-black font-black text-[10px] px-2 py-1 rounded rotate-[-10deg] shadow-lg z-30"
+                                    >
+                                        AUTO!
+                                    </motion.div>
+                                )}
                             </div>
 
                             {step === 'INTERACTIVE' && (
@@ -171,7 +202,7 @@ export const CascadeTutorial: React.FC<CascadeTutorialProps> = ({ onComplete }) 
                                     className="flex flex-col items-center gap-2 text-white/50"
                                 >
                                     <Hand size={32} className="animate-pulse" />
-                                    <span className="text-xs font-bold tracking-[0.2em]">SWIPE DOWN TO TRIGGER</span>
+                                    <span className="text-xs font-bold tracking-[0.2em]">PRESS DOWN TO MERGE</span>
                                 </motion.div>
                             )}
                         </motion.div>
@@ -188,8 +219,9 @@ export const CascadeTutorial: React.FC<CascadeTutorialProps> = ({ onComplete }) 
                                 COMBO X2!
                             </h2>
                             <p className="text-slate-300 text-sm max-w-xs mx-auto">
-                                Cascades grant <strong className="text-yellow-400">Bonus Gold</strong> and <strong className="text-blue-400">Bonus XP</strong>.
-                                <br/>Chain them together for massive rewards!
+                                Cascades occur <strong className="text-purple-400">automatically</strong> when falling tiles match.
+                                <br/><br/>
+                                They grant <strong className="text-yellow-400">Bonus Gold</strong> and <strong className="text-blue-400">Bonus XP</strong>.
                             </p>
                             <div className="p-4 bg-purple-900/20 border border-purple-500/30 rounded-xl">
                                 <div className="text-xs font-bold text-purple-300 uppercase tracking-widest mb-1">Tutorial Reward</div>

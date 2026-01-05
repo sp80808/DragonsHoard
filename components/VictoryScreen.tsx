@@ -3,6 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { GameState, HeroClass } from '../types';
 import { unlockClass } from '../services/storageService';
 import { Trophy, Swords, Crown, Play, Home, Coins, Clock, LayoutGrid, Unlock } from 'lucide-react';
+import { useMenuNavigation } from '../hooks/useMenuNavigation';
 
 interface VictoryScreenProps {
   gameState: GameState;
@@ -21,6 +22,20 @@ export const VictoryScreen: React.FC<VictoryScreenProps> = ({ gameState, onConti
           setUnlocked(true);
       }
   }, []);
+
+  const actions = [
+      { id: 'CONTINUE', action: onContinue },
+      { id: 'HOME', action: onHome }
+  ];
+
+  const { selectedIndex, setSelectedIndex } = useMenuNavigation(
+      actions.length,
+      (index) => actions[index].action(),
+      true,
+      'VERTICAL'
+  );
+
+  const getFocusClass = (idx: number) => selectedIndex === idx ? 'ring-2 ring-yellow-400 scale-[1.02] z-10 shadow-xl' : '';
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 overflow-hidden">
@@ -103,7 +118,8 @@ export const VictoryScreen: React.FC<VictoryScreenProps> = ({ gameState, onConti
                 <div className="mt-auto space-y-3 pt-4">
                     <button 
                         onClick={onContinue}
-                        className="w-full group relative py-4 bg-gradient-to-r from-yellow-700 to-yellow-600 hover:from-yellow-600 hover:to-yellow-500 text-white font-black text-lg rounded-xl shadow-[0_0_20px_rgba(234,179,8,0.3)] hover:shadow-[0_0_40px_rgba(234,179,8,0.5)] transition-all overflow-hidden"
+                        onMouseEnter={() => setSelectedIndex(0)}
+                        className={`w-full group relative py-4 bg-gradient-to-r from-yellow-700 to-yellow-600 hover:from-yellow-600 hover:to-yellow-500 text-white font-black text-lg rounded-xl shadow-[0_0_20px_rgba(234,179,8,0.3)] hover:shadow-[0_0_40px_rgba(234,179,8,0.5)] transition-all overflow-hidden ${getFocusClass(0)}`}
                     >
                         <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent skew-x-12 translate-x-[-100%] group-hover:animate-shimmer"></div>
                         <span className="relative z-10 flex items-center justify-center gap-2 uppercase tracking-wide">
@@ -113,7 +129,8 @@ export const VictoryScreen: React.FC<VictoryScreenProps> = ({ gameState, onConti
 
                     <button 
                         onClick={onHome}
-                        className="w-full py-3 bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-white border border-slate-700 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all uppercase tracking-widest"
+                        onMouseEnter={() => setSelectedIndex(1)}
+                        className={`w-full py-3 bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-white border border-slate-700 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all uppercase tracking-widest ${getFocusClass(1)}`}
                     >
                         <Home size={16} /> Return to Menu
                     </button>

@@ -1,8 +1,8 @@
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { getXpThreshold, getLevelRank, SHOP_ITEMS } from '../constants';
-import { Trophy, Star, Store as StoreIcon, Coins, RefreshCw, Menu, Clover, Skull, Zap, Info, Flame, Hammer, Moon, Sun, Waves, Gem, Target } from 'lucide-react';
-import { InventoryItem, Stage, GameMode, InputSettings, DailyModifier, AbilityState, AbilityType, ShopState } from '../types';
+import { Trophy, Star, Store as StoreIcon, Coins, RefreshCw, Menu, Clover, Skull, Zap, Info, Flame, Hammer, Moon, Sun, Waves, Gem, Target, Shield, Swords, Clock, Crown, Sparkles } from 'lucide-react';
+import { InventoryItem, Stage, GameMode, InputSettings, DailyModifier, AbilityState, AbilityType, ShopState, HeroClass } from '../types';
 import { CountUp } from './CountUp';
 import { motion, AnimatePresence, useAnimation } from 'framer-motion';
 import { useLootSystem } from './LootSystem';
@@ -32,6 +32,7 @@ interface HUDProps {
   itemFeedback?: { slot: number, status: 'SUCCESS' | 'ERROR', id: string };
   isLandscape?: boolean;
   showBuffs?: boolean;
+  selectedClass?: HeroClass;
 }
 
 // --- Sub-Components ---
@@ -230,7 +231,8 @@ export const HUDHeader = React.memo(({
     onMenu,
     onOpenStats,
     isLandscape,
-    showBuffs = true
+    showBuffs = true,
+    selectedClass = HeroClass.ADVENTURER
 }: HUDProps) => {
     const { registerTarget } = useLootSystem();
     const xpRef = useRef<HTMLDivElement>(null);
@@ -241,17 +243,46 @@ export const HUDHeader = React.memo(({
     const isLowQuality = settings.graphicsQuality === 'LOW';
     const isClassic = gameMode === 'CLASSIC';
 
-    // XP Progress Calculation
-    const [baselineXp, setBaselineXp] = useState(0);
+    // Toggle for XP Bar (Class vs Account)
+    const [showClassProgress, setShowClassProgress] = useState(true);
+    const [progressData, setProgressData] = useState({ current: 0, next: 1000, level: 1, label: 'Account' });
+
     useEffect(() => {
         const p = getPlayerProfile();
-        setBaselineXp(p.totalAccountXp);
-    }, []);
+        
+        // Calculate Account Progress
+        const accBase = p.totalAccountXp;
+        const accCurrent = accBase + xp;
+        const accLevel = getLevelFromXp(accCurrent); // Helper defined below
+        const accNext = getNextLevelXp(accLevel);
+        const accPrev = getNextLevelXp(accLevel - 1);
+        
+        // Calculate Class Progress
+        const classBase = p.classProgress[selectedClass]?.xp || 0;
+        const classCurrent = classBase + xp; // XP gained this run applies to class too
+        const clsLevel = getLevelFromXp(classCurrent);
+        const clsNext = getNextLevelXp(clsLevel);
+        const clsPrev = getNextLevelXp(clsLevel - 1);
 
-    const totalCurrentXp = baselineXp + xp;
-    const nextLevelXp = getNextLevelXp(accountLevel);
-    const prevLevelXp = accountLevel === 1 ? 0 : getNextLevelXp(accountLevel - 1);
-    const xpProgress = Math.min(100, Math.max(0, ((totalCurrentXp - prevLevelXp) / (nextLevelXp - prevLevelXp)) * 100));
+        if (showClassProgress) {
+            setProgressData({
+                current: classCurrent - clsPrev,
+                next: clsNext - clsPrev,
+                level: clsLevel,
+                label: selectedClass.replace('_', ' ')
+            });
+        } else {
+            setProgressData({
+                current: accCurrent - accPrev,
+                next: accNext - accPrev,
+                level: accLevel,
+                label: 'Account'
+            });
+        }
+
+    }, [xp, accountLevel, showClassProgress, selectedClass]);
+
+    const xpProgress = Math.min(100, Math.max(0, (progressData.current / progressData.next) * 100));
 
     useEffect(() => {
         if (xpRef.current) registerTarget('XP', xpRef.current);
@@ -282,6 +313,17 @@ export const HUDHeader = React.memo(({
       }
       prevGold.current = gold;
     }, [gold, goldControls]);
+
+    const getClassIcon = () => {
+        switch (selectedClass) {
+            case HeroClass.WARRIOR: return <Swords size={10} className="text-red-400" />;
+            case HeroClass.MAGE: return <Zap size={10} className="text-blue-400" />;
+            case HeroClass.ROGUE: return <Clock size={10} className="text-green-400" />;
+            case HeroClass.PALADIN: return <Shield size={10} className="text-yellow-400" />;
+            case HeroClass.DRAGON_SLAYER: return <Crown size={10} className="text-orange-400" />;
+            default: return <Shield size={10} className="text-slate-400" />;
+        }
+    };
 
     return (
         <div className="flex flex-col gap-2 w-full">
@@ -332,18 +374,19 @@ export const HUDHeader = React.memo(({
 
             {/* Enhanced Level / XP Bar */}
             {!isClassic && (
-                <div className="w-full px-1 relative group cursor-pointer" ref={xpRef} onClick={onOpenStats}>
+                <div className="w-full px-1 relative group cursor-pointer" ref={xpRef} onClick={() => setShowClassProgress(!showClassProgress)}>
                     <div className="flex justify-between text-[9px] md:text-[10px] font-bold text-slate-400 mb-1 uppercase tracking-wider px-1">
                         <span className="text-indigo-300 drop-shadow-md flex items-center gap-1">
-                            <Zap size={10} className="text-yellow-400" /> Account Level {accountLevel}
+                            {showClassProgress ? getClassIcon() : <Zap size={10} className="text-yellow-400" />} 
+                            {progressData.label} Lvl {progressData.level}
                         </span>
-                        <span className="font-mono text-slate-500">{Math.floor(totalCurrentXp - prevLevelXp).toLocaleString()} / {(nextLevelXp - prevLevelXp).toLocaleString()} XP</span>
+                        <span className="font-mono text-slate-500">{Math.floor(progressData.current).toLocaleString()} / {Math.floor(progressData.next).toLocaleString()} XP</span>
                     </div>
                     {/* Updated height for mobile (h-2.5) vs desktop (md:h-5) */}
                     <div className="h-2.5 md:h-5 bg-slate-900/80 rounded-full border border-slate-700/80 overflow-hidden relative shadow-inner backdrop-blur-sm">
                         <div className="absolute inset-0 bg-indigo-950/30"></div>
                         <motion.div 
-                            className={`h-full ${currentStage.barColor} relative`}
+                            className={`h-full ${showClassProgress ? 'bg-gradient-to-r from-blue-600 to-indigo-400' : currentStage.barColor} relative`}
                             initial={{ width: 0 }}
                             animate={{ width: `${xpProgress}%` }}
                             transition={{ type: "spring", stiffness: 100, damping: 20 }}
@@ -481,4 +524,19 @@ export const HUD = (props: HUDProps) => {
             <HUDControls {...props} />
         </div>
     );
+};
+
+// --- Helper Functions ---
+const getLevelFromXp = (xp: number) => {
+    let level = 1;
+    // Simple iterative check since threshold grows polynomially
+    while (getXpThreshold(level) <= xp) {
+        level++;
+    }
+    return level; // Level is the one we are *in* (passed threshold) or working *towards*? 
+    // Usually: If XP > Threshold(1), we are level 2. 
+    // getXpThreshold(1) = 1000. If we have 1500 XP, loop:
+    // L=1, Thresh=1000 <= 1500? Yes. L=2.
+    // L=2, Thresh=2800 <= 1500? No. Return 2.
+    // Correct.
 };

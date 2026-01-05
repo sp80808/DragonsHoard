@@ -106,6 +106,21 @@ export const Grimoire: React.FC<GrimoireProps> = ({ profile, onBack, onSelectTil
                                             {/* Icon Overlay */}
                                             <div className="absolute bottom-3 right-3 text-4xl drop-shadow-lg filter shadow-black">{previewTile.icon}</div>
                                             
+                                            {/* Preview Strip */}
+                                            {theme.unlocked && (
+                                                <div className="flex gap-1 absolute bottom-2 left-2 z-20">
+                                                    {[2, 4, 8, 16].map(val => (
+                                                        <div key={val} className="w-6 h-6 rounded bg-black/50 p-0.5 border border-white/10 shadow-sm" title={`Tier ${val}`}>
+                                                            {styleSet[val]?.imageUrl ? (
+                                                                <img src={styleSet[val].imageUrl} className="w-full h-full object-cover rounded-sm opacity-80" />
+                                                            ) : (
+                                                                <div className="w-full h-full bg-slate-700 rounded-sm"></div>
+                                                            )}
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
+
                                             {/* Lock Overlay */}
                                             {!theme.unlocked && (
                                                 <div className="absolute inset-0 bg-black/60 flex items-center justify-center backdrop-blur-sm">

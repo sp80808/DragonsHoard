@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import { DAILY_REWARDS, checkDailyLoginStatus } from '../services/storageService';
 import { PlayerProfile } from '../types';
 import { Check, Coins, Lock, Star, Sparkles, Gift } from 'lucide-react';
@@ -14,6 +14,18 @@ interface Props {
 export const DailyLoginModal: React.FC<Props> = ({ profile, onClaim }) => {
     const { streak, canClaim } = checkDailyLoginStatus(profile);
     const dayIndex = streak % 7; // Current day in the 7-day cycle (0-6)
+
+    // Keyboard listener for quick claim
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (canClaim && (e.key === 'Enter' || e.key === ' ')) {
+                e.preventDefault();
+                onClaim();
+            }
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [canClaim, onClaim]);
 
     return (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
@@ -111,7 +123,7 @@ export const DailyLoginModal: React.FC<Props> = ({ profile, onClaim }) => {
                                     {isToday && canClaim && (
                                         <div className="absolute -bottom-3 left-1/2 -translate-x-1/2">
                                             <div className="text-[9px] bg-yellow-500 text-black font-black px-2 py-0.5 rounded shadow-lg animate-bounce whitespace-nowrap">
-                                                CLAIM ME
+                                                CLAIM ME (ENTER)
                                             </div>
                                         </div>
                                     )}

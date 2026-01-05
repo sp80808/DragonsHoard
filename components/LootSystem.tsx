@@ -81,9 +81,10 @@ export const LootProvider: React.FC<{ children: React.ReactNode }> = ({ children
 };
 
 const FlyingParticle: React.FC<{ particle: LootParticle, onComplete: () => void }> = ({ particle, onComplete }) => {
-  // Random spread for the "burst" effect
-  const spreadX = (Math.random() - 0.5) * 120;
-  const spreadY = (Math.random() - 0.5) * 120;
+  // Enhanced Explosion Physics
+  const spreadX = (Math.random() - 0.5) * 200; // Wider horizontal spread
+  const spreadY = (Math.random() - 0.5) * 200; // Wider vertical spread
+  const rotation = Math.random() * 720 - 360;
 
   return (
     <motion.div
@@ -91,30 +92,31 @@ const FlyingParticle: React.FC<{ particle: LootParticle, onComplete: () => void 
         x: particle.startX, 
         y: particle.startY, 
         scale: 0,
-        opacity: 1 
+        opacity: 1,
+        rotate: 0
       }}
       animate={{ 
         x: [particle.startX, particle.startX + spreadX, particle.targetX],
         y: [particle.startY, particle.startY + spreadY, particle.targetY],
-        scale: [0.8, 1.5, 0.5],
+        scale: [0.5, 1.5, 0.5],
         opacity: [1, 1, 0],
-        rotate: [0, Math.random() * 360]
+        rotate: [0, rotation, rotation * 2]
       }}
       transition={{ 
-        duration: 0.7, 
+        duration: 0.8 + Math.random() * 0.4, // Varied duration
         times: [0, 0.4, 1],
-        ease: "easeInOut"
+        ease: [0.34, 1.56, 0.64, 1] // Custom bezier for spring-like explosion
       }}
       onAnimationComplete={onComplete}
       className="absolute top-0 left-0"
     >
       {particle.type === 'GOLD' ? (
-        <div className="text-yellow-400 drop-shadow-[0_0_10px_rgba(250,204,21,0.8)] filter brightness-125">
-          <Coins size={24} fill="currentColor" />
+        <div className="text-yellow-400 drop-shadow-[0_0_15px_rgba(250,204,21,0.9)] filter brightness-125">
+          <Coins size={20 + Math.random() * 12} fill="currentColor" />
         </div>
       ) : (
-        <div className="text-cyan-400 drop-shadow-[0_0_10px_rgba(34,211,238,0.8)] filter brightness-125">
-          <Star size={24} fill="currentColor" />
+        <div className="text-cyan-400 drop-shadow-[0_0_15px_rgba(34,211,238,0.9)] filter brightness-125">
+          <Star size={20 + Math.random() * 12} fill="currentColor" />
         </div>
       )}
     </motion.div>

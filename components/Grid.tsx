@@ -1,6 +1,6 @@
 
 import React, { useMemo, useEffect, useRef } from 'react';
-import { Tile, LootEvent, GraphicsQuality } from '../types';
+import { Tile, LootEvent, GraphicsQuality, MergeEvent } from '../types';
 import { TileComponent } from './TileComponent';
 import { TILE_STYLES, BOSS_STYLE, RUNE_STYLES, FALLBACK_STYLE, STONE_STYLE } from '../constants';
 import { Coins, Star } from 'lucide-react';
@@ -10,7 +10,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 interface GridProps {
   grid: Tile[];
   size: number;
-  mergeEvents: { id: string, x: number, y: number, value: number, type: string }[];
+  mergeEvents: MergeEvent[];
   lootEvents: LootEvent[];
   slideSpeed: number;
   themeId?: string;
@@ -33,6 +33,13 @@ export const Grid = React.memo(({ grid, size, mergeEvents, lootEvents, slideSpee
   const isLowQuality = graphicsQuality === 'LOW' || lowPerformanceMode === true;
   const isMediumQuality = graphicsQuality === 'MEDIUM';
 
+  // Danger State Check (85% capacity)
+  const isDanger = useMemo(() => {
+      const occupancy = grid.length;
+      const capacity = size * size;
+      return (occupancy / capacity) > 0.85;
+  }, [grid.length, size]);
+
   // Dynamic Background Style based on Combo
   const ambientGlowClass = useMemo(() => {
       if (isLowQuality) return "";
@@ -42,7 +49,6 @@ export const Grid = React.memo(({ grid, size, mergeEvents, lootEvents, slideSpee
       return "from-slate-900/40 to-slate-800/40";
   }, [combo, isLowQuality]);
 
-  // ... (Keep existing backgroundCells and useEffects for Loot/Particles) ...
   const backgroundCells = useMemo(() => {
       const cells = Array.from({ length: size * size });
       return (
@@ -71,7 +77,6 @@ export const Grid = React.memo(({ grid, size, mergeEvents, lootEvents, slideSpee
       const rect = containerRef.current.getBoundingClientRect();
       const padding = 8; // approx p-2
       const availableWidth = rect.width - (padding * 2);
-      // const availableHeight = rect.height - (padding * 2); // Unused
       const cellSize = availableWidth / size;
 
       lootEvents.forEach(loot => {
@@ -100,14 +105,23 @@ export const Grid = React.memo(({ grid, size, mergeEvents, lootEvents, slideSpee
            let style: any = TILE_STYLES[evt.value] || FALLBACK_STYLE;
            if (evt.type === 'BOSS') style = BOSS_STYLE;
            else if (evt.type === 'STONE') style = STONE_STYLE;
-           else if (evt.type.startsWith('RUNE')) style = RUNE_STYLES[evt.type];
-           const color = style?.particleColor || '#ffffff';
+           else if ((evt.type as string).startsWith('RUNE')) style = RUNE_STYLES[evt.type as string];
+           
+           let color = style?.particleColor || '#ffffff';
            
            // Determine Particle Config based on Value Tier
            let particleCount = 10;
            let speedMultiplier = 1;
            let sizeBase = 2;
            let ringEffect = false;
+
+           // Cascade Bonus Particles
+           if (evt.isCascade) {
+               particleCount += 10;
+               speedMultiplier *= 1.5;
+               // Slightly shift color towards blue/cyan for cascade magic feel
+               // color = '#60a5fa'; // Or keep original but add more sparks
+           }
 
            if (evt.value >= 2048) { // GOD TIER
                particleCount = 50;
@@ -157,9 +171,11 @@ export const Grid = React.memo(({ grid, size, mergeEvents, lootEvents, slideSpee
                });
            }
 
-           // Shockwave Ring (for High/God tiers)
-           if (ringEffect && !isMediumQuality) {
-               const ringCount = 20;
+           // Shockwave Ring (for High/God tiers or Cascades)
+           if ((ringEffect || evt.isCascade) && !isMediumQuality) {
+               const ringCount = evt.isCascade ? 12 : 20;
+               const ringColor = evt.isCascade ? '#fcd34d' : '#ffffff'; // Gold sparks for cascade
+               
                for (let i = 0; i < ringCount; i++) {
                    const angle = (i / ringCount) * Math.PI * 2;
                    const speed = 6 * speedMultiplier;
@@ -170,8 +186,8 @@ export const Grid = React.memo(({ grid, size, mergeEvents, lootEvents, slideSpee
                        vy: Math.sin(angle) * speed,
                        life: 0.8,
                        decay: 0.04,
-                       color: '#ffffff',
-                       size: 3,
+                       color: ringColor,
+                       size: evt.isCascade ? 2 : 3,
                        rotation: angle,
                        type: 'RING' // Special type to potentially render differently
                    });
@@ -252,8 +268,13 @@ export const Grid = React.memo(({ grid, size, mergeEvents, lootEvents, slideSpee
         <div ref={containerRef} className="relative aspect-square max-h-full max-w-full m-auto group will-change-transform">
             {!isLowQuality && <div className={`absolute -inset-4 bg-gradient-to-r ${ambientGlowClass} rounded-3xl blur-2xl -z-10 transition-colors duration-500`}></div>}
             
-            {/* Main Grid Container */}
-            <div className={`relative w-full h-full bg-black/90 rounded-xl p-1 sm:p-2 border-2 border-slate-700/50 shadow-2xl overflow-hidden ${isLowQuality ? '' : 'backdrop-blur-md'}`}>
+            {/* Danger Vignette */}
+            {isDanger && !isLowQuality && (
+                <div className="absolute -inset-4 rounded-3xl z-0 pointer-events-none shadow-[inset_0_0_60px_20px_rgba(220,38,38,0.3)] animate-pulse"></div>
+            )}
+
+            {/* Main Grid Container with Chromatic Aberration on Impact */}
+            <div className={`relative w-full h-full bg-black/90 rounded-xl p-1 sm:p-2 border-2 border-slate-700/50 shadow-2xl overflow-hidden ${isLowQuality ? '' : 'backdrop-blur-md'} ${isHitstopping ? 'glitch-effect' : ''}`}>
                 <div className="absolute inset-0 opacity-20 pointer-events-none" style={{ backgroundImage: 'radial-gradient(circle at 50% 50%, rgba(255,255,255,0.1) 1px, transparent 1px)', backgroundSize: '20px 20px' }}></div>
                 {backgroundCells}
 
@@ -282,11 +303,15 @@ export const Grid = React.memo(({ grid, size, mergeEvents, lootEvents, slideSpee
             <div className="absolute inset-0 p-1 sm:p-2 pointer-events-none z-50">
                 <div className="relative w-full h-full">
                     <AnimatePresence>
-                        {lootEvents.map((loot) => {
+                        {lootEvents.map((loot, idx) => {
                                 const tileSize = 100 / size;
                                 const top = loot.y * tileSize;
                                 const left = loot.x * tileSize;
                                 
+                                // Calculate overlapping offset
+                                const stackIndex = lootEvents.slice(0, idx).filter(l => l.x === loot.x && l.y === loot.y).length;
+                                const yOffset = stackIndex * -25; // Stack upwards in pixels
+
                                 let content = null;
 
                                 if (loot.type === 'XP') {
@@ -315,8 +340,8 @@ export const Grid = React.memo(({ grid, size, mergeEvents, lootEvents, slideSpee
                                     <motion.div 
                                         key={loot.id} 
                                         initial={{ opacity: 0, y: 10, scale: 0.5 }}
-                                        animate={{ opacity: 1, y: 0, scale: 1.2 }}
-                                        exit={{ opacity: 0, y: -50, scale: 0.8, transition: { duration: 0.6, ease: "easeIn" } }}
+                                        animate={{ opacity: 1, y: yOffset, scale: 1.2 }}
+                                        exit={{ opacity: 0, y: yOffset - 50, scale: 0.8, transition: { duration: 0.6, ease: "easeIn" } }}
                                         transition={{ type: "spring", stiffness: 300, damping: 20 }}
                                         className="absolute flex flex-col items-center justify-center z-50" 
                                         style={{ width: `${tileSize}%`, height: `${tileSize}%`, top: `${top}%`, left: `${left}%` }}

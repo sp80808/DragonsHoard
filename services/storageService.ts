@@ -1,9 +1,9 @@
 
-import { PlayerProfile, GameState, RunStats, HeroClass, DailyBounty, AbilityType, ItemType } from '../types';
+import { PlayerProfile, GameState, RunStats, HeroClass, DailyBounty, AbilityType, ItemType, ClassProgress, UnlockReward } from '../types';
 import { v4 as uuidv4 } from 'uuid';
 import { facebookService } from './facebookService';
-import { SHOP_ITEMS, getItemDefinition } from '../constants';
-import { createId } from './gameLogic';
+import { SHOP_ITEMS, getItemDefinition, MEDALS } from '../constants';
+import { generateId } from '../utils/rng';
 
 const STORAGE_KEY = 'dragons_hoard_profile';
 
@@ -21,6 +21,95 @@ const BOUNTY_TEMPLATES: Omit<DailyBounty, 'id' | 'currentValue' | 'isCompleted'>
     { description: "Score 5,000 Points", targetStat: 'goldEarned', targetValue: 5000, rewardXp: 600 }, 
 ];
 
+export interface DailyReward {
+    day: number;
+    gold: number;
+    item?: ItemType;
+    sp?: number;
+}
+
+export const DAILY_REWARDS: DailyReward[] = [
+    { day: 1, gold: 100 },
+    { day: 2, gold: 200, item: ItemType.XP_POTION },
+    { day: 3, gold: 300 },
+    { day: 4, gold: 400, item: ItemType.REROLL_TOKEN },
+    { day: 5, gold: 500 },
+    { day: 6, gold: 600, item: ItemType.GOLDEN_RUNE },
+    { day: 7, gold: 1000, sp: 1, item: ItemType.LUCKY_CHARM }
+];
+
+export const checkDailyLoginStatus = (profile: PlayerProfile) => {
+    const today = new Date().toISOString().split('T')[0];
+    const lastLogin = profile.lastLoginRewardDate;
+    
+    if (lastLogin === today) {
+        return { canClaim: false, streak: profile.loginStreak };
+    }
+
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    const yesterdayStr = yesterday.toISOString().split('T')[0];
+
+    // Simple streak check: if last login was yesterday or today (already handled), keep streak.
+    // If empty (first time) start at 0 (will become 1).
+    let streak = profile.loginStreak;
+    if (lastLogin !== yesterdayStr && lastLogin !== '') {
+        streak = 0;
+    }
+
+    return { canClaim: true, streak };
+};
+
+export const claimDailyReward = (state: GameState): Partial<GameState> => {
+    const profile = getPlayerProfile();
+    const { canClaim, streak } = checkDailyLoginStatus(profile);
+    
+    if (!canClaim) return {};
+
+    const newStreak = streak + 1;
+    const dayIndex = (newStreak - 1) % 7; 
+    const reward = DAILY_REWARDS[dayIndex];
+
+    // Update Profile
+    profile.loginStreak = newStreak;
+    profile.lastLoginRewardDate = new Date().toISOString().split('T')[0];
+    
+    // Handle Skill Points in Profile directly
+    if (reward.sp) {
+        const cls = state.selectedClass;
+        if (profile.classProgress[cls]) {
+            profile.classProgress[cls].skillPoints += reward.sp;
+        }
+    }
+    
+    localStorage.setItem('dragons_hoard_profile', JSON.stringify(profile));
+    
+    // Update Game State
+    let newGold = state.gold + reward.gold;
+    let newInventory = [...state.inventory];
+    let logs = [...state.logs, `Claimed Daily Reward: ${reward.gold} Gold`];
+
+    if (reward.item) {
+        const def = getItemDefinition(reward.item);
+        if (def) {
+            newInventory.push({
+                id: generateId(),
+                type: reward.item,
+                name: def.name,
+                description: def.desc,
+                icon: def.icon
+            });
+            logs.push(`Received ${def.name}`);
+        }
+    }
+
+    return {
+        gold: newGold,
+        inventory: newInventory,
+        logs
+    };
+}
+
 const generateDailyBounties = (): DailyBounty[] => {
     const shuffled = [...BOUNTY_TEMPLATES].sort(() => 0.5 - Math.random());
     return shuffled.slice(0, 3).map(t => ({
@@ -30,6 +119,13 @@ const generateDailyBounties = (): DailyBounty[] => {
         isCompleted: false
     }));
 };
+
+const getDefaultClassProgress = (): ClassProgress => ({
+    xp: 0,
+    level: 1,
+    skillPoints: 0,
+    unlockedNodes: []
+});
 
 const getDefaultProfile = (): PlayerProfile => ({
     id: uuidv4(),
@@ -43,15 +139,18 @@ const getDefaultProfile = (): PlayerProfile => ({
     lastBountyDate: new Date().toISOString().split('T')[0],
     lastPlayed: new Date().toISOString(),
     tutorialCompleted: false,
-    cascadeTutorialSeen: false, // Default to false
+    cascadeTutorialSeen: false,
     bossTutorialCompleted: false,
     seenHints: [],
     activeTilesetId: 'DEFAULT',
     unlockedLore: [],
     earnedMedals: {},
     unlockedPowerups: [],
-    skillPoints: 0,
-    unlockedSkills: ['ROOT'],
+    skillPoints: 0, // Legacy support
+    unlockedSkills: ['ROOT'], // Legacy support
+    classProgress: {
+        [HeroClass.ADVENTURER]: getDefaultClassProgress()
+    },
     loginStreak: 0,
     lastLoginRewardDate: ''
 });
@@ -82,11 +181,29 @@ export const syncPlayerProfile = async (): Promise<PlayerProfile> => {
         }
     }
 
-    // 4. Validate & Fill missing fields
+    // 4. Validate & Fill missing fields (Migration Logic)
     if (!finalProfile.unlockedClasses) finalProfile.unlockedClasses = [HeroClass.ADVENTURER];
     if (!finalProfile.activeBounties) finalProfile.activeBounties = [];
-    if (!finalProfile.skillPoints) finalProfile.skillPoints = 0;
-    if (!finalProfile.unlockedSkills) finalProfile.unlockedSkills = ['ROOT'];
+    
+    // Migration: Initialize Class Progress if missing
+    if (!finalProfile.classProgress) {
+        finalProfile.classProgress = {};
+        // Migrate legacy points to Adventurer
+        finalProfile.classProgress[HeroClass.ADVENTURER] = {
+            xp: 0,
+            level: 1,
+            skillPoints: finalProfile.skillPoints || 0,
+            unlockedNodes: finalProfile.unlockedSkills || []
+        };
+    }
+    
+    // Ensure every unlocked class has an entry
+    finalProfile.unlockedClasses.forEach(cls => {
+        if (!finalProfile.classProgress[cls]) {
+            finalProfile.classProgress[cls] = getDefaultClassProgress();
+        }
+    });
+
     if (finalProfile.loginStreak === undefined) finalProfile.loginStreak = 0;
     if (!finalProfile.lastLoginRewardDate) finalProfile.lastLoginRewardDate = '';
     if (finalProfile.cascadeTutorialSeen === undefined) finalProfile.cascadeTutorialSeen = false;
@@ -112,98 +229,8 @@ export const getPlayerProfile = (): PlayerProfile => {
 
 const saveProfile = (p: PlayerProfile) => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(p));
-    // Fire and forget cloud save
     facebookService.saveData(STORAGE_KEY, p);
 };
-
-// --- DAILY LOGIN SYSTEM ---
-
-export interface DailyRewardConfig {
-    day: number;
-    gold: number;
-    item?: ItemType;
-    sp?: number;
-}
-
-export const DAILY_REWARDS: DailyRewardConfig[] = [
-    { day: 1, gold: 150 },
-    { day: 2, gold: 300 },
-    { day: 3, gold: 0, item: ItemType.XP_POTION },
-    { day: 4, gold: 600 },
-    { day: 5, gold: 0, item: ItemType.REROLL_TOKEN },
-    { day: 6, gold: 1000 },
-    { day: 7, gold: 1500, item: ItemType.GOLDEN_RUNE, sp: 1 },
-];
-
-export const checkDailyLoginStatus = (profile: PlayerProfile): { canClaim: boolean, streak: number, reward: DailyRewardConfig } => {
-    const today = new Date().toISOString().split('T')[0];
-    const lastClaim = profile.lastLoginRewardDate;
-    
-    let streak = profile.loginStreak;
-
-    // Check if missed a day (Logic: if last claim was BEFORE yesterday)
-    if (lastClaim) {
-        const lastDate = new Date(lastClaim);
-        const currentDate = new Date(today);
-        const diffTime = Math.abs(currentDate.getTime() - lastDate.getTime());
-        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
-        
-        if (diffDays > 1) {
-            streak = 0; // Reset streak if missed more than 1 day
-        }
-    }
-
-    // Determine current reward day (1-based, modulo 7)
-    // If streak is 0, we are on Day 1. If streak is 1 (claimed yesterday), we are on Day 2.
-    // However, the streak variable in profile usually tracks CLAIMED days.
-    // If we claimed yesterday (streak 1), today we are claiming streak 2 reward.
-    // If we claimed today, canClaim is false.
-    
-    const canClaim = lastClaim !== today;
-    const currentDayIndex = streak % 7; // 0 = Day 1, 6 = Day 7
-    
-    return {
-        canClaim,
-        streak: streak,
-        reward: DAILY_REWARDS[currentDayIndex]
-    };
-};
-
-export const claimDailyReward = (state: GameState): GameState => {
-    const profile = getPlayerProfile();
-    const { canClaim, reward, streak } = checkDailyLoginStatus(profile);
-    
-    if (!canClaim) return state;
-
-    const today = new Date().toISOString().split('T')[0];
-    profile.lastLoginRewardDate = today;
-    profile.loginStreak = streak + 1; // Increment streak
-    if (reward.sp) profile.skillPoints = (profile.skillPoints || 0) + reward.sp;
-    
-    saveProfile(profile);
-
-    // Update Game State
-    let newState = { ...state, gold: state.gold + reward.gold };
-    
-    // Add Item if exists
-    if (reward.item) {
-        const def = getItemDefinition(reward.item);
-        if (def) {
-            const newItem = { 
-                id: createId(), 
-                type: reward.item, 
-                name: def.name, 
-                description: def.desc, 
-                icon: def.icon 
-            };
-            newState.inventory = [...newState.inventory, newItem];
-        }
-    }
-
-    return newState;
-};
-
-// --- END DAILY LOGIN SYSTEM ---
 
 export const completeTutorial = () => {
     const profile = getPlayerProfile();
@@ -252,30 +279,26 @@ export const unlockClass = (cls: HeroClass) => {
     const profile = getPlayerProfile();
     if (!profile.unlockedClasses.includes(cls)) {
         profile.unlockedClasses.push(cls);
+        if (!profile.classProgress[cls]) {
+            profile.classProgress[cls] = getDefaultClassProgress();
+        }
         saveProfile(profile);
         return true; 
     }
     return false; 
 };
 
-export interface UnlockReward {
-    type: 'CLASS' | 'FEATURE' | 'TILESET' | 'POWERUP' | 'SKILL_POINT';
-    id: string;
-    label: string;
-    desc: string;
-    level: number;
-}
-
 const calculateHoardRank = (level: number) => {
-    if (level >= 50) return 3; // Dragon Lord
-    if (level >= 30) return 2; // Conqueror
-    if (level >= 10) return 1; // Slayer
-    return 0; // Scavenger
+    if (level >= 50) return 3; 
+    if (level >= 30) return 2; 
+    if (level >= 10) return 1; 
+    return 0; 
 };
 
 export const finalizeRun = (finalState: GameState): { profile: PlayerProfile, leveledUp: boolean, xpGained: number, bountiesCompleted: number, newUnlocks: UnlockReward[] } => {
   const profile = getPlayerProfile();
   
+  // Calculate Base XP
   let runXp = 
     finalState.score + 
     (finalState.level * 250) + 
@@ -309,13 +332,36 @@ export const finalizeRun = (finalState: GameState): { profile: PlayerProfile, le
   profile.highScore = Math.max(profile.highScore, finalState.score);
   profile.lastPlayed = new Date().toISOString();
 
+  // Update Class Specific Progress
+  const heroClass = finalState.selectedClass;
+  if (!profile.classProgress[heroClass]) {
+      profile.classProgress[heroClass] = getDefaultClassProgress();
+  }
+  const classData = profile.classProgress[heroClass];
+  
+  // Class gets full XP
+  classData.xp += runXp;
+  
+  // Check for Class Level Up
+  while (true) {
+      const nextClassXp = getXpForLevel(classData.level);
+      if (classData.xp >= nextClassXp) {
+          classData.level++;
+          classData.skillPoints++; // Award SP
+      } else {
+          break;
+      }
+  }
+
+  // Award End-of-Run Medals
+  if (finalState.runStats.turnCount >= 500) awardMedal(MEDALS.SURVIVOR.id);
+  if (finalState.gold >= 5000) awardMedal(MEDALS.TYCOON.id);
+  if (finalState.runStats.powerUpsUsed === 0 && finalState.gameWon) awardMedal(MEDALS.TACTICIAN.id);
+  if (finalState.runStats.turnCount >= 100 && finalState.runStats.bossesDefeated === 0) awardMedal(MEDALS.PACIFIST.id);
+
   // Social: Submit to Global Leaderboard
   facebookService.submitScore('Global_Hoard_Rank', profile.highScore, JSON.stringify({ level: profile.accountLevel }));
-  
-  // Social: Post Session Score (For generic FB context ranking)
   facebookService.postSessionScore(finalState.score);
-
-  // Social: Update Surfaceable Stats (Hoard Rank)
   facebookService.setStats({ hoard_rank: calculateHoardRank(profile.accountLevel) });
 
   let leveledUp = false;
@@ -326,35 +372,36 @@ export const finalizeRun = (finalState: GameState): { profile: PlayerProfile, le
       newUnlocks.push({ type: 'FEATURE', id: 'MODE_BOSS_RUSH', label: 'Boss Rush', desc: 'Face the gauntlet.', level: profile.accountLevel });
   }
 
+  // Account Level Logic (Global Unlocks)
   while (true) {
     const nextLevelXp = getXpForLevel(profile.accountLevel);
     if (profile.totalAccountXp >= nextLevelXp) {
         profile.accountLevel += 1;
-        profile.skillPoints = (profile.skillPoints || 0) + 1; // Award Skill Point
-        newUnlocks.push({ type: 'SKILL_POINT', id: 'SP', label: 'Skill Point', desc: 'Spend in Grimoire.', level: profile.accountLevel });
-        
         leveledUp = true;
         const level = profile.accountLevel;
 
-        if (level >= 3 && !profile.unlockedPowerups.includes('SCORCH')) {
-            profile.unlockedPowerups.push('SCORCH');
-            newUnlocks.push({ type: 'POWERUP', id: 'SCORCH', label: 'Passive: Scorch', desc: 'Automatically burns a weak tile every 30 turns.', level });
+        if (level >= 3) {
+            // MOVED: Cascade Mechanic at Level 3
+            if (!profile.unlockedFeatures.includes('CASCADE_MECHANIC')) {
+                profile.unlockedFeatures.push('CASCADE_MECHANIC');
+                newUnlocks.push({ type: 'FEATURE', id: 'CASCADE_MECHANIC', label: 'Cascade', desc: 'Tiles now fall and merge automatically.', level });
+            }
+            if (!profile.unlockedPowerups.includes('SCORCH')) {
+                profile.unlockedPowerups.push('SCORCH');
+                newUnlocks.push({ type: 'POWERUP', id: 'SCORCH', label: 'Passive: Scorch', desc: 'Automatically burns a weak tile every 30 turns.', level });
+            }
         }
 
-        if (level >= 3 && !profile.unlockedClasses.includes(HeroClass.WARRIOR)) {
+        if (level >= 4 && !profile.unlockedClasses.includes(HeroClass.WARRIOR)) {
             profile.unlockedClasses.push(HeroClass.WARRIOR);
+            if (!profile.classProgress[HeroClass.WARRIOR]) profile.classProgress[HeroClass.WARRIOR] = getDefaultClassProgress();
             newUnlocks.push({ type: 'CLASS', id: HeroClass.WARRIOR, label: 'Warrior', desc: 'Starts with Bomb Scroll', level });
         }
         
-        // NEW: Unlock Cascade Mechanic at Level 4
-        if (level >= 4 && !profile.unlockedFeatures.includes('CASCADE_MECHANIC')) {
-            profile.unlockedFeatures.push('CASCADE_MECHANIC');
-            newUnlocks.push({ type: 'FEATURE', id: 'CASCADE_MECHANIC', label: 'Cascade', desc: 'Tiles now fall and merge automatically.', level });
-        }
-
-        if (level >= 5) {
+        if (level >= 6) {
             if (!profile.unlockedClasses.includes(HeroClass.ROGUE)) {
                 profile.unlockedClasses.push(HeroClass.ROGUE);
+                if (!profile.classProgress[HeroClass.ROGUE]) profile.classProgress[HeroClass.ROGUE] = getDefaultClassProgress();
                 newUnlocks.push({ type: 'CLASS', id: HeroClass.ROGUE, label: 'Rogue', desc: 'Starts with Reroll Token', level });
             }
             if (!profile.unlockedFeatures.includes('HARD_MODE')) {
@@ -363,42 +410,42 @@ export const finalizeRun = (finalState: GameState): { profile: PlayerProfile, le
             }
         }
 
-        if (level >= 6 && !profile.unlockedFeatures.includes('CODEX_FULL')) {
-            profile.unlockedFeatures.push('CODEX_FULL');
-            newUnlocks.push({ type: 'FEATURE', id: 'CODEX', label: 'Full Codex', desc: 'View enemy stats and detailed lore.', level });
-        }
-
         if (level >= 8 && !profile.unlockedFeatures.includes('TILESET_UNDEAD')) {
             profile.unlockedFeatures.push('TILESET_UNDEAD');
             newUnlocks.push({ type: 'TILESET', id: 'TILESET_UNDEAD', label: 'Necrotic Rot', desc: 'New visual theme unlocked.', level });
         }
 
-        if (level >= 10) {
+        if (level >= 10 && !profile.unlockedFeatures.includes('CODEX_FULL')) {
+            profile.unlockedFeatures.push('CODEX_FULL');
+            newUnlocks.push({ type: 'FEATURE', id: 'CODEX', label: 'Full Codex', desc: 'View enemy stats and detailed lore.', level });
+        }
+
+        if (level >= 15) {
             if (!profile.unlockedClasses.includes(HeroClass.MAGE)) {
                 profile.unlockedClasses.push(HeroClass.MAGE);
+                if (!profile.classProgress[HeroClass.MAGE]) profile.classProgress[HeroClass.MAGE] = getDefaultClassProgress();
                 newUnlocks.push({ type: 'CLASS', id: HeroClass.MAGE, label: 'Mage', desc: 'Starts with XP Potion', level });
             }
-            if (!profile.unlockedFeatures.includes('PASSIVE_MIDAS')) {
-                profile.unlockedFeatures.push('PASSIVE_MIDAS');
-                newUnlocks.push({ type: 'FEATURE', id: 'PASSIVE_MIDAS', label: 'Midas Touch', desc: '5% chance to earn 2x Gold on merge.', level });
+            if (!profile.unlockedFeatures.includes('AUTO_COLLECT')) {
+                profile.unlockedFeatures.push('AUTO_COLLECT');
+                newUnlocks.push({ type: 'FEATURE', id: 'AUTO_COLLECT', label: 'Auto-Collect', desc: 'Gold loot is collected automatically.', level });
             }
         }
 
-        if (level >= 15 && !profile.unlockedPowerups.includes('DRAGON_BREATH')) {
+        // ... (Keep existing high level unlocks) ...
+        if (level >= 20 && !profile.unlockedPowerups.includes('DRAGON_BREATH')) {
             profile.unlockedPowerups.push('DRAGON_BREATH');
             newUnlocks.push({ type: 'POWERUP', id: 'DRAGON_BREATH', label: 'Passive: Dragon Breath', desc: 'Clears a random row every 60 turns.', level });
         }
-
-        if (level >= 20 && !profile.unlockedPowerups.includes('GOLDEN_EGG')) {
-            profile.unlockedPowerups.push('GOLDEN_EGG');
-            newUnlocks.push({ type: 'POWERUP', id: 'GOLDEN_EGG', label: 'Passive: Golden Egg', desc: 'Evolves a random tile every 50 turns.', level });
-        }
-
-        if (level >= 15 && !profile.unlockedFeatures.includes('TILESET_INFERNAL')) {
+        if (level >= 20 && !profile.unlockedFeatures.includes('TILESET_INFERNAL')) {
             profile.unlockedFeatures.push('TILESET_INFERNAL');
             newUnlocks.push({ type: 'TILESET', id: 'TILESET_INFERNAL', label: 'Infernal Core', desc: 'Magma visual theme.', level });
         }
-        if (level >= 25 && !profile.unlockedFeatures.includes('TILESET_AQUATIC')) {
+        if (level >= 25 && !profile.unlockedPowerups.includes('GOLDEN_EGG')) {
+            profile.unlockedPowerups.push('GOLDEN_EGG');
+            newUnlocks.push({ type: 'POWERUP', id: 'GOLDEN_EGG', label: 'Passive: Golden Egg', desc: 'Evolves a random tile every 50 turns.', level });
+        }
+        if (level >= 30 && !profile.unlockedFeatures.includes('TILESET_AQUATIC')) {
             profile.unlockedFeatures.push('TILESET_AQUATIC');
             newUnlocks.push({ type: 'TILESET', id: 'TILESET_AQUATIC', label: 'Abyssal Depth', desc: 'Oceanic visual theme.', level });
         }

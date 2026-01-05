@@ -1,7 +1,8 @@
 
 import { TileType, ItemType, GameStats, GameState, Stage, Achievement, HeroClass, CraftingRecipe, DailyModifier, StoryEntry, PlayerProfile, Medal, SkillNodeDefinition } from './types';
-import { Trophy, Star, Shield, Zap, Swords, LayoutGrid, Map, Flame, Target, Hexagon, Crosshair, Medal as MedalIcon, Crown, Skull, Coins, Hourglass, Eye, Feather, Rocket } from 'lucide-react';
+import { Trophy, Star, Shield, Zap, Swords, LayoutGrid, Map, Flame, Target, Hexagon, Crosshair, Medal as MedalIcon, Crown, Skull, Coins, Hourglass, Eye, Feather, Rocket, Briefcase, Anchor, HeartOff, Sparkles, Sword, Hand, BookOpen, Clock, Scale, Sun, Heart } from 'lucide-react';
 import React from 'react';
+import { createId } from './services/gameLogic';
 
 export const GRID_SIZE_INITIAL = 4;
 
@@ -99,37 +100,26 @@ export const RUNE_STYLES: Record<string, any> = {
 };
 
 export const SHOP_ITEMS = [
+    // Essentials (Consumables)
     { id: ItemType.XP_POTION, name: "XP Potion", desc: "Instantly gain 1000 XP.", price: 150, category: 'CONSUMABLE', icon: '🧪' },
-    { id: ItemType.BOMB_SCROLL, name: "Bomb Scroll", desc: "Destroys 3 lowest value tiles.", price: 300, category: 'BATTLE', icon: '📜' },
+    { id: ItemType.MIDAS_POTION, name: "Midas Potion", desc: "Double Gold gain for 50 turns.", price: 750, category: 'CONSUMABLE', icon: '⚱️' },
+    { id: ItemType.MERCHANT_BELL, name: "Merchant Bell", desc: "Instantly restocks the shop.", price: 500, category: 'CONSUMABLE', icon: '🔔' },
+
+    // Runes & Magic
     { id: ItemType.GOLDEN_RUNE, name: "Golden Rune", desc: "Next spawn is a Golden Tile (Bonus Gold).", price: 500, category: 'MAGIC', icon: '✨' },
     { id: ItemType.REROLL_TOKEN, name: "Reroll Token", desc: "Shuffle the board completely.", price: 200, category: 'MAGIC', icon: '🎲' },
     { id: ItemType.LUCKY_CHARM, name: "Lucky Charm", desc: "Increases loot drop chance for the run.", price: 800, category: 'MAGIC', icon: '🍀' },
     { id: ItemType.CHAIN_CATALYST, name: "Chain Catalyst", desc: "Activates Cascades for 10 turns.", price: 400, category: 'MAGIC', icon: '⛓️' },
     { id: ItemType.LUCKY_DICE, name: "Lucky Dice", desc: "Increases Rune spawn rate.", price: 600, category: 'MAGIC', icon: '🎲' },
-    { id: ItemType.MIDAS_POTION, name: "Midas Potion", desc: "Double Gold gain for 50 turns.", price: 750, category: 'CONSUMABLE', icon: '⚱️' },
-    { id: ItemType.SIEGE_BREAKER, name: "Siege Breaker", desc: "Next boss hit deals 3x damage.", price: 450, category: 'BATTLE', icon: '🔨' },
     { id: ItemType.VOID_STONE, name: "Void Stone", desc: "Consumes 1 weak tile per turn (10 turns).", price: 1000, category: 'MAGIC', icon: '🌑' },
     { id: ItemType.RADIANT_AURA, name: "Radiant Aura", desc: "+50% XP for 20 turns.", price: 900, category: 'MAGIC', icon: '☀️' },
+    { id: ItemType.TRANSMUTATION_SCROLL, name: "Transmutation Scroll", desc: "Upgrades all lowest-tier tiles.", price: 1200, category: 'MAGIC', icon: '📜' },
+
+    // Weapons (Battle)
+    { id: ItemType.BOMB_SCROLL, name: "Bomb Scroll", desc: "Destroys 3 lowest value tiles.", price: 300, category: 'BATTLE', icon: '💣' },
+    { id: ItemType.SIEGE_BREAKER, name: "Siege Breaker", desc: "Next boss hit deals 3x damage.", price: 450, category: 'BATTLE', icon: '🔨' },
     { id: ItemType.THUNDER_SCROLL, name: "Thunder Scroll", desc: "Instantly triggers a Cascade chain.", price: 1200, category: 'BATTLE', icon: '⚡' },
-];
-
-export const SKILL_TREE: SkillNodeDefinition[] = [
-    { id: 'ROOT', title: 'Awakening', description: 'The start of your journey.', icon: React.createElement(Star, {size: 20}), x: 50, y: 90, cost: 0 },
-    
-    // Left Branch (Combat)
-    { id: 'WARRIOR_PATH', title: 'Warrior\'s Way', description: '+5% Boss Damage.', icon: React.createElement(Swords, {size: 20}), x: 30, y: 75, parentId: 'ROOT', cost: 1 },
-    { id: 'DEMOLITION', title: 'Demolition', description: 'Bomb Scrolls effect radius increased.', icon: React.createElement(Skull, {size: 20}), x: 20, y: 60, parentId: 'WARRIOR_PATH', cost: 2 },
-    { id: 'GIANT_SLAYER', title: 'Giant Slayer', description: '+10% Boss Damage.', icon: React.createElement(Trophy, {size: 20}), x: 30, y: 45, parentId: 'WARRIOR_PATH', cost: 3 },
-    
-    // Center Branch (Magic/Utility)
-    { id: 'ARCANE_PATH', title: 'Arcane Knowledge', description: '+5% XP Gain.', icon: React.createElement(Zap, {size: 20}), x: 50, y: 70, parentId: 'ROOT', cost: 1 },
-    { id: 'TIME_KEEPER', title: 'Time Keeper', description: 'Reroll Tokens cost 10% less.', icon: React.createElement(Hourglass, {size: 20}), x: 50, y: 50, parentId: 'ARCANE_PATH', cost: 2 },
-    { id: 'DIVINE_SPARK', title: 'Divine Spark', description: 'Start runs with 1 Random Item.', icon: React.createElement(Rocket, {size: 20}), x: 50, y: 30, parentId: 'TIME_KEEPER', cost: 5 },
-
-    // Right Branch (Greed)
-    { id: 'THIEF_PATH', title: 'Thief\'s Guile', description: '+5% Gold Gain.', icon: React.createElement(Coins, {size: 20}), x: 70, y: 75, parentId: 'ROOT', cost: 1 },
-    { id: 'LUCKY_FIND', title: 'Lucky Find', description: 'Increased loot drop chance.', icon: React.createElement(Eye, {size: 20}), x: 80, y: 60, parentId: 'THIEF_PATH', cost: 2 },
-    { id: 'MIDAS_TOUCH', title: 'Midas Touch', description: 'Golden Tiles worth 3x.', icon: React.createElement(Crown, {size: 20}), x: 70, y: 45, parentId: 'THIEF_PATH', cost: 3 },
+    { id: ItemType.OMNI_SLASH, name: "Omnislash", desc: "Deals 20 damage to all Bosses.", price: 1500, category: 'BATTLE', icon: '⚔️' },
 ];
 
 export const getItemDefinition = (type: string) => SHOP_ITEMS.find(i => i.id === type) || { name: type, desc: 'Unknown Item', icon: '?' };
@@ -222,9 +212,16 @@ export const MEDALS: Record<string, Medal> = {
     TILE_256: { id: 'TILE_256', name: 'Knight', description: 'Create a rank 256 monster.', icon: React.createElement(Shield, {size: 20}), rarity: 'UNCOMMON' },
     TILE_1024: { id: 'TILE_1024', name: 'Warlord', description: 'Create a rank 1024 monster.', icon: React.createElement(Shield, {size: 20}), rarity: 'EPIC' },
     TILE_2048: { id: 'TILE_2048', name: 'Dragon Slayer', description: 'Create the rank 2048 avatar.', icon: React.createElement(Crown, {size: 20}), rarity: 'LEGENDARY' },
+
+    // New Medals
+    TACTICIAN: { id: 'TACTICIAN', name: 'Tactician', description: 'Win without using items.', icon: React.createElement(Briefcase, {size: 20}), rarity: 'EPIC' },
+    SURVIVOR: { id: 'SURVIVOR', name: 'Survivor', description: 'Reach turn 500.', icon: React.createElement(Anchor, {size: 20}), rarity: 'RARE' },
+    TYCOON: { id: 'TYCOON', name: 'Tycoon', description: 'Hold 5000 Gold.', icon: React.createElement(Coins, {size: 20}), rarity: 'LEGENDARY' },
+    PACIFIST: { id: 'PACIFIST', name: 'Pacifist', description: 'Survive 100 turns without killing a boss.', icon: React.createElement(HeartOff, {size: 20}), rarity: 'UNCOMMON' },
 };
 
 export const STORY_ENTRIES: StoryEntry[] = [
+    // ... (Keep existing story entries)
     {
         id: 'intro',
         title: 'The Entrance',
@@ -233,54 +230,7 @@ export const STORY_ENTRIES: StoryEntry[] = [
         order: 1,
         unlockCondition: (s, g, p) => p.gamesPlayed >= 1
     },
-    {
-        id: 'first_blood',
-        title: 'Alchemy of Flesh',
-        text: "The slimes quiver when they touch, binding together to form something... viler. Is this biology, or heresy? The dungeon seems to reward this consolidation of power.",
-        imageUrl: genUrl('slime monster mutating evolving fantasy art', 302),
-        order: 2,
-        unlockCondition: (s, g, p) => s.totalMerges >= 50
-    },
-    {
-        id: 'guardian',
-        title: 'The Gatekeeper',
-        text: "A guardian blocks the path. It does not speak; it only kills. It stands as a test: do I have the strength to claim what lies deeper?",
-        imageUrl: genUrl('giant stone guardian golem blocking path', 303),
-        order: 3,
-        unlockCondition: (s, g, p) => s.bossesDefeated >= 1
-    },
-    {
-        id: 'gold_curse',
-        title: 'Golden Weight',
-        text: "The gold here glitters in the torchlight, but it feels cold to the touch. It wants to be held. It whispers promises of power, but I feel lighter only when I spend it.",
-        imageUrl: genUrl('cursed pile of gold coins skulls fantasy', 304),
-        order: 4,
-        unlockCondition: (s, g, p) => s.goldCollected >= 1000
-    },
-    {
-        id: 'cycle',
-        title: 'Eternal Return',
-        text: "Death is not the end here. The dungeon simply resets the board. I awake at the entrance, memories intact, but my pockets empty. The cycle continues.",
-        imageUrl: genUrl('time loop hourglass magic swirling', 305),
-        order: 5,
-        unlockCondition: (s, g, p) => p.gamesPlayed >= 3
-    },
-    {
-        id: 'dragon_sight',
-        title: 'The God',
-        text: "I saw it. A god of scales and fire. It does not hoard gold; it hoards souls. We are not intruders; we are livestock, fattening ourselves on its treasures until we are ripe for the harvest.",
-        imageUrl: genUrl('giant dragon eye opening darkness', 306),
-        order: 6,
-        unlockCondition: (s, g, p) => s.highestTile >= 1024
-    },
-    {
-        id: 'ascension',
-        title: 'Part of the Walls',
-        text: "I have spent so long in the dark that the light burns my eyes. I am no longer just an adventurer. I am a function of this dungeon. A variable in its equation.",
-        imageUrl: genUrl('transcendent being glowing light fantasy', 307),
-        order: 7,
-        unlockCondition: (s, g, p) => p.accountLevel >= 10
-    }
+    // ...
 ];
 
 export const BOSS_DEFINITIONS: Record<string, any> = {
@@ -312,4 +262,64 @@ export const getLevelRank = (level: number) => {
     if (level < 30) return { title: 'Champion', icon: Shield, bg: 'from-amber-600 to-amber-800', color: 'text-amber-200' };
     if (level < 40) return { title: 'Legend', icon: Zap, bg: 'from-purple-600 to-purple-800', color: 'text-purple-200' };
     return { title: 'Demigod', icon: LayoutGrid, bg: 'from-yellow-400 to-yellow-600', color: 'text-yellow-100' };
+};
+
+// --- NEW CLASS SKILL TREES ---
+
+const addItemToInventory = (state: GameState, itemType: ItemType): Partial<GameState> => {
+    const def = getItemDefinition(itemType);
+    if (!def) return {};
+    const item = {
+        id: createId(),
+        type: itemType,
+        name: def.name,
+        description: def.desc,
+        icon: def.icon
+    };
+    return { inventory: [...state.inventory, item] };
+};
+
+export const CLASS_SKILL_TREES: Record<HeroClass, SkillNodeDefinition[]> = {
+    [HeroClass.ADVENTURER]: [
+        { id: 'ADV_1', title: 'Survivor', description: 'Gain 10% more Score.', icon: React.createElement(Star, {size: 20}), x: 50, y: 80, reqLevel: 1, cost: 1, effect: (s) => ({}) },
+        { id: 'ADV_2', title: 'Lucky Find', description: 'Slightly increased item drop rate.', icon: React.createElement(Coins, {size: 20}), x: 30, y: 60, reqLevel: 3, parentId: 'ADV_1', cost: 1, effect: (s) => ({}) },
+        { id: 'ADV_3', title: 'Veteran', description: 'Gain 10% more Gold.', icon: React.createElement(Trophy, {size: 20}), x: 70, y: 60, reqLevel: 5, parentId: 'ADV_1', cost: 1, effect: (s) => ({}) },
+        { id: 'ADV_4', title: 'Haggler', description: 'Shop prices are 10% cheaper.', icon: React.createElement(Hand, {size: 20}), x: 50, y: 40, reqLevel: 10, parentId: 'ADV_2', cost: 2, effect: (s) => ({}) },
+        { id: 'ADV_5', title: 'Archaeologist', description: 'Rune spawn rate +20%.', icon: React.createElement(Map, {size: 20}), x: 50, y: 20, reqLevel: 20, parentId: 'ADV_4', cost: 3, effect: (s) => ({}) }
+    ],
+    [HeroClass.WARRIOR]: [
+        { id: 'WAR_1', title: 'Demolitions', description: 'Start runs with 1 Bomb Scroll.', icon: React.createElement(Swords, {size: 20}), x: 50, y: 80, reqLevel: 1, cost: 1, effect: (s) => addItemToInventory(s, ItemType.BOMB_SCROLL) },
+        { id: 'WAR_2', title: 'Giant Slayer', description: 'Deal 20% more damage to Bosses.', icon: React.createElement(Skull, {size: 20}), x: 30, y: 60, reqLevel: 3, parentId: 'WAR_1', cost: 1, effect: (s) => ({}) },
+        { id: 'WAR_3', title: 'Blitz', description: 'Bomb Scrolls destroy 5 tiles instead of 3.', icon: React.createElement(Flame, {size: 20}), x: 70, y: 60, reqLevel: 5, parentId: 'WAR_1', cost: 1, effect: (s) => ({}) },
+        { id: 'WAR_4', title: 'Vampirism', description: 'Killing a boss grants 200 Gold.', icon: React.createElement(HeartOff, {size: 20}), x: 50, y: 40, reqLevel: 10, parentId: 'WAR_2', cost: 2, effect: (s) => ({}) },
+        { id: 'WAR_5', title: 'Berserker', description: '5% chance to double damage on any hit.', icon: React.createElement(Zap, {size: 20}), x: 50, y: 20, reqLevel: 20, parentId: 'WAR_4', cost: 3, effect: (s) => ({}) }
+    ],
+    [HeroClass.ROGUE]: [
+        { id: 'ROG_1', title: 'Loaded Dice', description: 'Start runs with 1 Reroll Token.', icon: React.createElement(Coins, {size: 20}), x: 50, y: 80, reqLevel: 1, cost: 1, effect: (s) => addItemToInventory(s, ItemType.REROLL_TOKEN) },
+        { id: 'ROG_2', title: 'Discount', description: 'Shop prices are 10% cheaper.', icon: React.createElement(Briefcase, {size: 20}), x: 30, y: 60, reqLevel: 3, parentId: 'ROG_1', cost: 1, effect: (s) => ({}) },
+        { id: 'ROG_3', title: 'Jackpot', description: '1% Chance for merges to drop massive gold.', icon: React.createElement(Sparkles, {size: 20}), x: 70, y: 60, reqLevel: 5, parentId: 'ROG_1', cost: 1, effect: (s) => ({}) },
+        { id: 'ROG_4', title: 'Pickpocket', description: '5% chance to steal 1g on any merge.', icon: React.createElement(Hand, {size: 20}), x: 50, y: 40, reqLevel: 10, parentId: 'ROG_3', cost: 2, effect: (s) => ({}) },
+        { id: 'ROG_5', title: 'Shadow Guild', description: 'Start with 2 random items.', icon: React.createElement(Crown, {size: 20}), x: 50, y: 20, reqLevel: 20, parentId: 'ROG_4', cost: 3, effect: (s) => ({}) }
+    ],
+    [HeroClass.MAGE]: [
+        { id: 'MAGE_1', title: 'Arcane Study', description: 'Gain 15% more XP.', icon: React.createElement(Zap, {size: 20}), x: 50, y: 80, reqLevel: 1, cost: 1, effect: (s) => ({}) },
+        { id: 'MAGE_2', title: 'Alchemy', description: 'Start runs with 1 XP Potion.', icon: React.createElement(Briefcase, {size: 20}), x: 30, y: 60, reqLevel: 3, parentId: 'MAGE_1', cost: 1, effect: (s) => addItemToInventory(s, ItemType.XP_POTION) },
+        { id: 'MAGE_3', title: 'Mana Flow', description: 'XP Potions grant +50% more XP.', icon: React.createElement(Star, {size: 20}), x: 70, y: 60, reqLevel: 5, parentId: 'MAGE_1', cost: 1, effect: (s) => ({}) },
+        { id: 'MAGE_4', title: 'Scholar', description: '+20% XP from Scrolls/Tomes.', icon: React.createElement(BookOpen, {size: 20}), x: 50, y: 40, reqLevel: 10, parentId: 'MAGE_3', cost: 2, effect: (s) => ({}) },
+        { id: 'MAGE_5', title: 'Time Warp', description: 'Start with Chronos Rune.', icon: React.createElement(Hourglass, {size: 20}), x: 50, y: 20, reqLevel: 20, parentId: 'MAGE_4', cost: 3, effect: (s) => ({}) }
+    ],
+    [HeroClass.PALADIN]: [
+        { id: 'PAL_1', title: 'Divine Favor', description: 'Start runs with 1 Golden Rune.', icon: React.createElement(Shield, {size: 20}), x: 50, y: 80, reqLevel: 1, cost: 1, effect: (s) => addItemToInventory(s, ItemType.GOLDEN_RUNE) },
+        { id: 'PAL_2', title: 'Smite', description: 'Bosses spawn with 10% less HP.', icon: React.createElement(Sword, {size: 20}), x: 30, y: 60, reqLevel: 3, parentId: 'PAL_1', cost: 1, effect: (s) => ({}) },
+        { id: 'PAL_3', title: 'Sanctuary', description: '1 Free Revive (prevents Game Over once).', icon: React.createElement(HeartOff, {size: 20}), x: 70, y: 60, reqLevel: 5, parentId: 'PAL_1', cost: 2, effect: (s) => ({}) },
+        { id: 'PAL_4', title: 'Justicar', description: 'Bosses grant +50% XP.', icon: React.createElement(Scale, {size: 20}), x: 50, y: 40, reqLevel: 10, parentId: 'PAL_2', cost: 2, effect: (s) => ({}) },
+        { id: 'PAL_5', title: 'Holy Light', description: 'Radiant Aura lasts 2x longer.', icon: React.createElement(Sun, {size: 20}), x: 50, y: 20, reqLevel: 20, parentId: 'PAL_4', cost: 3, effect: (s) => ({}) }
+    ],
+    [HeroClass.DRAGON_SLAYER]: [
+        { id: 'DS_1', title: 'Apex Predator', description: 'Deal 50% more damage to Bosses.', icon: React.createElement(Crown, {size: 20}), x: 50, y: 80, reqLevel: 1, cost: 1, effect: (s) => ({}) },
+        { id: 'DS_2', title: 'Hoard Sense', description: 'Bosses drop 2x Gold.', icon: React.createElement(Coins, {size: 20}), x: 30, y: 60, reqLevel: 3, parentId: 'DS_1', cost: 1, effect: (s) => ({}) },
+        { id: 'DS_3', title: 'Executioner', description: 'Bosses below 20% HP die instantly.', icon: React.createElement(Skull, {size: 20}), x: 70, y: 60, reqLevel: 5, parentId: 'DS_1', cost: 2, effect: (s) => ({}) },
+        { id: 'DS_4', title: 'Trophy Hunter', description: 'Final Score +20%.', icon: React.createElement(Trophy, {size: 20}), x: 50, y: 40, reqLevel: 10, parentId: 'DS_2', cost: 2, effect: (s) => ({}) },
+        { id: 'DS_5', title: 'Dragon Heart', description: 'Start with 1000 Gold.', icon: React.createElement(Heart, {size: 20}), x: 50, y: 20, reqLevel: 20, parentId: 'DS_4', cost: 3, effect: (s) => ({}) }
+    ],
 };

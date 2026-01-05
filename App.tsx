@@ -24,9 +24,9 @@ import { ComboMeter } from './components/ComboMeter';
 import { LootProvider, useLootSystem } from './components/LootSystem';
 import { VictoryScreen } from './components/VictoryScreen';
 import { DailyLoginModal } from './components/DailyLoginModal';
-import { CascadeTutorial } from './components/CascadeTutorial'; // IMPORT ADDED
+import { CascadeTutorial } from './components/CascadeTutorial'; 
 import { loadCriticalAssets, loadBackgroundAssets } from './services/assetLoader';
-import { getNextLevelXp, awardMedal, markHintSeen, unlockLore, getPlayerProfile, syncPlayerProfile, checkDailyLoginStatus, claimDailyReward } from './services/storageService';
+import { getNextLevelXp, awardMedal, markHintSeen, unlockLore, getPlayerProfile, syncPlayerProfile, checkDailyLoginStatus, claimDailyReward, completeTutorial } from './services/storageService';
 import { useFullscreen } from './hooks/useFullscreen';
 import { useOrientation } from './hooks/useOrientation';
 import { facebookService } from './services/facebookService';
@@ -55,7 +55,8 @@ type Action =
   | { type: 'CLEAR_INVALID_MOVE' }
   | { type: 'CLAIM_DAILY_LOGIN' }
   | { type: 'CLEAR_LOOT_EVENTS' }
-  | { type: 'COMPLETE_TUTORIAL_REWARD' }; // NEW ACTION
+  | { type: 'CLEAR_MERGE_EVENTS' }
+  | { type: 'COMPLETE_TUTORIAL_REWARD' }; 
 
 const TURN_BASED_EFFECTS = ['MIDAS_POTION', 'CHAIN_CATALYST', 'VOID_STONE', 'RADIANT_AURA', 'FLOW_STATE', 'HARMONIC_RESONANCE', 'LUCKY_LOOT', 'LUCKY_DICE'];
 
@@ -72,11 +73,14 @@ const gameReducer = (state: GameState, action: Action): GameState => {
                 const profile = getPlayerProfile();
                 restoredState.baselineAccountXp = profile.totalAccountXp;
             }
+            if (!restoredState.mergeEvents) restoredState.mergeEvents = [];
             return restoredState;
         case 'RESTART':
             return initializeGame(true, state.selectedClass, state.gameMode, undefined, state.difficulty, state.tilesetId);
         case 'MOVE': {
-            if (state.gameOver || state.gameWon || state.isCascading) return state;
+            // Prioritize input: Remove `state.isCascading` check to allow interruption
+            if (state.gameOver || state.gameWon) return state;
+            
             const res = moveGrid(
                 state.grid, 
                 action.direction, 
@@ -84,7 +88,7 @@ const gameReducer = (state: GameState, action: Action): GameState => {
                 state.gameMode, 
                 state.effectCounters, 
                 state.activeModifiers, 
-                state.difficulty,
+                state.difficulty, 
                 state.stats
             );
             if (!res.moved) {
@@ -92,8 +96,6 @@ const gameReducer = (state: GameState, action: Action): GameState => {
             }
 
             audioService.playMove();
-            // Audio delay for merge sound to match hitstop is tricky in reducer, so we play immediately 
-            // or let the effect handle it. Playing immediately is usually fine for feedback.
             if (res.score > 0) audioService.playMerge(res.score, res.combo, res.mergedIds.length > 0 ? Math.max(...res.grid.filter(t => res.mergedIds.includes(t.id)).map(t => t.value)) : 0);
             if (res.powerUpTriggered) audioService.playZap(2);
 
@@ -101,7 +103,6 @@ const gameReducer = (state: GameState, action: Action): GameState => {
                 navigator.vibrate(50);
             }
 
-            // Decrement Turn-Based Effects
             const nextEffectCounters = { ...state.effectCounters };
             TURN_BASED_EFFECTS.forEach(key => {
                 if (nextEffectCounters[key] > 0) {
@@ -152,12 +153,23 @@ const gameReducer = (state: GameState, action: Action): GameState => {
                 audioService.playLevelUp();
             }
 
-            // Check for potential cascade
-            // LOGIC UPDATE: Enable cascades if level >= 4 OR Chain Catalyst is active
             let shouldCascade = false;
-            if (state.accountLevel >= 4 || (state.effectCounters['CHAIN_CATALYST'] || 0) > 0) {
+            // CASCADE UNLOCK LEVEL CHECK: 3
+            if (state.accountLevel >= 3 || (state.effectCounters['CHAIN_CATALYST'] || 0) > 0) {
                  shouldCascade = true;
             }
+
+            // Map manual move merges to mergeEvents
+            const newMergeEvents = res.mergedIds.length > 0 
+                ? res.grid.filter(t => res.mergedIds.includes(t.id)).map(t => ({
+                    id: t.id,
+                    x: t.x,
+                    y: t.y,
+                    value: t.value,
+                    type: t.type,
+                    isCascade: false
+                })) 
+                : [];
 
             return {
                 ...state,
@@ -172,15 +184,15 @@ const gameReducer = (state: GameState, action: Action): GameState => {
                 combo: res.combo,
                 stats: newStats,
                 lootEvents: res.lootEvents,
+                mergeEvents: newMergeEvents,
                 lastTurnMedals: res.medalsEarned,
                 abilities: updatedAbilities,
                 achievements: [...state.achievements, ...newAchievements],
                 logs: [...state.logs, ...res.logs].slice(-5),
                 isInvalidMove: false,
                 effectCounters: nextEffectCounters,
-                isCascading: shouldCascade,
+                isCascading: shouldCascade, // Re-evaluate cascade trigger on every move
                 cascadeStep: shouldCascade ? 0 : 0,
-                // Hack: attach hitstop info to state transiently for the Effect to pick up
                 currentHitstop: res.hitstopDuration 
             } as GameState & { currentHitstop: number };
         }
@@ -190,6 +202,8 @@ const gameReducer = (state: GameState, action: Action): GameState => {
             return { ...state, isInvalidMove: false };
         case 'CLEAR_LOOT_EVENTS': 
             return { ...state, lootEvents: [] };
+        case 'CLEAR_MERGE_EVENTS':
+            return { ...state, mergeEvents: [] };
         case 'PROCESS_PASSIVES': {
             const res = processPassiveAbilities(state);
             if (res.triggered.length === 0) return state;
@@ -253,27 +267,44 @@ const gameReducer = (state: GameState, action: Action): GameState => {
             return { ...state, grid, rerolls, gold: state.gold - cost };
         }
         case 'CASCADE_STEP': {
-            const res = executeAutoCascade(state.grid, state.gridSize, state.cascadeStep || 0, state.effectCounters);
+            const step = state.cascadeStep || 0;
+            // Safety break for infinite cascades
+            if (step > 20) {
+                return { ...state, isCascading: false, cascadeStep: 0, cascadeDelay: 0 };
+            }
+
+            const res = executeAutoCascade(state.grid, state.gridSize, step, state.effectCounters);
+            
             if (res.occurred) {
-                audioService.playCascade(state.cascadeStep || 0);
+                let delay = 100;
+                if (res.type === 'MERGE') {
+                    audioService.playCascade(step);
+                    delay = 400; 
+                } else if (res.type === 'SPAWN') {
+                    delay = 150;
+                }
+
+                const nextStep = res.type === 'MERGE' ? step + 1 : step;
+
                 return {
                     ...state,
                     grid: res.grid,
                     score: state.score + res.rewards.xp,
                     xp: state.xp + res.rewards.xp,
                     gold: state.gold + res.rewards.gold,
-                    cascadeStep: (state.cascadeStep || 0) + 1,
-                    // Pass loot events from cascade
-                    lootEvents: [...state.lootEvents, ...res.lootEvents]
+                    cascadeStep: nextStep,
+                    lootEvents: [...state.lootEvents, ...res.lootEvents],
+                    mergeEvents: res.mergeEvents || [],
+                    cascadeDelay: delay
                 };
             } else {
-                return { ...state, isCascading: false, cascadeStep: 0 };
+                return { ...state, isCascading: false, cascadeStep: 0, cascadeDelay: 0 };
             }
         }
         case 'CLAIM_BOUNTY':
             return { ...state, gold: state.gold + action.reward };
         case 'CLAIM_DAILY_LOGIN': 
-            return claimDailyReward(state);
+            return { ...state, ...claimDailyReward(state) };
         case 'COMPLETE_TUTORIAL_REWARD':
             return { ...state, xp: state.xp + 200 };
         case 'UPDATE_SETTINGS':
@@ -307,27 +338,25 @@ const GameContent: React.FC = () => {
   const [showStore, setShowStore] = useState(false);
   const [showStats, setShowStats] = useState(false);
   const [showTutorial, setShowTutorial] = useState(false);
-  const [showCascadeTutorial, setShowCascadeTutorial] = useState(false); // NEW STATE
+  const [showCascadeTutorial, setShowCascadeTutorial] = useState(false); 
   const [feedbackQueue, setFeedbackQueue] = useState<FeedbackEvent[]>([]);
   const [medalQueue, setMedalQueue] = useState<{id: string, medal: Medal}[]>([]);
   const [itemFeedback, setItemFeedback] = useState<{ slot: number, status: 'SUCCESS' | 'ERROR', id: string } | undefined>(undefined);
   const [globalShake, setGlobalShake] = useState(false);
+  const [cascadeShake, setCascadeShake] = useState(false); 
   const [showDailyLogin, setShowDailyLogin] = useState(false);
   const [showDailyTribute, setShowDailyTribute] = useState(false);
   
   const [isProcessingMove, setIsProcessingMove] = useState(false);
-  const [isHitstopping, setIsHitstopping] = useState(false); // Hitstop state
+  const [isHitstopping, setIsHitstopping] = useState(false); 
   const [challengeTarget, setChallengeTarget] = useState<{score: number, name: string} | null>(null);
   const [bountyClaimed, setBountyClaimed] = useState(false);
   
   const dragStartRef = useRef<{ x: number, y: number } | null>(null);
-  const scrollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { spawnLoot } = useLootSystem();
 
-  // Detect Orientation
   const isLandscape = useOrientation(state.settings.orientation);
 
-  // Initialization Logic
   useEffect(() => {
       const boot = async () => {
           try {
@@ -342,18 +371,11 @@ const GameContent: React.FC = () => {
               const { canClaim } = checkDailyLoginStatus(profile);
               if (canClaim) setShowDailyLogin(true);
 
-              // Check for Cascade Tutorial Trigger
-              if (profile.accountLevel >= 4 && !profile.cascadeTutorialSeen) {
-                  // Only show if tutorial not completed
-                  setShowCascadeTutorial(true);
-              }
-
               const entry = facebookService.getEntryPointData();
               if (entry && entry.score) {
                   setChallengeTarget({ score: entry.score, name: entry.challenger || "Challenger" });
               }
 
-              // Try/Catch for Supabase to avoid hard crashes if DB is unreachable
               try {
                   const { data: tribute } = await supabase
                       .from('daily_tributes')
@@ -374,7 +396,7 @@ const GameContent: React.FC = () => {
 
           } catch (e) {
               console.error("Boot Error:", e);
-              setIsReady(true); // Fallback to allow play even on error
+              setIsReady(true); 
           }
       };
       boot();
@@ -390,23 +412,43 @@ const GameContent: React.FC = () => {
       }
   }, []);
 
-  // HITSTOP LOGIC
+  // GLOBAL CHECK FOR UNSEEN TUTORIALS WHENEVER VIEW CHANGES
+  useEffect(() => {
+      if (view === 'SPLASH') {
+          const profile = getPlayerProfile();
+          if (profile.accountLevel >= 3 && !profile.cascadeTutorialSeen) {
+              // Immediately show tutorial if unlocked and unseen
+              setShowCascadeTutorial(true);
+          }
+      }
+  }, [view]);
+
+  // HITSTOP LOGIC (Fixed Dependency Race Condition)
   useEffect(() => {
       const duration = (state as any).currentHitstop;
       if (duration && duration > 0) {
           setIsHitstopping(true);
           const t = setTimeout(() => {
               setIsHitstopping(false);
-              // Trigger shake ONLY after hitstop releases for impact feel
               setGlobalShake(true);
               const shakeT = setTimeout(() => setGlobalShake(false), 300);
               return () => clearTimeout(shakeT);
           }, duration);
           return () => clearTimeout(t);
       }
-  }, [state]);
+  }, [state.stats.totalMoves]); // Only re-run when a new move actually happens
 
-  // ... (Other effects for Audio, Input, etc. same as before) ...
+  // Failsafe to unlock board
+  useEffect(() => {
+      if (isHitstopping || isProcessingMove) {
+          const t = setTimeout(() => {
+              setIsHitstopping(false);
+              setIsProcessingMove(false);
+          }, 2000);
+          return () => clearTimeout(t);
+      }
+  }, [isHitstopping, isProcessingMove]);
+
   useEffect(() => {
       if (state.isInvalidMove) {
           const t = setTimeout(() => {
@@ -416,14 +458,20 @@ const GameContent: React.FC = () => {
       }
   }, [state.isInvalidMove]);
 
-  // Clean up loot events after they display
   useEffect(() => {
       if (state.lootEvents.length > 0) {
-          // Wait 1s (approx duration of loot animation) then clear events from state
           const t = setTimeout(() => dispatch({ type: 'CLEAR_LOOT_EVENTS' }), 1000);
           return () => clearTimeout(t);
       }
   }, [state.lootEvents]);
+
+  // Clean up merge events after a tick to ensure animation fires once
+  useEffect(() => {
+      if (state.mergeEvents && state.mergeEvents.length > 0) {
+          const t = setTimeout(() => dispatch({ type: 'CLEAR_MERGE_EVENTS' }), 100);
+          return () => clearTimeout(t);
+      }
+  }, [state.mergeEvents]);
 
   useEffect(() => {
       const intensity = Math.min(1, state.score / 15000);
@@ -431,7 +479,6 @@ const GameContent: React.FC = () => {
   }, [state.score]);
 
   useEffect(() => {
-      // General shake for bosses (kept separate from hitstop shake)
       const bossSpawned = state.grid.some(t => t.type === TileType.BOSS && t.isNew);
       if (bossSpawned && state.settings.enableScreenShake) {
           setGlobalShake(true);
@@ -460,17 +507,33 @@ const GameContent: React.FC = () => {
       }
   }, [state.stats.totalMoves]);
 
+  // CASCADE LOGIC: Ensure timer resets on moves
   useEffect(() => {
       if (state.isCascading) {
+          const delay = state.cascadeDelay || 250;
           const timer = setTimeout(() => {
               dispatch({ type: 'CASCADE_STEP' });
-          }, 250);
+          }, delay);
           return () => clearTimeout(timer);
       }
-  }, [state.isCascading]);
+  }, [state.isCascading, state.cascadeDelay, state.stats.totalMoves]); // Added totalMoves dependency to reset on input
+
+  const prevCascadeStep = useRef(0);
+  useEffect(() => {
+      if (state.cascadeStep && state.cascadeStep > prevCascadeStep.current) {
+          if (state.settings.enableScreenShake) {
+              setCascadeShake(true);
+              const t = setTimeout(() => setCascadeShake(false), 200);
+              return () => clearTimeout(t);
+          }
+      }
+      prevCascadeStep.current = state.cascadeStep || 0;
+  }, [state.cascadeStep, state.settings.enableScreenShake]);
 
   const handleMove = useCallback((direction: Direction) => {
-      if (isProcessingMove || isHitstopping || showCascadeTutorial) return; // Block input
+      // Allow input even if cascading to prioritize responsiveness
+      if (isProcessingMove || isHitstopping || showCascadeTutorial) return; 
+      
       setIsProcessingMove(true);
       dispatch({ type: 'MOVE', direction });
       setTimeout(() => setIsProcessingMove(false), state.settings.slideSpeed * 0.7); 
@@ -485,7 +548,8 @@ const GameContent: React.FC = () => {
           const dy = clientY - dragStartRef.current.y;
           const threshold = 50; 
           if (Math.abs(dx) > threshold || Math.abs(dy) > threshold) {
-              if (state.gameOver || state.isCascading || showStore || showStats || showTutorial || feedbackQueue.length > 0 || showDailyLogin || showCascadeTutorial) {
+              // Block swipe only for critical UI states, not cascade
+              if (state.gameOver || showStore || showStats || showTutorial || showDailyLogin || showCascadeTutorial) {
                   dragStartRef.current = null;
                   return;
               }
@@ -521,7 +585,7 @@ const GameContent: React.FC = () => {
           window.removeEventListener('mousedown', onMouseDown);
           window.removeEventListener('mouseup', onMouseUp);
       };
-  }, [view, state.gameOver, state.isCascading, showStore, showStats, state.settings, showTutorial, feedbackQueue.length, showDailyLogin, showCascadeTutorial, handleMove]);
+  }, [view, state.gameOver, showStore, showStats, state.settings, showTutorial, showDailyLogin, showCascadeTutorial, handleMove]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -532,7 +596,7 @@ const GameContent: React.FC = () => {
             return;
         }
 
-        if (!state.settings.enableKeyboard || showTutorial || state.gameOver || view !== 'GAME' || state.isCascading || showStore || showStats || showCascadeTutorial) return;
+        if (!state.settings.enableKeyboard || showTutorial || state.gameOver || view !== 'GAME' || showStore || showStats || showCascadeTutorial || showDailyLogin) return;
         switch(e.key) {
             case 'ArrowUp': case 'w': case 'W': handleMove(Direction.UP); break;
             case 'ArrowDown': case 's': case 'S': handleMove(Direction.DOWN); break;
@@ -545,13 +609,10 @@ const GameContent: React.FC = () => {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [state.gameOver, view, state.isCascading, showStore, showStats, state.settings, showTutorial, state.inventory, showCascadeTutorial, handleMove]);
-
-  // ... (Rest of component including Medal Queue, etc.)
+  }, [state.gameOver, view, showStore, showStats, state.settings, showTutorial, state.inventory, showCascadeTutorial, handleMove, showDailyLogin]);
 
   if (!isReady) return <LoadingScreen progress={loadingProgress} />;
 
-  // ... (commonHUDProps) ...
   const commonHUDProps = {
         score: state.score,
         bestScore: Math.max(state.score, state.bestScore),
@@ -569,6 +630,7 @@ const GameContent: React.FC = () => {
         activeModifiers: state.activeModifiers,
         shopState: state.shop,
         challengeTarget: !bountyClaimed ? challengeTarget : null,
+        selectedClass: state.selectedClass,
         onOpenStore: () => setShowStore(true),
         onUseItem: (item: InventoryItem) => {
             const idx = state.inventory.indexOf(item);
@@ -584,7 +646,6 @@ const GameContent: React.FC = () => {
 
   const renderView = () => {
       switch(view) {
-          // ... other views ...
           case 'SPLASH':
               return (
                 <>
@@ -592,7 +653,10 @@ const GameContent: React.FC = () => {
                         onStart={(cls, mode, seed, diff, tileset) => {
                             dispatch({ type: 'START_GAME', heroClass: cls, mode, seed, difficulty: diff, tileset });
                             setView('GAME');
-                            setShowTutorial(true); 
+                            const p = getPlayerProfile();
+                            if (!p.tutorialCompleted) {
+                                setShowTutorial(true);
+                            }
                             setBountyClaimed(false);
                         }}
                         onContinue={() => setView('GAME')}
@@ -617,6 +681,16 @@ const GameContent: React.FC = () => {
                              </div>
                          </div>
                     )}
+                    
+                    {showCascadeTutorial && (
+                        <CascadeTutorial 
+                            onComplete={() => {
+                                setShowCascadeTutorial(false);
+                                dispatch({ type: 'COMPLETE_TUTORIAL_REWARD' });
+                                setFeedbackQueue(prev => [...prev, { id: createId(), type: 'UNLOCK', title: 'FEATURE UNLOCKED', subtitle: 'Natural Cascades Enabled' }]);
+                            }}
+                        />
+                    )}
                 </>
               );
           case 'LEADERBOARD': return <Leaderboard onBack={() => setView('SPLASH')} />;
@@ -634,42 +708,42 @@ const GameContent: React.FC = () => {
                         <AmbientBackground graphicsQuality={state.settings.graphicsQuality} />
                     </div>
 
-                    <div className={`relative w-full h-full max-h-[100dvh] mx-auto flex flex-col z-10 transition-transform duration-100 ${globalShake ? 'animate-shake-lg' : ''} ${state.isInvalidMove ? 'animate-shake-horizontal' : ''} justify-center overflow-hidden`}>
+                    <div className={`relative w-full h-full max-h-[100dvh] mx-auto flex flex-col z-10 transition-all duration-200 
+                        ${state.isCascading ? 'saturate-[1.05]' : ''} 
+                        ${globalShake ? 'animate-shake-lg' : ''} 
+                        ${cascadeShake ? 'animate-shake-sm' : ''} 
+                        ${state.isInvalidMove ? 'animate-shake-horizontal' : ''} 
+                        justify-center overflow-hidden`}
+                    >
                         
-                        {/* Portrait HUD (Top) */}
                         <div className="landscape:hidden shrink-0 z-30 p-2 md:p-4 pb-0 w-full max-w-xl mx-auto">
                              <HUDHeader {...commonHUDProps} />
                         </div>
 
                         <div className="relative z-10 flex flex-col landscape:flex-row h-full gap-4 landscape:items-center landscape:justify-center flex-1 min-h-0">
                             
-                            {/* Landscape HUD (Sidebar - Left) */}
                             <div className="hidden landscape:flex landscape:w-[280px] lg:landscape:w-[320px] landscape:h-full landscape:shrink-0 landscape:flex-col landscape:justify-center landscape:pr-4 landscape:pl-6 landscape:py-6">
                                 <HUD {...commonHUDProps} />
                             </div>
                             
-                            {/* Game Board Area */}
                             <div className="flex-1 flex flex-col items-center justify-center relative min-h-0 min-w-0 w-full h-full p-2">
                                  
-                                 {/* Landscape Overlays (Top of Grid) */}
                                  <div className="hidden landscape:flex w-full justify-center items-center h-16 min-h-[4rem] z-20 gap-8 mb-2 relative">
                                      <AnimatePresence>
                                         {state.combo >= 2 && <ComboMeter combo={state.combo} />}
                                      </AnimatePresence>
                                      <MedalFeed queue={medalQueue} inline={true} />
                                      
-                                     {/* Landscape Buffs (Top Right of Grid Area) */}
                                      <div className="absolute top-0 right-0">
                                          <BuffDisplay effectCounters={state.effectCounters} className="justify-end" />
                                      </div>
                                  </div>
 
-                                 {/* Grid Container */}
                                  <div className="flex-1 w-full h-full flex items-center justify-center min-h-0">
                                      <Grid 
                                         grid={state.grid} 
                                         size={state.gridSize} 
-                                        mergeEvents={[]} 
+                                        mergeEvents={state.mergeEvents || []} 
                                         lootEvents={state.lootEvents}
                                         slideSpeed={state.settings.slideSpeed} 
                                         themeId={state.currentStage.themeId}
@@ -681,7 +755,6 @@ const GameContent: React.FC = () => {
                                      />
                                  </div>
                                  
-                                 {/* Portrait Overlays */}
                                  <div className="landscape:hidden absolute top-2 right-2 md:top-4 md:right-4 z-50 pointer-events-none">
                                      <AnimatePresence>
                                         {state.combo >= 2 && <ComboMeter combo={state.combo} />}
@@ -693,7 +766,6 @@ const GameContent: React.FC = () => {
                             </div>
                         </div>
 
-                        {/* Portrait HUD (Bottom Bar) */}
                         <div className="landscape:hidden shrink-0 z-30 p-2 pb-4 w-full max-w-xl mx-auto">
                              <div className="bg-gradient-to-t from-black/80 to-transparent pt-4 pb-1 rounded-t-2xl backdrop-blur-[2px]">
                                 <HUDControls {...commonHUDProps} />
@@ -720,18 +792,10 @@ const GameContent: React.FC = () => {
                             />
                         )}
                         
-                        {/* New Cascade Tutorial Overlay */}
-                        {showCascadeTutorial && (
-                            <CascadeTutorial 
-                                onComplete={() => {
-                                    setShowCascadeTutorial(false);
-                                    dispatch({ type: 'COMPLETE_TUTORIAL_REWARD' });
-                                    setFeedbackQueue(prev => [...prev, { id: createId(), type: 'UNLOCK', title: 'FEATURE UNLOCKED', subtitle: 'Natural Cascades Enabled' }]);
-                                }}
-                            />
-                        )}
-
-                        {showTutorial && <TutorialOverlay onDismiss={() => setShowTutorial(false)} />}
+                        {showTutorial && <TutorialOverlay onDismiss={() => {
+                            setShowTutorial(false);
+                            completeTutorial();
+                        }} />}
                         <FeedbackLayer events={feedbackQueue} onDismiss={(id) => setFeedbackQueue(q => q.filter(e => e.id !== id))} />
                         
                         {showDailyLogin && (

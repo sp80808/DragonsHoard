@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { X, Trophy, Star, Shield, Lock, Unlock, Map, Coins, Zap, Swords, LayoutGrid, Ghost, Skull, Flame, Droplets, Settings, Sword, Heart } from 'lucide-react';
+import { X, Trophy, Star, Shield, Lock, Unlock, Map, Coins, Zap, Swords, LayoutGrid, Ghost, Skull, Flame, Droplets, Settings, Sword, Heart, Eye } from 'lucide-react';
 import { GameState } from '../types';
 import { getLevelRank } from '../constants';
 
@@ -16,18 +16,20 @@ export const GameStatsModal: React.FC<GameStatsModalProps> = ({ gameState, onClo
     
     // Updated Unlocks Logic based on Account Level
     const UNLOCKS = [
-        { level: 3, label: "Warrior Class", desc: "Start with a Bomb Scroll.", icon: <Swords size={16}/> },
-        { level: 5, label: "Hard Mode & Rogue", desc: "Unlock tougher difficulty and the Rogue class.", icon: <Skull size={16}/> },
+        { level: 3, label: "Cascade Mechanic", desc: "Adjacent matching tiles merge automatically after moves.", icon: <Zap size={16}/> },
+        { level: 3, label: "Passive: Scorch", desc: "Burn a weak tile every 30 turns.", icon: <Flame size={16}/> },
+        { level: 4, label: "Warrior Class", desc: "Start with a Bomb Scroll.", icon: <Swords size={16}/> },
+        { level: 6, label: "Hard Mode & Rogue", desc: "Unlock tougher difficulty and the Rogue class.", icon: <Skull size={16}/> },
         { level: 8, label: "Undead Tileset", desc: "Unlock a spooky alternate look for enemies.", icon: <Ghost size={16}/> },
-        { level: 10, label: "Mage Class", desc: "Unlock the Mage class.", icon: <Zap size={16}/> },
-        { level: 12, label: "Boss Rush Mode", desc: "Battle bosses back-to-back in the arena.", icon: <LayoutGrid size={16}/> },
-        { level: 15, label: "Infernal Tileset", desc: "Unlock the fiery demon theme.", icon: <Flame size={16}/> },
-        { level: 15, label: "Reroll Feature", desc: "Ability to reroll the board when stuck.", icon: <LayoutGrid size={16}/> },
-        { level: 20, label: "Paladin Class", desc: "Unlock the Paladin class.", icon: <Shield size={16}/> },
-        { level: 25, label: "Aquatic Tileset", desc: "Unlock the monsters of the deep.", icon: <Droplets size={16}/> },
-        { level: 30, label: "Void Realm", desc: "Enter the eldritch void dimension.", icon: <Map size={16}/> },
+        { level: 10, label: "Full Codex", desc: "Reveal enemy stats and lore.", icon: <Settings size={16}/> },
+        { level: 12, label: "Precognition", desc: "See the next tile spawn.", icon: <Eye size={16}/> },
+        { level: 15, label: "Mage Class", desc: "Unlock the Mage class.", icon: <Zap size={16}/> },
+        { level: 15, label: "Auto-Collect", desc: "Gold loot is collected automatically.", icon: <Coins size={16}/> },
+        { level: 20, label: "Passive: Dragon Breath", desc: "Clears a random row every 60 turns.", icon: <Flame size={16}/> },
+        { level: 20, label: "Infernal Tileset", desc: "Unlock the fiery demon theme.", icon: <Flame size={16}/> },
+        { level: 25, label: "Passive: Golden Egg", desc: "Evolves a random tile every 50 turns.", icon: <Star size={16}/> },
+        { level: 30, label: "Aquatic Tileset", desc: "Unlock the monsters of the deep.", icon: <Droplets size={16}/> },
         { level: 35, label: "Cyberpunk Tileset", desc: "Unlock the neon city theme.", icon: <Zap size={16}/> },
-        { level: 40, label: "Celestial Citadel", desc: "Ascend to the heavens.", icon: <Star size={16}/> },
         { level: 45, label: "Clockwork Tileset", desc: "Unlock the Steampunk theme.", icon: <Settings size={16}/> },
         { level: 50, label: "Celestial Tileset", desc: "Unlock the divine angel theme.", icon: <Star size={16}/> },
         { level: 55, label: "Ronin Tileset", desc: "Unlock the feudal Japan theme.", icon: <Sword size={16}/> },

@@ -1,7 +1,7 @@
 
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useMemo } from 'react';
 import { HeroClass, GameMode, PlayerProfile, Difficulty } from '../types';
-import { Trophy, Settings, Swords, Play, Skull, Palette, Grid, HelpCircle, Star, Calendar, RefreshCcw, ChevronRight, Users, ChevronDown, Gamepad2, Award, Lock, User, Maximize, Facebook } from 'lucide-react';
+import { Trophy, Settings, Swords, Play, Skull, Palette, Grid, HelpCircle, Star, Calendar, RefreshCcw, ChevronRight, Users, ChevronDown, Gamepad2, Award, Lock, User, Maximize, Facebook, Heart } from 'lucide-react';
 import { getPlayerProfile, getNextLevelXp } from '../services/storageService';
 import { generateDailyModifiers } from '../services/gameLogic';
 import { facebookService } from '../services/facebookService';
@@ -9,6 +9,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { genUrl } from '../constants';
 import { useFullscreen } from '../hooks/useFullscreen';
 import { useOrientation } from '../hooks/useOrientation';
+import { useMenuNavigation } from '../hooks/useMenuNavigation';
 
 interface SplashScreenProps {
   onStart: (heroClass: HeroClass, mode: GameMode, seed?: number, difficulty?: Difficulty, tileset?: string) => void;
@@ -80,7 +81,7 @@ const GoldDust = () => {
     return <canvas ref={canvasRef} className="absolute inset-0 pointer-events-none z-10 opacity-60 mix-blend-screen" />;
 };
 
-const MenuButton = ({ onClick, label, icon, primary = false, subtitle, color = 'blue', disabled = false, isLandscape }: { onClick: () => void, label: string, icon: React.ReactNode, primary?: boolean, subtitle?: string, color?: string, disabled?: boolean, isLandscape?: boolean }) => {
+const MenuButton = ({ onClick, label, icon, primary = false, subtitle, color = 'blue', disabled = false, isLandscape, isFocused, onMouseEnter }: { onClick: () => void, label: string, icon: React.ReactNode, primary?: boolean, subtitle?: string, color?: string, disabled?: boolean, isLandscape?: boolean, isFocused?: boolean, onMouseEnter?: () => void }) => {
     const baseColor = disabled 
         ? 'bg-slate-900 border-slate-800 text-slate-600 cursor-not-allowed opacity-70' 
         : primary 
@@ -88,6 +89,7 @@ const MenuButton = ({ onClick, label, icon, primary = false, subtitle, color = '
             : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700 hover:text-white';
     
     const hoverColor = primary && !disabled ? 'hover:bg-yellow-500' : '';
+    const focusRing = isFocused && !disabled ? 'ring-2 ring-yellow-400 scale-[1.02] z-20 shadow-xl' : '';
     
     // Conditional styling for short landscape mode (mobile rotated) vs desktop landscape
     const landscapeCompact = isLandscape ? 'max-h-[500px]:p-2 max-h-[500px]:min-h-[50px]' : '';
@@ -95,368 +97,261 @@ const MenuButton = ({ onClick, label, icon, primary = false, subtitle, color = '
     return (
         <button 
             onClick={!disabled ? onClick : undefined}
+            onMouseEnter={onMouseEnter}
             disabled={disabled}
             className={`w-full group relative flex items-center p-3 md:p-4 rounded-xl border-2 transition-all duration-100 transform ${!disabled ? 'active:scale-95 shadow-lg' : ''}
-                ${baseColor} ${hoverColor} ${landscapeCompact}
+                ${baseColor} ${hoverColor} ${focusRing} ${landscapeCompact}
             `}
         >
             <div className={`p-2 rounded-lg bg-black/20 mr-3 md:mr-4 transition-transform ${!disabled ? 'group-hover:scale-110 group-hover:rotate-3' : ''} ${isLandscape ? 'max-h-[500px]:mr-2 max-h-[500px]:p-1.5' : ''}`}>
                 {disabled ? <Lock size={20} /> : icon}
             </div>
-            <div className="flex flex-col items-start flex-1 min-w-0">
-                <span className="font-black uppercase tracking-wide text-xs md:text-base leading-none mb-1 truncate w-full text-left">{label}</span>
-                {subtitle && <span className="text-[9px] md:text-[10px] font-bold opacity-60 uppercase tracking-wider truncate w-full text-left hidden sm:block">{subtitle}</span>}
+            <div className="flex flex-col items-start">
+                <span className={`font-black text-sm md:text-base uppercase tracking-wider ${isFocused && !disabled ? 'text-yellow-200' : ''}`}>{label}</span>
+                {subtitle && <span className="text-[10px] md:text-xs opacity-60 font-medium">{subtitle}</span>}
             </div>
-            {!disabled && <ChevronRight size={16} className="opacity-0 group-hover:opacity-100 transition-opacity -translate-x-2 group-hover:translate-x-0 hidden md:block" />}
+            {!disabled && (
+                <div className={`absolute right-4 opacity-0 transition-all ${isFocused ? 'opacity-100 translate-x-0' : 'group-hover:opacity-100 group-hover:translate-x-0 -translate-x-4'}`}>
+                    <ChevronRight size={20} className={primary ? "text-white" : "text-yellow-500"} />
+                </div>
+            )}
         </button>
     );
 };
 
 export const SplashScreen: React.FC<SplashScreenProps> = ({ onStart, onContinue, onOpenLeaderboard, onOpenSettings, onOpenHelp, onOpenGrimoire, onOpenVersus, hasSave }) => {
   const [profile, setProfile] = useState<PlayerProfile | null>(null);
-  const [showProfileStats, setShowProfileStats] = useState(false);
-  const [bgUrl, setBgUrl] = useState('');
-  const { toggleFullscreen } = useFullscreen();
-  const [fbLoggedIn, setFbLoggedIn] = useState(facebookService.isLoggedIn());
-  const [isDesktop, setIsDesktop] = useState(false);
-  
-  // Facebook Player Info
-  const playerName = facebookService.getPlayerName();
-  const playerPhoto = facebookService.getPlayerPhoto();
-
-  // Settings for Orientation
-  const [settings, setSettings] = useState(getPlayerProfile().accountLevel ? JSON.parse(localStorage.getItem('2048_rpg_state_v3') || '{}').settings || { orientation: 'AUTO' } : { orientation: 'AUTO' });
-  const isLandscape = useOrientation(settings.orientation);
-  const isFacebook = facebookService.isInstantMode();
+  const [showClassSelect, setShowClassSelect] = useState(false);
+  const { isFullscreen, toggleFullscreen } = useFullscreen();
+  const isLandscape = useOrientation('AUTO');
 
   useEffect(() => {
-    setProfile(getPlayerProfile());
-    // Robust desktop check
-    setIsDesktop(window.matchMedia('(pointer: fine)').matches && !('ontouchstart' in window));
-    
-    // Pick a random background for variety
-    const bgs = [
-        genUrl('mysterious dark fantasy dungeon entrance environment art no text scenery', 99),
-        genUrl('epic fantasy castle in the clouds divine light', 100),
-        genUrl('underwater ruins bioluminescent fantasy world', 101),
-        genUrl('volcanic mountain forge fantasy landscape', 102)
-    ];
-    setBgUrl(bgs[Math.floor(Math.random() * bgs.length)]);
+      setProfile(getPlayerProfile());
   }, []);
 
-  const handleStartGame = () => {
-      onStart(HeroClass.ADVENTURER, 'RPG', undefined, 'NORMAL', profile?.activeTilesetId);
-  };
+  const unlockedBossRush = profile?.unlockedFeatures.includes('MODE_BOSS_RUSH');
+  const dailyMods = useMemo(() => generateDailyModifiers(Date.now()), []);
 
-  const handleDaily = () => {
-      const today = new Date();
-      const seed = parseInt(`${today.getFullYear()}${today.getMonth() + 1}${today.getDate()}`);
-      onStart(HeroClass.ADVENTURER, 'DAILY', seed, 'NORMAL', profile?.activeTilesetId);
-  };
+  // --- MENU DATA STRUCTURE ---
+  const mainMenuItems = useMemo(() => {
+      const items = [];
+      if (hasSave) items.push({ id: 'CONTINUE', label: 'Continue Journey', subtitle: 'Resume your quest', icon: <Play fill="currentColor" />, action: onContinue, primary: true });
+      items.push({ id: 'NEW_GAME', label: 'New Game', subtitle: 'Start a fresh run', icon: <Swords />, action: () => setShowClassSelect(true), primary: !hasSave });
+      
+      // Daily
+      items.push({ 
+          id: 'DAILY', 
+          label: 'Daily Challenge', 
+          subtitle: 'Unique modifiers every 24h', 
+          icon: <Calendar />, 
+          action: () => onStart(HeroClass.ADVENTURER, 'DAILY', undefined, 'NORMAL', profile?.activeTilesetId),
+          color: 'purple'
+      });
 
-  const handleFriendMatch = async () => {
-      const success = await facebookService.chooseContext();
-      if (success) {
-          onStart(HeroClass.ADVENTURER, 'VERSUS', undefined, 'NORMAL', profile?.activeTilesetId);
+      // Boss Rush
+      if (unlockedBossRush) {
+          items.push({
+              id: 'BOSS_RUSH',
+              label: 'Boss Rush',
+              subtitle: 'Face the gauntlet',
+              icon: <Skull />,
+              action: () => onStart(HeroClass.ADVENTURER, 'BOSS_RUSH', undefined, 'NORMAL', profile?.activeTilesetId),
+              color: 'red'
+          });
       }
-  };
 
-  const handleBossRush = () => {
-      onStart(HeroClass.ADVENTURER, 'BOSS_RUSH', undefined, 'NORMAL', profile?.activeTilesetId);
-  };
-
-  const handleFbLogin = async () => {
-      const success = await facebookService.loginWeb();
-      if (success) {
-          setFbLoggedIn(true);
+      // Secondary
+      items.push({ id: 'LEADERBOARD', label: 'Hall of Heroes', icon: <Trophy />, action: onOpenLeaderboard });
+      items.push({ id: 'GRIMOIRE', label: 'Grimoire', subtitle: 'Themes & Medals', icon: <Palette />, action: onOpenGrimoire });
+      items.push({ id: 'CODEX', label: 'Codex', icon: <HelpCircle />, action: onOpenHelp });
+      
+      // Versus (Desktop only mostly, but logic handles availability)
+      if (window.innerWidth > 768) {
+          items.push({ id: 'VERSUS', label: 'Versus Mode', subtitle: 'Local Multiplayer', icon: <Gamepad2 />, action: onOpenVersus });
       }
-  };
 
-  const isBossRushUnlocked = profile?.unlockedFeatures.includes('MODE_BOSS_RUSH');
-  const isWebMode = facebookService.isWebMode();
+      items.push({ id: 'SETTINGS', label: 'Settings', icon: <Settings />, action: onOpenSettings });
+
+      return items;
+  }, [hasSave, unlockedBossRush, profile, onContinue, onStart, onOpenLeaderboard, onOpenGrimoire, onOpenHelp, onOpenVersus, onOpenSettings]);
+
+  // Main Menu Navigation
+  const { selectedIndex: menuIndex, setSelectedIndex: setMenuIndex } = useMenuNavigation(
+      mainMenuItems.length, 
+      (index) => mainMenuItems[index].action(),
+      !showClassSelect
+  );
+
+  // Class Selection Navigation
+  const classes = [HeroClass.ADVENTURER, HeroClass.WARRIOR, HeroClass.ROGUE, HeroClass.MAGE, HeroClass.PALADIN, HeroClass.DRAGON_SLAYER];
+  const { selectedIndex: classIndex, setSelectedIndex: setClassIndex } = useMenuNavigation(
+      classes.length,
+      (index) => {
+          const cls = classes[index];
+          if (profile?.unlockedClasses.includes(cls)) {
+              onStart(cls, 'RPG', undefined, 'NORMAL', profile?.activeTilesetId);
+          }
+      },
+      showClassSelect,
+      'HORIZONTAL' // Grid-like navigation handled as flat list with wrap? Actually 2x3 grid is visual, 1D logic is fine for basic support.
+  );
+
+  const renderClassButton = (cls: HeroClass, idx: number) => {
+      const isUnlocked = profile?.unlockedClasses.includes(cls);
+      const isFocused = showClassSelect && classIndex === idx;
+      
+      let icon = <User />;
+      let desc = "Balanced stats.";
+      if (cls === HeroClass.WARRIOR) { icon = <Swords />; desc = "Starts with Bomb Scroll."; }
+      if (cls === HeroClass.ROGUE) { icon = <Lock />; desc = "Starts with Reroll Token."; }
+      if (cls === HeroClass.MAGE) { icon = <Star />; desc = "Starts with XP Potion."; }
+      if (cls === HeroClass.PALADIN) { icon = <Award />; desc = "Starts with Golden Rune."; }
+      if (cls === HeroClass.DRAGON_SLAYER) { icon = <Skull />; desc = "Siege Breaker & Glass Cannon."; }
+
+      const classLvl = profile?.classProgress?.[cls]?.level || 1;
+
+      return (
+          <button
+              key={cls}
+              disabled={!isUnlocked}
+              onClick={() => onStart(cls, 'RPG', undefined, 'NORMAL', profile?.activeTilesetId)}
+              onMouseEnter={() => setClassIndex(idx)}
+              className={`relative flex flex-col items-center p-4 rounded-xl border-2 transition-all duration-200 
+                  ${isUnlocked 
+                      ? (isFocused ? 'bg-slate-800 border-yellow-400 scale-105 shadow-xl ring-2 ring-yellow-500/30' : 'bg-slate-900 border-slate-700 hover:border-slate-500 hover:bg-slate-800')
+                      : 'bg-black/40 border-slate-800 opacity-50 cursor-not-allowed'}
+              `}
+          >
+              <div className={`mb-2 ${isUnlocked ? (isFocused ? 'text-yellow-400' : 'text-slate-200') : 'text-slate-600'}`}>
+                  {icon}
+              </div>
+              <div className="text-xs font-black uppercase tracking-widest text-slate-300">{cls.replace('_', ' ')}</div>
+              
+              {isUnlocked && (
+                  <div className="text-[9px] font-mono text-indigo-400 mt-1 font-bold">Lvl {classLvl}</div>
+              )}
+
+              <div className="text-[10px] text-slate-500 text-center mt-1 leading-tight h-6">{isUnlocked ? desc : "Locked"}</div>
+              
+              {!isUnlocked && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/60 rounded-xl backdrop-blur-[1px]">
+                      <Lock size={24} className="text-slate-600" />
+                  </div>
+              )}
+          </button>
+      );
+  };
 
   return (
-    <div className={`absolute inset-0 z-50 flex overflow-hidden font-sans bg-[#050505] ${isLandscape ? 'flex-row' : 'flex-col'}`}>
+    <div className="relative w-full h-full bg-[#050505] overflow-hidden flex flex-col">
+      <GoldDust />
       
-      {/* MOBILE PORTRAIT FLOATING HEADER */}
-      {/* Only show if NOT landscape */}
-      {!isLandscape && (
-          <div className="absolute top-0 left-0 w-full p-4 z-[60] flex justify-between items-start pointer-events-none">
-              {/* Profile & Stats Toggle */}
-              <div className="pointer-events-auto flex items-center gap-2">
-                {profile && (
-                    <button 
-                        onClick={() => setShowProfileStats(!showProfileStats)}
-                        className="flex items-center gap-2 group"
-                    >
-                        <div className="w-10 h-10 rounded-full bg-slate-900/60 border border-slate-500/50 flex items-center justify-center overflow-hidden shadow-lg backdrop-blur-md group-active:scale-95 transition-transform">
-                            {playerPhoto ? (
-                                <img src={playerPhoto} alt="Player" className="w-full h-full object-cover" />
-                            ) : (
-                                <User size={18} className="text-slate-300" />
-                            )}
-                        </div>
-                        {/* Minimal Level Badge */}
-                        <div className="bg-black/40 backdrop-blur-md px-2 py-1 rounded-full border border-white/10 text-[10px] font-mono font-bold text-slate-300 shadow-lg">
-                            LVL {profile?.accountLevel}
-                        </div>
-                    </button>
-                )}
-              </div>
-
-              {/* Right Actions */}
-              <div className="flex gap-2 pointer-events-auto">
-                  <button 
-                    onClick={toggleFullscreen}
-                    className="w-10 h-10 bg-slate-900/60 hover:bg-black/80 rounded-full text-white border border-slate-500/50 flex items-center justify-center shadow-lg backdrop-blur-md active:scale-95 transition-all"
-                  >
-                      <Maximize size={18} />
-                  </button>
-                  <button 
-                    onClick={onOpenSettings} 
-                    className="w-10 h-10 bg-slate-900/60 hover:bg-black/80 rounded-full text-white border border-slate-500/50 flex items-center justify-center shadow-lg backdrop-blur-md active:scale-95 transition-all"
-                  >
-                      <Settings size={18} />
-                  </button>
-              </div>
-          </div>
-      )}
-
-      {/* HERO ART SECTION */}
-      <div className={`relative overflow-hidden bg-slate-900 flex flex-col items-center justify-center p-8 shrink-0 
-          ${isLandscape ? 'flex-[1.4] bg-gradient-to-r from-transparent to-[#0b0f15]' : 'flex-[1.5] bg-gradient-to-t from-black via-transparent to-black/60'}
-      `}>
-          {/* Animated Background */}
-          <div 
-            className="absolute inset-0 bg-cover bg-center opacity-60 transition-transform duration-[40s] scale-110 animate-[pulse_15s_ease-in-out_infinite]"
-            style={{ backgroundImage: `url('${bgUrl}')` }}
-          ></div>
-          <div className={`absolute inset-0 ${isLandscape ? 'bg-gradient-to-r from-transparent to-[#0b0f15]' : 'bg-gradient-to-t from-black via-transparent to-black/60'}`}></div>
-          
-          <GoldDust />
-
-          {/* Fullscreen Toggle (Desktop/Landscape Only) */}
-          {isLandscape && (
-              <button 
-                onClick={toggleFullscreen}
-                className="absolute top-4 right-4 z-50 p-2 bg-black/40 hover:bg-black/60 rounded-lg text-white border border-white/20 transition-all active:scale-95"
-              >
-                  <Maximize size={24} />
-              </button>
-          )}
-
-          {/* Logo Content */}
-          <div className="relative z-10 text-center flex flex-col items-center max-w-[80vw]">
-              <div className="mb-4 md:mb-6 relative">
-                  <Skull size={60} className="text-red-600 relative z-10 drop-shadow-[0_0_30px_rgba(220,38,38,0.8)] animate-float md:w-20 md:h-20" />
-                  <div className="absolute inset-0 bg-red-500 blur-3xl opacity-20 animate-pulse"></div>
-              </div>
-              
-              <motion.h1 
-                initial={{ scale: 0.9, opacity: 0.8 }}
-                animate={{ scale: 1, opacity: 1 }}
-                transition={{ duration: 3, repeat: Infinity, repeatType: "reverse", ease: "easeInOut" }}
-                className="text-5xl md:text-7xl lg:text-8xl font-black text-transparent bg-clip-text bg-gradient-to-b from-yellow-100 via-orange-400 to-red-700 fantasy-font tracking-tighter drop-shadow-2xl leading-[0.8] break-words w-full"
-              >
-                  DRAGON'S<br/>HOARD
-              </motion.h1>
-              
-              <div className="h-1.5 w-24 md:w-32 bg-gradient-to-r from-transparent via-orange-500 to-transparent mt-4 md:mt-6 mb-3 rounded-full shadow-[0_0_15px_orange]"></div>
-              
-              <p className="text-orange-200/70 font-serif italic text-xs md:text-lg tracking-[0.4em] uppercase drop-shadow-md">
-                  Roguelike Puzzle RPG
-              </p>
-
-              {/* Version Tag */}
-              <div className="mt-4 md:mt-8 text-[9px] md:text-[10px] text-slate-500 font-mono border border-slate-700/50 px-2 py-1 rounded bg-black/40 backdrop-blur-sm">
-                  v1 BETA
-              </div>
-          </div>
-
-          {/* Footer - Optimized for Mobile & Desktop */}
-          <div className="absolute bottom-2 md:bottom-4 left-0 right-0 text-center z-20 pointer-events-none">
-              <a 
-                href="https://instagram.com/sp8m8" 
-                target="_blank" 
-                rel="noopener noreferrer" 
-                className="pointer-events-auto inline-block text-[10px] text-white/30 font-bold uppercase tracking-widest hover:text-yellow-500 transition-colors bg-black/20 px-3 py-1 rounded-full backdrop-blur-sm"
-              >
-                  Made with &lt;3 by Sp8
-              </a>
-          </div>
+      {/* Background Layer with improved mixing */}
+      <div className="absolute inset-0 z-0">
+          <div className="absolute inset-0 bg-[url('https://image.pollinations.ai/prompt/mysterious%20dark%20fantasy%20dungeon%20entrance%20environment%20art%20no%20text%20scenery?width=1024&height=1024&nologo=true&seed=99')] bg-cover bg-center"></div>
+          {/* Lighter gradient mask to blend image naturally instead of overwriting it */}
+          <div className="absolute inset-0 bg-gradient-to-b from-slate-950/80 via-slate-900/60 to-black/90 mix-blend-multiply"></div>
+          <div className="absolute inset-0 bg-black/40"></div> 
       </div>
 
-      {/* RIGHT COLUMN (Desktop/Landscape) / BOTTOM (Mobile Portrait): MENU */}
-      <div className={`relative bg-[#0b0f15] flex flex-col border-slate-800 shadow-2xl z-20 
-          ${isLandscape ? 'flex-1 border-l min-h-0 w-96 flex-none' : 'flex-1 border-t'}
-      `}>
+      <div className="relative z-20 flex-1 flex flex-col md:flex-row max-w-7xl mx-auto w-full h-full overflow-hidden">
           
-          {/* COMPACT TOOLBAR (For Short Landscape) */}
-          {isLandscape && (
-              <div className="hidden landscape:max-h-[500px]:flex justify-end p-2 gap-2 absolute top-0 right-0 z-30 pointer-events-auto">
-                  <button 
-                    onClick={() => setShowProfileStats(true)} 
-                    className="p-2 bg-slate-900/80 rounded-lg text-slate-300 border border-slate-700 hover:bg-slate-800"
-                  >
-                      {playerPhoto ? <img src={playerPhoto} className="w-5 h-5 rounded-full" alt="P" /> : <User size={20} />}
-                  </button>
-                  <button 
-                    onClick={onOpenSettings} 
-                    className="p-2 bg-slate-900/80 rounded-lg text-slate-300 border border-slate-700 hover:bg-slate-800"
-                  >
-                      <Settings size={20} />
-                  </button>
+          {/* Left Panel: Brand */}
+          <div className="flex-1 flex flex-col justify-center items-center p-6 md:p-12 text-center md:text-left md:items-start shrink-0">
+              <div className="mb-4 inline-flex items-center gap-2 px-3 py-1 rounded-full bg-yellow-900/30 border border-yellow-600/30 text-yellow-500 text-[10px] font-bold uppercase tracking-widest animate-in fade-in slide-in-from-top-4 duration-1000">
+                  <Star size={12} fill="currentColor" /> Season 1: Awakening
               </div>
-          )}
+              <h1 className="text-5xl sm:text-6xl md:text-7xl lg:text-8xl font-black text-transparent bg-clip-text bg-gradient-to-b from-yellow-100 via-amber-400 to-amber-700 fantasy-font drop-shadow-2xl tracking-tighter mb-4 animate-in zoom-in-50 duration-700">
+                  DRAGON'S<br/>HOARD
+              </h1>
+              <p className="text-slate-300 max-w-md text-sm md:text-lg font-medium leading-relaxed mb-8 animate-in slide-in-from-left-4 delay-200 duration-700 drop-shadow-md">
+                  Merge tiles, slay beasts, and amass a fortune in this rogue-lite puzzle RPG.
+              </p>
+              
+              <div className="flex gap-4 animate-in fade-in delay-500 duration-700">
+                  <div className="text-center">
+                      <div className="text-2xl font-black text-white">{profile?.accountLevel || 1}</div>
+                      <div className="text-[10px] text-slate-400 uppercase tracking-widest font-bold">Level</div>
+                  </div>
+                  <div className="w-px h-10 bg-slate-500/50"></div>
+                  <div className="text-center">
+                      <div className="text-2xl font-black text-yellow-500">{profile?.highScore.toLocaleString() || 0}</div>
+                      <div className="text-[10px] text-slate-400 uppercase tracking-widest font-bold">Best Score</div>
+                  </div>
+                  <div className="w-px h-10 bg-slate-500/50"></div>
+                  <div className="text-center">
+                      <div className="text-2xl font-black text-indigo-400">{profile?.gamesPlayed || 0}</div>
+                      <div className="text-[10px] text-slate-400 uppercase tracking-widest font-bold">Runs</div>
+                  </div>
+              </div>
+          </div>
 
-          {/* FULL PROFILE HEADER (Desktop/Landscape) */}
-          {isLandscape && (
-              <div className="relative border-b border-slate-800/50 bg-slate-900/50 z-20 hidden md:block landscape:block landscape:max-h-[500px]:hidden">
-                  <div className="p-4 md:p-6 flex justify-between items-center">
-                      {profile && (
-                          <button 
-                            onClick={() => setShowProfileStats(!showProfileStats)}
-                            className="flex items-center gap-3 text-left hover:bg-slate-800/50 -ml-2 p-2 rounded-xl transition-all group"
+          {/* Right Panel: Menu */}
+          <div className="flex-1 w-full max-w-md md:max-w-lg bg-black/60 backdrop-blur-lg border-l border-white/10 flex flex-col relative transition-all h-full">
+              
+              {/* Scrollable Content */}
+              <div className="flex-1 overflow-y-auto custom-scrollbar p-4 md:p-8 flex flex-col">
+                  <AnimatePresence mode='wait'>
+                      {!showClassSelect ? (
+                          <motion.div 
+                              key="main-menu"
+                              initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}
+                              className="space-y-3 md:space-y-4 w-full my-auto"
                           >
-                              <div className="w-10 h-10 md:w-12 md:h-12 rounded-full bg-gradient-to-br from-indigo-600 to-blue-900 flex items-center justify-center border-2 border-slate-700 shadow-inner group-hover:border-indigo-400 transition-colors relative overflow-hidden">
-                                  {playerPhoto ? (
-                                      <img src={playerPhoto} alt="Player" className="w-full h-full object-cover" />
-                                  ) : (
-                                      <User size={20} className="text-white" />
-                                  )}
-                              </div>
-                              <div className="flex flex-col">
-                                  <span className="text-[10px] text-indigo-300 font-bold uppercase tracking-wider">{playerName}</span>
-                                  <div className="flex items-center gap-1">
-                                      <span className="text-xs font-mono text-white font-bold">Lvl {profile.accountLevel}</span>
-                                      <ChevronDown size={10} className={`text-slate-500 transition-transform ${showProfileStats ? 'rotate-180' : ''}`} />
+                              {mainMenuItems.map((item, idx) => (
+                                  <MenuButton 
+                                      key={item.id}
+                                      {...item}
+                                      onClick={() => {
+                                          setMenuIndex(idx);
+                                          item.action();
+                                      }}
+                                      isLandscape={isLandscape}
+                                      isFocused={menuIndex === idx}
+                                      onMouseEnter={() => setMenuIndex(idx)}
+                                  />
+                              ))}
+                          </motion.div>
+                      ) : (
+                          <motion.div 
+                              key="class-select"
+                              initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}
+                              className="space-y-6 w-full my-auto"
+                          >
+                              <div className="flex items-center gap-4 mb-4">
+                                  <button onClick={() => setShowClassSelect(false)} className="p-2 hover:bg-slate-800 rounded-full text-slate-400 hover:text-white">
+                                      <ChevronDown className="rotate-90" />
+                                  </button>
+                                  <div>
+                                      <h2 className="text-xl font-black text-white uppercase tracking-wider">Select Class</h2>
+                                      <p className="text-xs text-slate-400">Choose your hero</p>
                                   </div>
                               </div>
-                          </button>
+
+                              <div className="grid grid-cols-2 gap-3">
+                                  {classes.map((cls, idx) => renderClassButton(cls, idx))}
+                              </div>
+                          </motion.div>
                       )}
-                      <div className="flex gap-2">
-                          <button onClick={onOpenSettings} className="p-2 hover:bg-slate-800 rounded-full text-slate-400 hover:text-white transition-colors">
-                              <Settings size={20} />
-                          </button>
-                      </div>
+                  </AnimatePresence>
+              </div>
+
+              {/* Pinned Footer */}
+              <div className="p-4 md:p-8 pt-0 mt-auto shrink-0 opacity-60 hover:opacity-100 transition-opacity border-t border-white/5">
+                  <div className="flex justify-between items-center mb-3 pt-3">
+                      <button onClick={toggleFullscreen} className="text-[10px] uppercase font-bold text-slate-500 flex items-center gap-2 hover:text-white transition-colors">
+                          <Maximize size={12}/> {isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}
+                      </button>
+                      <div className="text-[10px] text-slate-600 font-mono">v1.3.0</div>
                   </div>
-
-                  {/* Facebook Login for Web (Optional) */}
-                  {isWebMode && !fbLoggedIn && (
-                      <div className="px-4 pb-2">
-                          <button 
-                            onClick={handleFbLogin}
-                            className="w-full py-2 bg-[#1877F2] hover:bg-[#155fc4] text-white text-xs font-bold rounded-lg flex items-center justify-center gap-2 transition-colors"
-                          >
-                              <Facebook size={14} fill="currentColor" /> Connect Facebook
-                          </button>
-                      </div>
-                  )}
-              </div>
-          )}
-
-          {/* Collapsible Stats Panel (Absolute Overlay) */}
-          <AnimatePresence>
-              {showProfileStats && profile && (
-                  <motion.div 
-                    initial={{ height: 0, opacity: 0 }}
-                    animate={{ height: 'auto', opacity: 1 }}
-                    exit={{ height: 0, opacity: 0 }}
-                    className="bg-slate-950/95 border-b border-slate-800 overflow-hidden absolute top-0 left-0 right-0 z-40 shadow-xl landscape:max-h-[500px]:top-0"
+                  <a 
+                      href="https://instagram.com/sp8m8" 
+                      target="_blank" 
+                      rel="noopener noreferrer" 
+                      className="text-[10px] text-slate-500 hover:text-pink-400 font-mono text-center transition-colors flex items-center justify-center gap-1.5"
                   >
-                      <div className="p-4 grid grid-cols-2 gap-4">
-                          <div className="col-span-2 flex justify-between items-center mb-2">
-                              <h3 className="text-white font-bold">Profile Stats</h3>
-                              <button onClick={() => setShowProfileStats(false)} className="text-slate-400 p-2"><ChevronDown className="rotate-180"/></button>
-                          </div>
-                          <div className="col-span-2">
-                              <div className="flex justify-between text-[10px] uppercase font-bold text-slate-500 mb-1">
-                                  <span>Progress to Level {profile.accountLevel + 1}</span>
-                                  <span>{Math.floor((profile.totalAccountXp / getNextLevelXp(profile.accountLevel)) * 100)}%</span>
-                              </div>
-                              <div className="h-2 bg-slate-900 rounded-full overflow-hidden border border-slate-800">
-                                  <div 
-                                    className="h-full bg-gradient-to-r from-indigo-600 to-blue-500" 
-                                    style={{ width: `${(profile.totalAccountXp / getNextLevelXp(profile.accountLevel)) * 100}%` }}
-                                  ></div>
-                              </div>
-                          </div>
-                          <div className="bg-slate-900 p-2 rounded-lg border border-slate-800 flex items-center gap-3">
-                              <Gamepad2 size={16} className="text-slate-500" />
-                              <div>
-                                  <div className="text-[10px] text-slate-500 uppercase font-bold">Games Played</div>
-                                  <div className="text-sm font-mono text-white font-bold">{profile.gamesPlayed}</div>
-                              </div>
-                          </div>
-                          <div className="bg-slate-900 p-2 rounded-lg border border-slate-800 flex items-center gap-3">
-                              <Award size={16} className="text-yellow-600" />
-                              <div>
-                                  <div className="text-[10px] text-slate-500 uppercase font-bold">High Score</div>
-                                  <div className="text-sm font-mono text-white font-bold">{profile.highScore.toLocaleString()}</div>
-                              </div>
-                          </div>
-                      </div>
-                  </motion.div>
-              )}
-          </AnimatePresence>
-
-          {/* Menu Items */}
-          <div className="flex-1 overflow-y-auto p-6 md:p-10 flex flex-col justify-center gap-3 md:gap-4 pb-6 md:pb-10
-              landscape:max-h-[500px]:grid landscape:max-h-[500px]:grid-cols-2 landscape:max-h-[500px]:gap-2 landscape:max-h-[500px]:p-2 landscape:max-h-[500px]:pb-2 landscape:max-h-[500px]:place-content-center
-          ">
-              
-              {hasSave ? (
-                  <MenuButton onClick={onContinue} label="Continue" icon={<Play fill="currentColor" />} primary subtitle="Resume" />
-              ) : (
-                  <MenuButton onClick={handleStartGame} label="Start" icon={<Swords />} primary subtitle="New Run" />
-              )}
-
-              {isBossRushUnlocked && (
-                  <MenuButton 
-                      onClick={handleBossRush} 
-                      label="Boss Rush" 
-                      icon={<Skull />} 
-                      subtitle="Gauntlet" 
-                  />
-              )}
-
-              {/* DYNAMIC SECONDARY BUTTONS */}
-              <div className={`grid gap-3 mt-2 landscape:max-h-[500px]:mt-0 landscape:max-h-[500px]:contents ${(!isFacebook && !isDesktop) ? 'grid-cols-1' : 'grid-cols-2'}`}>
-                  
-                  {/* Daily always visible */}
-                  <button onClick={handleDaily} className="bg-indigo-900/20 hover:bg-indigo-900/40 border border-indigo-500/30 hover:border-indigo-500/60 p-3 md:p-4 rounded-xl flex flex-col items-center gap-2 transition-all group active:scale-95 duration-100 landscape:max-h-[500px]:flex-row landscape:max-h-[500px]:p-2 landscape:max-h-[500px]:justify-center">
-                      <Calendar size={20} className="text-indigo-400 group-hover:scale-110 transition-transform md:w-6 md:h-6" />
-                      <span className="text-[10px] md:text-xs font-bold text-indigo-100 uppercase">Daily</span>
-                  </button>
-
-                  {/* Friend Match ONLY on Facebook */}
-                  {isFacebook && (
-                      <button onClick={handleFriendMatch} className="bg-red-900/20 hover:bg-red-900/40 border border-red-500/30 hover:border-red-500/60 p-3 md:p-4 rounded-xl flex flex-col items-center gap-2 transition-all group active:scale-95 duration-100 landscape:max-h-[500px]:flex-row landscape:max-h-[500px]:p-2 landscape:max-h-[500px]:justify-center">
-                          <Users size={20} className="text-red-400 group-hover:scale-110 transition-transform md:w-6 md:h-6" />
-                          <span className="text-[10px] md:text-xs font-bold text-red-100 uppercase">Friend Match</span>
-                      </button>
-                  )}
-
-                  {/* Local Versus ONLY on Desktop (and NOT FB, typically) */}
-                  {!isFacebook && isDesktop && (
-                      <button onClick={onOpenVersus} className="bg-cyan-900/20 hover:bg-cyan-900/40 border border-cyan-500/30 hover:border-cyan-500/60 p-3 md:p-4 rounded-xl flex flex-col items-center gap-2 transition-all group active:scale-95 duration-100 landscape:max-h-[500px]:flex-row landscape:max-h-[500px]:p-2 landscape:max-h-[500px]:justify-center">
-                          <Swords size={20} className="text-cyan-400 group-hover:scale-110 transition-transform md:w-6 md:h-6" />
-                          <span className="text-[10px] md:text-xs font-bold text-cyan-100 uppercase">Local VS</span>
-                      </button>
-                  )}
-              </div>
-
-              <div className="h-px bg-slate-800 w-full my-1 md:my-2 landscape:max-h-[500px]:hidden"></div>
-
-              <MenuButton onClick={onOpenLeaderboard} label="Heroes" icon={<Trophy />} subtitle="Leaderboards" />
-              
-              <div className="flex gap-3 landscape:max-h-[500px]:contents">
-                  <button onClick={onOpenGrimoire} className="flex-1 bg-slate-900 border border-slate-800 hover:border-slate-600 p-3 rounded-xl flex items-center justify-center gap-2 text-slate-400 hover:text-white transition-all text-xs font-bold uppercase active:scale-95 duration-100 landscape:max-h-[500px]:p-2">
-                      <Palette size={16} /> <span className="landscape:max-h-[500px]:hidden xl:inline">Collection</span>
-                  </button>
-                  <button onClick={onOpenHelp} className="flex-1 bg-slate-900 border border-slate-800 hover:border-slate-600 p-3 rounded-xl flex items-center justify-center gap-2 text-slate-400 hover:text-white transition-all text-xs font-bold uppercase active:scale-95 duration-100 landscape:max-h-[500px]:p-2">
-                      <HelpCircle size={16} /> <span className="landscape:max-h-[500px]:hidden xl:inline">Codex</span>
-                  </button>
+                      Made with <Heart size={10} className="animate-pulse" fill="currentColor" /> by sp8
+                  </a>
               </div>
 
           </div>

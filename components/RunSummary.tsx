@@ -1,7 +1,7 @@
 
 import React, { useEffect, useState } from 'react';
-import { GameState, PlayerProfile, HeroClass } from '../types';
-import { finalizeRun, getNextLevelXp, UnlockReward } from '../services/storageService';
+import { GameState, PlayerProfile, HeroClass, UnlockReward } from '../types';
+import { finalizeRun, getNextLevelXp } from '../services/storageService';
 import { generateFallbackStory } from '../services/gameLogic';
 import { MEDALS } from '../constants';
 import { GoogleGenAI } from "@google/genai";
@@ -22,6 +22,7 @@ import {
   Ghost, Flame, Droplets, Zap, Star, Settings, Sword, Heart, Unlock, Palette,
   Feather, MessageCircle
 } from 'lucide-react';
+import { useMenuNavigation } from '../hooks/useMenuNavigation';
 
 interface Props {
   gameState: GameState;
@@ -99,6 +100,19 @@ export const RunSummary: React.FC<Props> = ({ gameState, onRestart, onShowLeader
       facebookService.challengeFriend(gameState.score, gameState.selectedClass);
   };
 
+  const actions = [
+      { id: 'RESTART', action: onRestart },
+      { id: 'SCORES', action: onShowLeaderboard },
+      { id: 'HOME', action: onHome }
+  ];
+
+  const { selectedIndex, setSelectedIndex } = useMenuNavigation(
+      actions.length,
+      (index) => actions[index].action(),
+      true,
+      'VERTICAL'
+  );
+
   if (!profile) return null;
 
   const nextLevelXp = getNextLevelXp(profile.accountLevel);
@@ -141,6 +155,8 @@ export const RunSummary: React.FC<Props> = ({ gameState, onRestart, onShowLeader
       }
       return <Unlock size={18} />;
   };
+
+  const getFocusClass = (idx: number) => selectedIndex === idx ? 'ring-2 ring-yellow-400 scale-[1.02] z-10' : '';
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-0 md:p-4 overflow-hidden">
@@ -333,7 +349,8 @@ export const RunSummary: React.FC<Props> = ({ gameState, onRestart, onShowLeader
                     <div className="mt-auto space-y-3 hidden md:block">
                         <button 
                             onClick={onRestart}
-                            className="w-full group relative py-4 bg-gradient-to-r from-red-800 to-red-600 hover:from-red-700 hover:to-red-500 text-white font-black text-lg rounded-2xl shadow-[0_0_30px_rgba(220,38,38,0.3)] hover:shadow-[0_0_50px_rgba(220,38,38,0.5)] transition-all overflow-hidden border border-red-500/20"
+                            onMouseEnter={() => setSelectedIndex(0)}
+                            className={`w-full group relative py-4 bg-gradient-to-r from-red-800 to-red-600 hover:from-red-700 hover:to-red-500 text-white font-black text-lg rounded-2xl shadow-[0_0_30px_rgba(220,38,38,0.3)] hover:shadow-[0_0_50px_rgba(220,38,38,0.5)] transition-all overflow-hidden border border-red-500/20 ${getFocusClass(0)}`}
                         >
                             <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent skew-x-12 translate-x-[-100%] group-hover:animate-shimmer"></div>
                             <span className="relative z-10 flex items-center justify-center gap-3 tracking-wider">
@@ -344,13 +361,15 @@ export const RunSummary: React.FC<Props> = ({ gameState, onRestart, onShowLeader
                         <div className="flex gap-3">
                             <button 
                                 onClick={onShowLeaderboard}
-                                className="flex-1 py-3 bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-white border border-slate-800 hover:border-slate-600 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all"
+                                onMouseEnter={() => setSelectedIndex(1)}
+                                className={`flex-1 py-3 bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-white border border-slate-800 hover:border-slate-600 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all ${getFocusClass(1)}`}
                             >
                                 <Trophy size={16} /> SCORES
                             </button>
                             <button 
                                 onClick={onHome}
-                                className="flex-1 py-3 bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-white border border-slate-800 hover:border-slate-600 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all"
+                                onMouseEnter={() => setSelectedIndex(2)}
+                                className={`flex-1 py-3 bg-slate-900 hover:bg-slate-800 text-slate-400 hover:text-white border border-slate-800 hover:border-slate-600 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all ${getFocusClass(2)}`}
                             >
                                 <Home size={16} /> MENU
                             </button>
@@ -368,7 +387,7 @@ export const RunSummary: React.FC<Props> = ({ gameState, onRestart, onShowLeader
         <div className="md:hidden absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black via-slate-950/95 to-transparent z-50 flex flex-col gap-2 backdrop-blur-sm border-t border-red-900/30">
             <button 
                 onClick={onRestart}
-                className="w-full group relative py-3 bg-gradient-to-r from-red-800 to-red-600 active:scale-95 text-white font-black text-lg rounded-xl shadow-lg transition-all overflow-hidden border border-red-500/20"
+                className={`w-full group relative py-3 bg-gradient-to-r from-red-800 to-red-600 active:scale-95 text-white font-black text-lg rounded-xl shadow-lg transition-all overflow-hidden border border-red-500/20 ${getFocusClass(0)}`}
             >
                 <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent skew-x-12 animate-[shimmer_2s_infinite_linear] opacity-30"></div>
                 <span className="relative z-10 flex items-center justify-center gap-2 tracking-wider">
@@ -378,13 +397,13 @@ export const RunSummary: React.FC<Props> = ({ gameState, onRestart, onShowLeader
             <div className="flex gap-2">
                 <button 
                     onClick={onShowLeaderboard}
-                    className="flex-1 py-3 bg-slate-900 text-slate-400 border border-slate-800 rounded-xl font-bold text-xs flex items-center justify-center gap-2"
+                    className={`flex-1 py-3 bg-slate-900 text-slate-400 border border-slate-800 rounded-xl font-bold text-xs flex items-center justify-center gap-2 ${getFocusClass(1)}`}
                 >
                     <Trophy size={14} /> SCORES
                 </button>
                 <button 
                     onClick={onHome}
-                    className="flex-1 py-3 bg-slate-900 text-slate-400 border border-slate-800 rounded-xl font-bold text-xs flex items-center justify-center gap-2"
+                    className={`flex-1 py-3 bg-slate-900 text-slate-400 border border-slate-800 rounded-xl font-bold text-xs flex items-center justify-center gap-2 ${getFocusClass(2)}`}
                 >
                     <Home size={14} /> MENU
                 </button>

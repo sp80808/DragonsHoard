@@ -37,6 +37,11 @@ export enum ItemType {
   RADIANT_AURA = 'RADIANT_AURA', // +50% XP
   THUNDER_SCROLL = 'THUNDER_SCROLL', // Trigger Cascade
   
+  // Expansion Items
+  TRANSMUTATION_SCROLL = 'TRANSMUTATION_SCROLL', // Upgrades lowest tier
+  MERCHANT_BELL = 'MERCHANT_BELL', // Restocks shop
+  OMNI_SLASH = 'OMNI_SLASH', // Damages all bosses
+  
   // Cascade Synergy Items
   FLOW_ELIXIR = 'FLOW_ELIXIR', // Double cascade multipliers
   HARMONIC_CRYSTAL = 'HARMONIC_CRYSTAL', // Spawns tiles during cascades to extend them
@@ -49,12 +54,12 @@ export enum ItemType {
 }
 
 export enum HeroClass {
-  ADVENTURER = 'ADVENTURER', // Balanced, Standard Start
-  WARRIOR = 'WARRIOR',       // Starts with Bomb Scroll
-  ROGUE = 'ROGUE',           // Starts with Reroll Token
-  MAGE = 'MAGE',             // Starts with XP Potion
-  PALADIN = 'PALADIN',       // Starts with Golden Rune
-  DRAGON_SLAYER = 'DRAGON_SLAYER' // Starts with Siege Breaker (Unlocked by winning)
+  ADVENTURER = 'ADVENTURER', // Balanced
+  WARRIOR = 'WARRIOR',       // Combat
+  ROGUE = 'ROGUE',           // Greed
+  MAGE = 'MAGE',             // Magic
+  PALADIN = 'PALADIN',       // Tank/Holy
+  DRAGON_SLAYER = 'DRAGON_SLAYER' // Ultimate
 }
 
 export type AbilityType = 'SCORCH' | 'DRAGON_BREATH' | 'GOLDEN_EGG';
@@ -126,13 +131,13 @@ export interface LootEvent {
   icon?: string;
 }
 
-export interface FloatingText {
+export interface MergeEvent {
   id: string;
-  x: number; // Percentage or pixel
+  x: number;
   y: number;
-  text: string;
-  color: string;
-  createdAt: number;
+  value: number;
+  type: TileType | string;
+  isCascade: boolean;
 }
 
 export interface GameStats {
@@ -161,6 +166,10 @@ export interface RunStats {
   mergesCount: number;
   itemsCrafted: number;
   medalsEarned: string[]; // List of Medal IDs earned this run
+  
+  // XP Breakdown
+  xpGainedClass: number;
+  xpGainedAccount: number;
 }
 
 export interface DailyBounty {
@@ -173,27 +182,37 @@ export interface DailyBounty {
   isCompleted: boolean;
 }
 
+export interface ClassProgress {
+    xp: number;
+    level: number;
+    skillPoints: number;
+    unlockedNodes: string[];
+}
+
 export interface PlayerProfile {
   id: string;
   totalAccountXp: number;
   accountLevel: number;
   gamesPlayed: number;
   highScore: number;
-  unlockedFeatures: string[]; // ['NG+', 'HARD_MODE', 'TILESET_UNDEAD', 'MODE_BOSS_RUSH', 'TILESET_INFERNAL', 'CASCADE_MECHANIC']
+  unlockedFeatures: string[]; 
   unlockedClasses: HeroClass[];
   activeBounties: DailyBounty[];
   lastBountyDate: string; // YYYY-MM-DD
   lastPlayed: string;
   tutorialCompleted: boolean;
-  cascadeTutorialSeen: boolean; // New: Tracks if player has done the cascade tutorial
+  cascadeTutorialSeen: boolean; 
   bossTutorialCompleted: boolean;
-  seenHints: string[]; // IDs of hints player has already seen
+  seenHints: string[]; 
   activeTilesetId: string;
-  unlockedLore: string[]; // IDs of unlocked story fragments
-  earnedMedals: Record<string, number>; // Medal ID -> Count
+  unlockedLore: string[]; 
+  earnedMedals: Record<string, number>; 
   unlockedPowerups: AbilityType[]; // Persistent unlocks
-  skillPoints: number;
-  unlockedSkills: string[]; // IDs of unlocked skill nodes
+  
+  // New Class System
+  classProgress: Record<string, ClassProgress>; // HeroClass -> Progress
+  skillPoints: number; // Legacy global points (convert to Adventurer points on migration)
+  unlockedSkills: string[]; // Legacy global skills
   
   // Login Streak
   loginStreak: number;
@@ -205,11 +224,12 @@ export interface SkillNodeDefinition {
     title: string;
     description: string;
     icon: React.ReactNode;
-    x: number; // 0-100 percentage
+    x: number; // 0-100 percentage (Left to Right layout in this new design)
     y: number; // 0-100 percentage
     parentId?: string;
     cost: number;
     effect?: (state: GameState) => Partial<GameState>; // Runtime effect hook
+    reqLevel: number; // Class Level required
 }
 
 export interface Achievement {
@@ -226,7 +246,7 @@ export interface StoryEntry {
     id: string;
     title: string;
     text: string;
-    imageUrl?: string; // New: Visuals for lore
+    imageUrl?: string; 
     unlockCondition: (stats: GameStats, state: GameState, profile: PlayerProfile) => boolean;
     order: number;
 }
@@ -241,17 +261,14 @@ export interface InputSettings {
   enableHaptics: boolean; 
   invertSwipe: boolean;
   invertScroll: boolean;
-  sensitivity: number; // 1-10 (For scroll/swipe threshold)
+  sensitivity: number; // 1-10
   enableTooltips: boolean;
-  slideSpeed: number; // ms duration for tile movement
+  slideSpeed: number; // ms duration
   graphicsQuality: GraphicsQuality;
   
-  // Enhanced Depth Settings
   enableScreenShake: boolean;
   enableParticles: boolean;
   reduceMotion: boolean;
-  
-  // Orientation
   orientation: OrientationSetting;
 }
 
@@ -297,8 +314,9 @@ export interface GameState {
   victory: boolean;
   gameWon: boolean;
   combo: number;
-  isCascading?: boolean; // Blocks input during cascade sequence
-  cascadeStep?: number; // Tracks current cascade iteration for multiplier
+  isCascading?: boolean;
+  cascadeStep?: number;
+  cascadeDelay?: number;
   logs: string[];
   activeEffects: string[];
   effectCounters: Record<string, number>; 
@@ -308,25 +326,29 @@ export interface GameState {
   lastSpawnedTileId?: string;
   stats: GameStats;
   runStats: RunStats;
-  achievements: string[]; // IDs of unlocked achievements
+  achievements: string[]; 
   settings: InputSettings;
-  selectedClass: HeroClass; // Track current run class
-  gameMode: GameMode; // RPG or CLASSIC or DAILY or BOSS_RUSH
-  difficulty: Difficulty; // NORMAL or HARD
-  tilesetId: string; // DEFAULT or UNDEAD
-  accountLevel: number; // Used for gating cascades
-  baselineAccountXp: number; // New: Tracks starting XP of the session for level up calculation
+  selectedClass: HeroClass; 
+  gameMode: GameMode; 
+  difficulty: Difficulty; 
+  tilesetId: string; 
+  accountLevel: number; 
+  baselineAccountXp: number; 
   justLeveledUp: boolean;
   unlockedPerk?: string;
   shop: ShopState;
-  activeModifiers: DailyModifier[]; // New: List of active modifiers for Daily/Challenge runs
+  activeModifiers: DailyModifier[]; 
   lootEvents: LootEvent[];
-  lastTurnMedals: Medal[]; // Medals earned in the most recent move (cleared by UI)
-  isInvalidMove?: boolean; // Visual feedback for invalid swipes
+  mergeEvents: MergeEvent[]; 
+  lastTurnMedals: Medal[]; 
+  isInvalidMove?: boolean; 
   
   // Powerup System
   abilities: Record<AbilityType, AbilityState>;
-  targetingMode: AbilityType | null; // Keep for legacy compatibility but generally unused for passives
+  targetingMode: AbilityType | null; 
+  
+  // Active Class Skills (New)
+  activeClassSkills: string[];
 }
 
 export interface MoveResult {
@@ -348,29 +370,28 @@ export interface MoveResult {
   hitstopDuration: number;
 }
 
-export interface LootResult {
-    message: string;
-    gold?: number;
-    item?: InventoryItem;
-}
-
-export interface LeaderboardEntry {
-    score: number;
-    level: number;
-    gold: number;
-    date: number;
-    heroClass?: HeroClass;
-    turns?: number;
-    mode?: GameMode;
-}
-
-export type FeedbackType = 'LEVEL_UP' | 'BOSS_KILLED' | 'GRID_EXPAND' | 'UNLOCK' | 'ACHIEVEMENT' | 'LORE_UNLOCK' | 'POWERUP_UNLOCK' | 'PASSIVE_TRIGGER';
-
 export interface FeedbackEvent {
     id: string;
-    type: FeedbackType;
+    type: string;
     title: string;
     subtitle?: string;
     icon?: React.ReactNode;
     reward?: string;
+}
+
+export interface LeaderboardEntry {
+    score: number;
+    name: string;
+    date: number;
+    heroClass: HeroClass;
+    gold?: number;
+    level?: number;
+}
+
+export interface UnlockReward {
+    type: 'CLASS' | 'FEATURE' | 'TILESET' | 'POWERUP' | 'SKILL_POINT';
+    id: string;
+    label: string;
+    desc: string;
+    level: number;
 }
