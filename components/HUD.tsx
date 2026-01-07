@@ -211,22 +211,38 @@ export const BuffDisplay: React.FC<{ effectCounters: Record<string, number>, cla
 
 export const HUDHeader = React.memo(({ score, bestScore, xp, gold, currentStage, gameMode, accountLevel, settings, combo, activeModifiers, challengeTarget, effectCounters, onMenu, onOpenStats, isLandscape, showBuffs = true, selectedClass = HeroClass.ADVENTURER }: HUDProps) => {
     
-    const xpRef = useRef<HTMLDivElement>(null);
-    const goldRef = useRef<HTMLSpanElement>(null);
-    
-    // XP Bar Calculation
-    const nextLevelXp = getNextLevelXp(accountLevel);
-    const prevLevelXp = getNextLevelXp(accountLevel - 1);
-    const xpForThisLevel = nextLevelXp - (accountLevel === 1 ? 0 : prevLevelXp);
-    
-    const [profileXp, setProfileXp] = useState(0);
+    // Class XP Calculation
+    const [classProgressData, setClassProgressData] = useState<{ level: number, current: number, max: number }>({ level: 1, current: 0, max: 1000 });
     
     useEffect(() => {
         const p = getPlayerProfile();
-        setProfileXp(p.totalAccountXp + xp); // Base + Current Run Gain
-    }, [xp]);
-
-    const xpProgress = Math.max(0, profileXp - (accountLevel === 1 ? 0 : prevLevelXp));
+        const baseClassData = p.classProgress?.[selectedClass] || { xp: 0, level: 1 };
+        
+        // Calculate dynamic level based on run XP
+        const totalClassXp = baseClassData.xp + xp;
+        
+        let calculatedLevel = 1;
+        while (true) {
+            const nextThreshold = getNextLevelXp(calculatedLevel);
+            if (totalClassXp >= nextThreshold) {
+                calculatedLevel++;
+            } else {
+                break;
+            }
+        }
+        
+        const prevLevelXp = getNextLevelXp(calculatedLevel - 1);
+        const nextLevelXp = getNextLevelXp(calculatedLevel);
+        
+        const xpForThisLevel = nextLevelXp - (calculatedLevel === 1 ? 0 : prevLevelXp);
+        const xpProgress = Math.max(0, totalClassXp - (calculatedLevel === 1 ? 0 : prevLevelXp));
+        
+        setClassProgressData({
+            level: calculatedLevel,
+            current: xpProgress,
+            max: xpForThisLevel
+        });
+    }, [xp, selectedClass]);
 
     return (
         <div className={`flex flex-col gap-2 w-full ${isLandscape ? 'h-full justify-between pb-6' : ''}`}>
@@ -247,8 +263,8 @@ export const HUDHeader = React.memo(({ score, bestScore, xp, gold, currentStage,
                             <h1 className="text-base sm:text-xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-yellow-200 via-orange-400 to-red-500 fantasy-font drop-shadow-sm whitespace-nowrap overflow-hidden text-ellipsis">
                                 {gameMode === 'DAILY' ? 'Daily Run' : gameMode === 'GAUNTLET' ? 'The Gauntlet' : "Dragon's Hoard"}
                             </h1>
-                            <div className="px-1.5 py-0.5 bg-slate-800 rounded border border-slate-700 text-[9px] font-bold text-slate-400 uppercase whitespace-nowrap shrink-0">
-                                Lvl {accountLevel}
+                            <div className="px-1.5 py-0.5 bg-indigo-900/50 rounded border border-indigo-500/50 text-[9px] font-bold text-indigo-300 uppercase whitespace-nowrap shrink-0 flex items-center gap-1">
+                                <Sparkles size={8} /> Class Lvl {classProgressData.level}
                             </div>
                         </div>
                         <div className="flex items-center gap-3 text-xs text-slate-400 mt-1">
@@ -270,13 +286,13 @@ export const HUDHeader = React.memo(({ score, bestScore, xp, gold, currentStage,
                     {/* Dynamic XP Bar */}
                     <div className={`mt-1 ${isLandscape ? 'w-full' : 'absolute bottom-0 left-0 right-0'}`}>
                         <div className={`${isLandscape ? 'flex justify-between text-[8px] text-blue-300 font-mono mb-1' : 'hidden'}`}>
-                            <span>XP</span>
-                            <span>{Math.floor(xpProgress)} / {xpForThisLevel}</span>
+                            <span>Class XP</span>
+                            <span>{Math.floor(classProgressData.current)} / {classProgressData.max}</span>
                         </div>
                         <DynamicXPBar 
-                            current={xpProgress} 
-                            max={xpForThisLevel} 
-                            height={isLandscape ? 6 : 4} // Slightly thicker in landscape sidebar
+                            current={classProgressData.current} 
+                            max={classProgressData.max} 
+                            height={isLandscape ? 6 : 4} 
                         />
                     </div>
                 </div>

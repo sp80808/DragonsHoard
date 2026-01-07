@@ -355,7 +355,7 @@ export const Store: React.FC<StoreProps> = ({ gold, inventory, onClose, onBuy, o
         {/* Desktop Close Button (Floating) - Z-Index Boosted */}
         <button 
             onClick={() => { audioService.playUIBack(); onClose(); }}
-            className="absolute top-6 right-6 hidden md:flex items-center gap-2 text-slate-400 hover:text-white transition-colors bg-black/40 px-3 py-1.5 rounded-full border border-slate-700 hover:border-slate-500 z-[60]"
+            className="absolute top-6 right-6 hidden md:flex items-center gap-2 text-slate-400 hover:text-white transition-colors bg-black/40 px-3 py-1.5 rounded-full border border-slate-700 hover:border-slate-500 z-[100] cursor-pointer"
         >
             <ArrowLeft size={16} /> <span className="text-xs font-bold uppercase">Return to Game</span>
         </button>

@@ -126,8 +126,8 @@ export const CascadeTutorial: React.FC<CascadeTutorialProps> = ({ onComplete }) 
                                 </p>
                             </div>
                             <p className="text-slate-300 text-sm leading-relaxed max-w-xs mx-auto">
-                                The dungeon's magic has shifted. <br/>
-                                <strong className="text-white">Adjacent matching tiles</strong> will now merge automatically after your turn to create powerful combos.
+                                The dungeon's energy is unstable. <br/>
+                                <strong className="text-white">Matching neighbors</strong> will now automatically combine after your move, triggering powerful chain reactions.
                             </p>
                             <button 
                                 onClick={() => setStep('INTERACTIVE')}
@@ -219,9 +219,9 @@ export const CascadeTutorial: React.FC<CascadeTutorialProps> = ({ onComplete }) 
                                 COMBO X2!
                             </h2>
                             <p className="text-slate-300 text-sm max-w-xs mx-auto">
-                                Cascades occur <strong className="text-purple-400">automatically</strong> when falling tiles match.
+                                The grid automatically resolves adjacent matches to stimulate rapid gameplay.
                                 <br/><br/>
-                                They grant <strong className="text-yellow-400">Bonus Gold</strong> and <strong className="text-blue-400">Bonus XP</strong>.
+                                Combos grant <strong className="text-yellow-400">Bonus Gold</strong> and <strong className="text-blue-400">Bonus XP</strong>.
                             </p>
                             <div className="p-4 bg-purple-900/20 border border-purple-500/30 rounded-xl">
                                 <div className="text-xs font-bold text-purple-300 uppercase tracking-widest mb-1">Tutorial Reward</div>
